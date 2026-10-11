@@ -1,0 +1,54 @@
+﻿# Git metadata
+.git/
+
+# Generated files and caches
+**/__pycache__/
+**/node_modules/
+**/.venv/
+**/venv/
+**/.dart_tool/
+**/.pub-cache/
+**/build/
+**/dist/
+**/bin/
+**/obj/
+**/coverage/
+**/.pytest_cache/
+**/.mypy_cache/
+
+# Local environment files; retain safe templates
+**/.env
+**/.env.*
+!**/.env.example
+
+# Signing keys, certificates, and private credentials
+*.pfx
+*.p12
+*.pvk
+*.snk
+*.pem
+*.key
+*.jks
+*.keystore
+*.cer
+*.crt
+*.base64.txt
+**/id_rsa
+**/id_ed25519
+**/credentials.json
+**/service.account*.json
+
+# Build binaries and archives
+*.exe
+*.dll
+*.pdb
+*.msi
+*.zip
+
+# Editor and OS noise
+**/.DS_Store
+**/Thumbs.db
+
+# Generated Flutter plugin metadata
+**/.flutter-plugins-dependencies
+**/.flutter-plugins-dependencies
