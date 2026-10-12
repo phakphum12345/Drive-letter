@@ -1,2 +1,3 @@
-²^\Éªá•o4Þ\:bwJÏé¼¤_vß}g¨n“®ž\„èìü‹§¨¢o\Þ ¶»/Óªƒ€a‘*ý!ÃÖRŠD³9äx6ñä³­1nª
-U"4¨AqîIÙ–)D}•Fà°Æ²ó!ñÉ	<“†p˜~„/ƒä×ûø•`Š–ŠæAê¼‹ŒXö,é°Áá‡¿[TÿFßÐ5òuGS
+from .client import CopilotChatClient, CopilotChatConfigError, CopilotChatError
+
+__all__ = ["CopilotChatClient", "CopilotChatConfigError", "CopilotChatError"]
