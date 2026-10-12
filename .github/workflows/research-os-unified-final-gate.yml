@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
@@ -90,12 +90,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - name: Verify exact target SHA
@@ -120,7 +120,7 @@ jobs:
             --expected-sha "$TARGET_SHA"
       - name: Upload AEOS recheck evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: research-os-unified-final-gate-aeos-${{ env.TARGET_SHA }}
           path: aeos_master_assurance_manifest.json
@@ -133,7 +133,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
@@ -152,7 +152,7 @@ jobs:
           grep -F "M2_AUDIT_INDEX=PASS" m2_audit_index_summary.txt
       - name: Upload M.2 evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: research-os-m2-audit-${{ env.TARGET_SHA }}
           path: |
@@ -167,12 +167,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
@@ -199,12 +199,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - name: Compile source
@@ -335,7 +335,7 @@ jobs:
         working-directory: apps/research_os_laravel
     steps:
       - name: Checkout exact target SHA
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
