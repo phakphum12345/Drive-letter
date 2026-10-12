@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact canonical source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 1
@@ -64,7 +64,7 @@ jobs:
           expected_ref='ref: $'
           expected_ref+='{{ inputs.source_sha || github.sha }}'
           grep -qF "$expected_ref" "$workflow"
-          grep -qF 'uses: actions/upload-artifact@v4' "$workflow"
+          grep -qF 'uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4' "$workflow"
 
           if grep -qF 'Research-OS-Windows-x64-Friend-Complete-' "$workflow"; then
             echo 'CANONICAL_LINEAGE_GATE=FAIL'
