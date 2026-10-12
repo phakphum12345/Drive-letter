@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout exact verified Windows build commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: f1ef9671e5b76dac0fc5df62f64fe31f54845072
 
       - name: Setup exact Flutter toolchain
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: "3.44.9"
           channel: stable
@@ -105,7 +105,7 @@ jobs:
           Write-Host "SOURCE_SHA256=$hash"
 
       - name: Upload exact Windows source bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Research-OS-Windows-Source-f1ef9671
           path: |
