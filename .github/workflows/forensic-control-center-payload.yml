@@ -23,7 +23,7 @@ jobs:
             payload_ref: "7d6db9ccca7c3565288411a4cf01f5b5219bdb07"
     steps:
       - name: Checkout full lineage
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -44,7 +44,7 @@ jobs:
           python tools/forensic/control_center_payload.py             --payload-ref "${PAYLOAD_REF}"             --base-ref "${BASE_REF}"             --out "reports/forensic/control-center-payload/CONTROL_CENTER_${SET_ID}_FORENSIC.json"
 
       - name: Publish forensic manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: control-center-${{ matrix.set }}-forensic-${{ matrix.payload_ref }}
           path: reports/forensic/control-center-payload/CONTROL_CENTER_${{ matrix.set }}_FORENSIC.json
