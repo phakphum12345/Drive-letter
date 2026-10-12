@@ -18,7 +18,7 @@ jobs:
     name: Architecture validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate canonical architecture
         run: |
           set -euo pipefail
@@ -32,7 +32,7 @@ jobs:
     name: Security boundary validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate mandatory deny boundaries
         run: |
           set -euo pipefail
@@ -56,7 +56,7 @@ jobs:
     name: Code generation validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate deterministic generation inputs
         run: |
           set -euo pipefail
@@ -75,7 +75,7 @@ jobs:
     name: External-tool validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate Flutter boundary
         run: |
           set -euo pipefail
@@ -87,7 +87,7 @@ jobs:
     name: API and contract validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate contract terminology
         run: |
           set -euo pipefail
@@ -100,7 +100,7 @@ jobs:
     name: E2E validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Run existing Research OS E2E tests when present
         env:
           PYTHONPATH: v3
@@ -116,7 +116,7 @@ jobs:
     name: Production readiness evidence
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Validate production readiness assets
         shell: pwsh
@@ -196,7 +196,7 @@ jobs:
           Get-Content evidence/production-readiness.json
 
       - name: Upload production readiness evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: production-readiness-evidence-${{ github.sha }}
           path: evidence/production-readiness.json
@@ -207,7 +207,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [architecture, security-boundary, code-generation, external-tool, api-contract, e2e, production-readiness]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate read-only release contract
         env:
           EVENT_NAME: ${{ github.event_name }}
