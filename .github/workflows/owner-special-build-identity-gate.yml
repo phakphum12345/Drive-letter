@@ -34,13 +34,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: 1. Checkout source at exact expected SHA
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ env.AEOS_EXPECTED_SHA }}
           fetch-depth: 1
 
       - name: 2. Setup toolchains
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
 
@@ -48,7 +48,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           cache: true
@@ -189,7 +189,7 @@ jobs:
           Write-Host 'E2E_GATE=PASS'
 
       - name: 14. Release artifact — only after every gate passes
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: owner-special-validated-${{ env.AEOS_EXPECTED_SHA }}
           path: |
