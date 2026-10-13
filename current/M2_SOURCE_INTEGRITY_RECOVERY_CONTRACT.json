@@ -159,6 +159,20 @@
         "v3/flutter_app/lib/main.dart": "99379d902cc6e468dc8bec077351291c5bb74021"
       },
       "limit": "sampled entry files only; complete UI asset, dependency lock, build and artifact SHA lineage remains unverified"
+    },
+    {
+      "id": "SIR-019",
+      "kind": "latest_exact_head_ci_and_m2_audit",
+      "path": "repository_tree",
+      "status": "not_certified_blocking_findings_reproduced_on_a183fd6",
+      "target_sha": "a183fd6ab46f982cbe1f73dca06674ac74f0e7e6",
+      "evidence_runs": [
+        38411171672,
+        38411172443,
+        38411172505
+      ],
+      "details": "CI Lite fails its source-file audit with 14 BOM-affected Python helpers; M.2 reports 17 errors, 1 authoritative BOM info match, and 22 duplicate-basename warnings; V3.5 Master Final Gate fails because required production readiness assets are absent from both base and head.",
+      "repair_policy": "recover exact files only from authoritative Git blobs/branches; audit workflow-to-asset contract and UI/build/artifact lineage; do not weaken gates"
     }
   ],
   "required_checks": [
@@ -235,23 +249,52 @@
     }
   ],
   "latest_audit": {
-    "target_sha": "522057f6e4622535a085d7c55b053fe280a1ddb7",
-    "workflow_run_id": 38407689847,
-    "workflow_run_url": "https://github.com/phakphum12345/Drive-letter/actions/runs/38407689847",
-    "result": "FAIL",
-    "errors": 20,
-    "warnings": 22,
-    "error_classes": {
-      "unexpected_utf8_bom": 17,
-      "bom_only_empty_source": 1,
-      "text_nul_byte": 1,
-      "invalid_utf8": 1
+    "target_sha": "a183fd6ab46f982cbe1f73dca06674ac74f0e7e6",
+    "observed_at": "2026-10-13",
+    "decision": "NOT_CERTIFIED",
+    "evidence": {
+      "ci_lite": {
+        "run_id": 38411171672,
+        "conclusion": "failure",
+        "tests_run": 255,
+        "failing_tests": 1,
+        "failure": "test_candidate_repository_passes_adaptive_6x6_file_audit",
+        "blocking_python_bom_paths": 14,
+        "flutter_steps": "skipped"
+      },
+      "m2_source_integrity": {
+        "run_id": 38411172443,
+        "conclusion": "failure",
+        "exact_sha_match": true,
+        "files_scanned": 1662,
+        "workflow_and_composite_action_files_scanned": 86,
+        "external_action_references_scanned": 165,
+        "errors": 17,
+        "info": 1,
+        "warnings": 22
+      },
+      "v35_master_final_gate": {
+        "run_id": 38411172505,
+        "conclusion": "failure",
+        "failing_step": "Validate production readiness assets",
+        "missing_first_asset": "render.yaml",
+        "assets_absent_from_base_and_head": true
+      },
+      "successful_independent_gates": [
+        "Baseline Truth Gate: 38411172810",
+        "Workflow Integrity Gate: 38411172297",
+        "Research OS Unified 10x10 Exact SHA Gate: 38411172243",
+        "Research OS Final Gate: 38411172653",
+        "Research OS Unified Final Gate: 38411172939"
+      ]
     },
-    "duplicate_source_basename_review_groups": 22,
-    "ci_lite_run_id": 38407687735,
-    "baseline_truth_run_id": 38407688988,
-    "production_readiness_job_url": "https://github.com/phakphum12345/Drive-letter/actions/runs/38407689007/job/115332592608",
-    "checked_at_utc": "2026-10-13T13:50:33Z"
+    "interpretation": {
+      "api_401_403_logs_are_not_ci_lite_failing_assertion": true,
+      "missing_assets_are_not_proven_pr_deletions": true,
+      "ui_full_artifact_lineage_verified": false,
+      "helper_source_recovery_complete": false,
+      "final_gate_authority": "FINAL_GATE"
+    }
   },
   "latest_recovery": {
     "path": "versions/v1.0.0-draft/docs/00_FOUNDATION/ANEF-001_PROJECT_OVERVIEW.md",

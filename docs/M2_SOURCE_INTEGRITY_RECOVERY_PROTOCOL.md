@@ -124,3 +124,50 @@ The Unified 10x10 workflow explicitly checks out its selected `TARGET_SHA` and c
 ## 11. Current disposition
 
 **NOT CERTIFIED.**
+
+
+## 12. Latest exact-head evidence update — 2026-10-13
+
+**Target:** `a183fd6ab46f982cbe1f73dca06674ac74f0e7e6`  
+**Decision:** **NOT CERTIFIED — blocking source damage remains.**
+
+### 12.1 CI Lite — exact same target SHA
+
+Run [38411171672](https://github.com/phakphum12345/Drive-letter/actions/runs/38411171672) checked out `a183fd6ab46f982cbe1f73dca06674ac74f0e7e6` and failed in API unit tests after 255 tests ran. The single failing test was `test_candidate_repository_passes_adaptive_6x6_file_audit`; it reported 14 blocking Python syntax findings caused by U+FEFF at line 1:
+
+- `tools/add_parser_regression.py`
+- `tools/add_resource_translator.py`
+- `tools/bootstrap_resource_semantic_platform.py`
+- `tools/create_change_queue.py`
+- `tools/create_resource_identity_allocator.py`
+- `tools/create_resource_instance.py`
+- `tools/create_resource_parser_tests.py`
+- `tools/create_resource_variables.py`
+- `tools/fix_resource_builder.py`
+- `tools/fix_resource_builder_validator.py`
+- `tools/fix_resource_manifest_collision.py`
+- `tools/fix_resource_parser_identity.py`
+- `tools/harden_resource_drift.py`
+- `tools/harden_resource_semantic_platform.py`
+
+The API unit-test failure caused Flutter setup and Flutter analyze/tests to be skipped in this CI Lite run. The `401`/ `403` entries in the API logs are not the reported failing assertion: the log's only failing test is the source-file audit. Do not relax identity, trial-mode, or owner-authority checks to turn those responses into `200`.
+
+### 12.2 M.2 Source Integrity — exact same target SHA
+
+Run [38411172443](https://github.com/phakphum12345/Drive-letter/actions/runs/38411172443) verified `exact_sha_match=true`, scanned 1,662 tracked files, 86 workflow/composite-action files, and 165 external action references. It returned **17 errors, 1 informational source-verified BOM match, and 22 duplicate-basename review warnings**.
+
+The 17 errors comprise the 14 damaged Python paths above plus three other unexpected-BOM files: `.github/workflows/aeos-master-assurance.yml`, `.gitignore`, and `apps/research_os_flutter/test/desktop_shell_test.dart`. The BOM in `owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1` is an exact authoritative blob match and must be preserved. The 22 duplicate-basename groups are review warnings, not proof of overwrite.
+
+`tools/create_change_queue.py` is specifically confirmed to contain only the UTF-8 BOM bytes (`77u/` in Base64) and no implementation. Its exact path was not found in the authoritative production/canonical trees already reviewed. All 14 helper files remain **BLOCKED_SOURCE_UNAVAILABLE** until a trusted branch/blob is found; do not strip the BOM and leave an empty file, and do not reconstruct implementation from a filename.
+
+### 12.3 Independent gate results and remaining coverage
+
+On `a183fd6ab46f982cbe1f73dca06674ac74f0e7e6`, the Baseline Truth Gate, Workflow Integrity Gate, Unified 10x10 Exact SHA Gate, Research OS Final Gate, and Research OS Unified Final Gate reported success. Those results do not override the failing CI Lite and M.2 source-integrity findings.
+
+Run [38411172505](https://github.com/phakphum12345/Drive-letter/actions/runs/38411172505) failed in V3.5 Master Final Gate production-readiness validation because `render.yaml` is missing; the workflow also requires `render.staging.yaml`, `scripts/backup-research-os.ps1`, and `scripts/restore-research-os.ps1`. Evidence in the incident register says these assets are absent from both the PR base and head, so this is a workflow/asset-contract mismatch, not proof that this PR deleted them. The backup/restore drill was skipped after the missing-asset failure.
+
+Three sampled UI entry-point blobs match the authoritative production source exactly. Full UI asset, dependency-lock, build, generated-output, and release-artifact SHA lineage remains unverified. The current M.2 implementation still does not independently prove workflow path-filter coverage or UI/build/artifact lineage; those checks must remain open rather than be reported as passed.
+
+### 12.4 Required next decision
+
+Restore damaged files only from a verified authoritative blob or branch. Keep the PR blocked where provenance cannot be established. Resolve the production-readiness workflow's required-asset contract against the intended deployment model, with explicit evidence, rather than adding guessed placeholders or weakening the validation. Re-run all relevant checks against one new immutable target SHA and preserve the report and diff.
