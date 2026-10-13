@@ -45,6 +45,14 @@ jobs:
           echo "TARGET_SHA=$TARGET_SHA"
           echo "CHECKED_OUT_SHA=$actual"
 
+      - name: Fetch authoritative baseline history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --filter=blob:none \
+            https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git \
+            refs/heads/main:refs/remotes/baseline-truth/main
+
       - name: Test corruption detectors
         run: python -m unittest tools.test_m2_source_integrity_audit -v
 
@@ -52,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python tools/m2_source_integrity_audit.py --root . --expected-sha "$TARGET_SHA" --output m2-source-integrity-report.json
+          python tools/m2_source_integrity_audit.py --root . --expected-sha "$TARGET_SHA" --truth-ref refs/remotes/baseline-truth/main --output m2-source-integrity-report.json
 
       - name: Publish audit evidence
         if: always()
