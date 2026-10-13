@@ -23,6 +23,13 @@ TEXT_SUFFIXES = {
 }
 SOURCE_SUFFIXES = {".py", ".pyi", ".dart", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".php", ".ps1", ".psm1", ".sh", ".bash"}
 EXEMPT_EMPTY_NAMES = {".gitkeep", ".keep"}
+TRUSTED_SOURCE_BOM_BLOBS = {
+    "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1": {
+        "blob_sha": "bb43724cc9cfbbdbc709490ea72a0946e59aa3b1",
+        "repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+        "commit": "565ab068d5a1540ea799b594ff031ba003e068af",
+    },
+}
 EXTERNAL_ACTION_RE = re.compile(r"^\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)", re.MULTILINE)
 
 
@@ -54,6 +61,26 @@ def classify_bytes(path: str, raw: bytes) -> list[dict[str, str]]:
         except UnicodeDecodeError as exc:
             findings.append({"severity": "error", "code": "INVALID_UTF8", "path": path, "message": f"UTF-8 decode failed at byte {exc.start}"})
     return findings
+
+
+def apply_authoritative_bom_policy(
+    path: str, git_blob_sha: str, findings: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    """Do not flag a BOM as corruption when the exact blob is source-verified."""
+    source = TRUSTED_SOURCE_BOM_BLOBS.get(path)
+    if not source or git_blob_sha != source["blob_sha"]:
+        return findings
+    retained = [item for item in findings if item["code"] != "UTF8_BOM"]
+    retained.append({
+        "severity": "info",
+        "code": "AUTHORITATIVE_BOM_MATCH",
+        "path": path,
+        "message": (
+            f"UTF-8 BOM is byte-identical to authoritative blob {git_blob_sha} "
+            f"at {source['repository']}@{source['commit']}; not classified as corruption"
+        ),
+    })
+    return retained
 
 
 def tracked_paths(root: Path) -> list[str]:
@@ -149,6 +176,7 @@ def audit(
     casefold_paths: dict[str, list[str]] = defaultdict(list)
     basename_sources: dict[str, list[str]] = defaultdict(list)
     raw_sha256: dict[str, str] = {}
+    git_blob_sha_by_path: dict[str, str] = {}
     scanned = 0
     for rel in paths:
         file_path = root / rel
@@ -159,7 +187,10 @@ def audit(
             continue
         scanned += 1
         raw_sha256[rel] = hashlib.sha256(raw).hexdigest()
-        findings.extend(classify_bytes(rel, raw))
+        blob_sha = run_git(root, "rev-parse", f"HEAD:{rel}")
+        git_blob_sha_by_path[rel] = blob_sha
+        file_findings = classify_bytes(rel, raw)
+        findings.extend(apply_authoritative_bom_policy(rel, blob_sha, file_findings))
         casefold_paths[rel.casefold()].append(rel)
         if Path(rel).suffix.lower() in SOURCE_SUFFIXES:
             basename_sources[Path(rel).name.casefold()].append(rel)
@@ -211,6 +242,7 @@ def audit(
         "status": status,
         "findings": findings,
         "raw_sha256_by_path": raw_sha256,
+        "git_blob_sha_by_path": git_blob_sha_by_path,
         "limitations": [
             "This implementation checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
             "It does not yet independently prove workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. Those remain open protocol checks.",
