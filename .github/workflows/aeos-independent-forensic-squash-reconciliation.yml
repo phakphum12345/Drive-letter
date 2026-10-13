@@ -23,8 +23,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Fetch authoritative historical object graph
-        run: git fetch --no-tags https://github.com/phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git main
-        run: git fetch --no-tags https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git feat/aeos-hold-recovery-engine
+        run: |
+          set -euo pipefail
+          git fetch --no-tags https://github.com/phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git main
+          git fetch --no-tags https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git feat/aeos-hold-recovery-engine
 
       - name: Verify independent forensic evidence
         run: |
