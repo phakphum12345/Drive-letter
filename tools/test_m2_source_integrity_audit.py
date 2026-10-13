@@ -25,6 +25,23 @@ class SourceIntegrityByteClassificationTests(unittest.TestCase):
         findings = AUDIT.classify_bytes("tools/example.py", b"print('x')\x00\n")
         self.assertIn("TEXT_NUL_BYTE", {item["code"] for item in findings})
 
+    def test_authoritative_bom_blob_is_not_misclassified_as_corruption(self) -> None:
+        path = "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1"
+        blob_sha = "bb43724cc9cfbbdbc709490ea72a0946e59aa3b1"
+        raw_findings = AUDIT.classify_bytes(path, b"\\xef\\xbb\\xbfparam()\\n")
+        self.assertIn("UTF8_BOM", {item["code"] for item in raw_findings})
+        findings = AUDIT.apply_authoritative_bom_policy(path, blob_sha, raw_findings)
+        codes = {item["code"] for item in findings}
+        self.assertNotIn("UTF8_BOM", codes)
+        self.assertIn("AUTHORITATIVE_BOM_MATCH", codes)
+
+    def test_bom_exception_does_not_apply_to_different_blob(self) -> None:
+        path = "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1"
+        findings = AUDIT.apply_authoritative_bom_policy(
+            path, "0" * 40, AUDIT.classify_bytes(path, b"\\xef\\xbb\\xbfparam()\\n")
+        )
+        self.assertIn("UTF8_BOM", {item["code"] for item in findings})
+
     def test_does_not_treat_binary_image_nul_as_text_corruption(self) -> None:
         findings = AUDIT.classify_bytes("assets/logo.png", b"\x89PNG\x00binary")
         self.assertEqual(findings, [])
