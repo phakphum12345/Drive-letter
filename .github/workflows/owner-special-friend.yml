@@ -176,9 +176,9 @@ jobs:
           ref: ${{ env.TARGET_SHA }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: {python-version: '3.12'}
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5 pinned immutable commit
         with: {dotnet-version: '8.0.x'}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4 pinned immutable commit
         with:
           name: owner-special-desktop-validated-${{ env.TARGET_SHA }}
           path: owner_special/installer/desktop
@@ -269,7 +269,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ env.TARGET_SHA }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4 pinned immutable commit
         with:
           name: owner-special-setup-validated-${{ env.TARGET_SHA }}
           path: owner_special/installer/output
@@ -316,7 +316,7 @@ jobs:
           ref: ${{ env.TARGET_SHA }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: {python-version: '3.12'}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4 pinned immutable commit
         with:
           name: owner-special-setup-validated-${{ env.TARGET_SHA }}
           path: owner_special/dist/validated-installer
