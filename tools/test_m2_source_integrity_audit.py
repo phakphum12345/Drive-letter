@@ -28,7 +28,7 @@ class SourceIntegrityByteClassificationTests(unittest.TestCase):
     def test_authoritative_bom_blob_is_not_misclassified_as_corruption(self) -> None:
         path = "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1"
         blob_sha = "bb43724cc9cfbbdbc709490ea72a0946e59aa3b1"
-        raw_findings = AUDIT.classify_bytes(path, b"\\xef\\xbb\\xbfparam()\\n")
+        raw_findings = AUDIT.classify_bytes(path, b"\xef\xbb\xbfparam()\n")
         self.assertIn("UTF8_BOM", {item["code"] for item in raw_findings})
         findings = AUDIT.apply_authoritative_bom_policy(path, blob_sha, raw_findings)
         codes = {item["code"] for item in findings}
@@ -38,7 +38,7 @@ class SourceIntegrityByteClassificationTests(unittest.TestCase):
     def test_bom_exception_does_not_apply_to_different_blob(self) -> None:
         path = "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1"
         findings = AUDIT.apply_authoritative_bom_policy(
-            path, "0" * 40, AUDIT.classify_bytes(path, b"\\xef\\xbb\\xbfparam()\\n")
+            path, "0" * 40, AUDIT.classify_bytes(path, b"\xef\xbb\xbfparam()\n")
         )
         self.assertIn("UTF8_BOM", {item["code"] for item in findings})
 
