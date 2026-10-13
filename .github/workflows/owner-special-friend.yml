@@ -82,7 +82,7 @@ jobs:
           ref: ${{ env.TARGET_SHA }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: {python-version: '3.12'}
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      - uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with: {channel: stable, cache: true}
       - name: Prepare canonical Owner Windows desktop project
         working-directory: owner_special/flutter_app
