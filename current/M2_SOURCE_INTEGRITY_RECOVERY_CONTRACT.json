@@ -72,7 +72,8 @@
       "id": "SIR-008",
       "kind": "ui_source_sha_mismatch",
       "path": "apps/research_os_flutter/**;apps/research_os_web/**",
-      "status": "hypothesis_not_yet_proven"
+      "status": "sampled_ui_entry_blobs_match_authoritative_source_full_artifact_lineage_unverified",
+      "details": "The three sampled main.dart entry files match the authoritative production commit by exact Git blob SHA; this does not prove every UI asset or built artifact matches the same source revision."
     },
     {
       "id": "SIR-009",
@@ -144,6 +145,20 @@
       "path": "apps/research_os_flutter/lib/main.dart;owner_special/flutter_app/lib/main.dart;v3/flutter_app/lib/main.dart;owner_special/research_os_friend/brain.py;v3/research_os_v3/brain.py;owner_special/research_os_friend/service.py;v3/dlq/service.py;v3/research_os_v3/service.py",
       "status": "sampled_blob_shas_are_distinct; no evidence_of_overwrite_from_basename_alone",
       "repair_policy": "keep_separate_until_reference_and_surface_ownership_review"
+    },
+    {
+      "id": "SIR-018",
+      "kind": "ui_entry_source_blob_lineage_sample",
+      "path": "apps/research_os_flutter/lib/main.dart;owner_special/flutter_app/lib/main.dart;v3/flutter_app/lib/main.dart",
+      "status": "all_three_sampled_blobs_exact_match",
+      "source_repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "source_commit": "565ab068d5a1540ea799b594ff031ba003e068af",
+      "blob_shas": {
+        "apps/research_os_flutter/lib/main.dart": "077a1f64fc2f4572d8323870d17d9dcd93dfb13d",
+        "owner_special/flutter_app/lib/main.dart": "5aea08ec59adb7f70606901a5116dc48484f62d9",
+        "v3/flutter_app/lib/main.dart": "99379d902cc6e468dc8bec077351291c5bb74021"
+      },
+      "limit": "sampled entry files only; complete UI asset, dependency lock, build and artifact SHA lineage remains unverified"
     }
   ],
   "required_checks": [
@@ -212,6 +227,11 @@
       "version": "1.0.3",
       "date": "2026-10-13",
       "change": "Trace baseline and squash anchors to authoritative source main; record source-verified PowerShell BOM blob, source-unavailable helper files, sampled distinct path blobs, and M.2 ancestry/blob-SHA implementation."
+    },
+    {
+      "version": "1.0.4",
+      "date": "2026-10-13",
+      "change": "Record exact authoritative blob matches for three UI entry points while explicitly leaving full UI/build/artifact SHA lineage unverified."
     }
   ],
   "latest_audit": {
@@ -254,5 +274,30 @@
     "all_three_absent_from_Drive_letter_object_graph_at_audit_time": true,
     "baseline_workflow_fetch_and_ancestry_check_added": true,
     "baseline_and_M2_reverification": "PENDING"
+  },
+  "ui_source_sha_sample_checks": {
+    "source_repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+    "source_commit": "565ab068d5a1540ea799b594ff031ba003e068af",
+    "checks": [
+      {
+        "path": "apps/research_os_flutter/lib/main.dart",
+        "target_blob_sha": "077a1f64fc2f4572d8323870d17d9dcd93dfb13d",
+        "source_blob_sha": "077a1f64fc2f4572d8323870d17d9dcd93dfb13d",
+        "equal": true
+      },
+      {
+        "path": "owner_special/flutter_app/lib/main.dart",
+        "target_blob_sha": "5aea08ec59adb7f70606901a5116dc48484f62d9",
+        "source_blob_sha": "5aea08ec59adb7f70606901a5116dc48484f62d9",
+        "equal": true
+      },
+      {
+        "path": "v3/flutter_app/lib/main.dart",
+        "target_blob_sha": "99379d902cc6e468dc8bec077351291c5bb74021",
+        "source_blob_sha": "99379d902cc6e468dc8bec077351291c5bb74021",
+        "equal": true
+      }
+    ],
+    "status": "SAMPLED_ONLY_NOT_FULL_UI_OR_ARTIFACT_CERTIFICATION"
   }
 }
