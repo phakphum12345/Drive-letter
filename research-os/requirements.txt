@@ -1,2 +1,0 @@
-pytest
-# Minimal dependencies for the example app

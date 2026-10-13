@@ -23,6 +23,7 @@ jobs:
       - name: Validate #366 reconciliation evidence structure
         run: |
           set -euo pipefail
+          git fetch --no-tags https://github.com/phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git main
           python3 tools/aeos/validate_squash_reconciliation.py \
             current/AEOS_SQUASH_RECONCILIATIONS.json source
           python3 -m unittest tools.aeos.test_validate_squash_reconciliation -v

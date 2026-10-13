@@ -80,24 +80,6 @@ def main() -> int:
         item = evidence[path]
         if not isinstance(item, dict) or item.get("stale_or_conflicting") is not True or not isinstance(item.get("evidence"), str) or not item["evidence"].strip():
             raise SystemExit(f"FAIL: incomplete stale/conflict proof for divergent path: {path}")
-    if stage == "source":
-        print(json.dumps({
-            "status": "STRUCTURE_VALID_NOT_FORENSIC",
-            "stage": "source",
-            "schema": data["schema"],
-            "pr_number": data["pr_number"],
-            "base_sha": data["base_sha"],
-            "head_sha": data["head_sha"],
-            "merge_sha": data["merge_sha"],
-            "divergent_paths": sorted(declared),
-            "accepted_payload_paths": sorted(set(accepted_list)),
-            "independent_forensic_status": data["independent_forensic_status"],
-            "merge_authority": False,
-            "self_certification": False,
-            "note": "Manifest structure validated; Git-object existence and historical ancestry were not verified in source stage."
-        }, indent=2))
-        return 0
-
     base = data["base_sha"]
     head = data["head_sha"]
     merge = data["merge_sha"]

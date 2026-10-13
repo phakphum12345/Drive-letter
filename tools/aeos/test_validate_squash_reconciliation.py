@@ -1,4 +1,4 @@
-"""Regression tests for source-only versus forensic reconciliation validation."""
+"""Regression tests ensuring unavailable history never becomes a false pass."""
 from __future__ import annotations
 
 import json
@@ -25,15 +25,15 @@ class ReconciliationValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             manifest = Path(temp) / "manifest.json"
             manifest.write_text(json.dumps(payload), encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=temp, check=True)
             return subprocess.run([sys.executable, str(SCRIPT), str(manifest), stage], cwd=temp, text=True, capture_output=True, check=False)
 
-    def test_source_stage_validates_structure_without_claiming_forensic_proof(self) -> None:
+    def test_source_stage_fails_closed_when_historical_objects_are_missing(self) -> None:
         result = self.invoke(VALID, "source")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("STRUCTURE_VALID_NOT_FORENSIC", result.stdout)
-        self.assertIn('"merge_authority": false', result.stdout)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("required historical Git commit is unavailable", result.stderr)
 
-    def test_source_stage_rejects_digest_mismatch(self) -> None:
+    def test_source_stage_rejects_digest_mismatch_before_git_validation(self) -> None:
         payload = dict(VALID, accepted_payload_digest="3" * 40)
         result = self.invoke(payload, "source")
         self.assertNotEqual(result.returncode, 0)

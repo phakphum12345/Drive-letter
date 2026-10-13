@@ -1,5 +1,0 @@
-status=IMPLEMENTATION_DRAFT
-base=c04d60b36d51eb8529a4c65a61c7d5a411e5fe85
-mode=AUTO_GUARDED
-auto_merge=OFF
-certification=REQUIRED
