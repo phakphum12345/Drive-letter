@@ -99,6 +99,16 @@ The corrupted `ANEF-001_PROJECT_OVERVIEW.md` was restored in commit [`4837ee6ff8
 - Restored target blob: `b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0` — exact Git blob SHA match.
 - Disposition: **restored; independent exact-head re-audit pending**. This does not certify the remaining BOM files, missing source helpers, baseline gate, workflow coverage, UI SHA lineage, or path-shadow warnings.
 
-## 9. Current disposition
+## 9. Provenance and path findings
+
+The immutable anchors `565ab068d5a1540ea799b594ff031ba003e068af`, `fab39afc15739c3dc9952f6f21db46d26f54b683`, and historical squash object `14750f63b0c1871b768874f36f6b7ee32e48cc99` were found in the authoritative repository `phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`; GitHub's compare API confirms each is an ancestor of that repository's `main`. They are absent from the imported `Drive-letter` object graph because this repository contains a source snapshot rather than that original Git history. The Baseline Truth and M.2 workflows have been updated to fetch authoritative main and check ancestry; their new exact-head CI results are still pending. Do not change the immutable anchors to the snapshot's current HEAD.
+
+The source blob `bb43724cc9cfbbdbc709490ea72a0946e59aa3b1` for `owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1` is identical in the imported tree and authoritative source. Its BOM is source-verified and must be preserved. The audit now allows this exact path/blob pair only; a changed blob does not receive the exception.
+
+The 14 damaged Python helper paths listed in the incident contract were not present in the recursive source trees at either authoritative anchor. In particular, no authoritative `tools/create_change_queue.py` blob was found. These files remain **BLOCKED_SOURCE_UNAVAILABLE** until a trusted branch/blob is found; no guessed replacement will be created.
+
+Sampled same-basename implementations (`apps/research_os_flutter/lib/main.dart`, `owner_special/flutter_app/lib/main.dart`, `v3/flutter_app/lib/main.dart`, plus selected `brain.py` and `service.py` files) have distinct Git blob SHAs. That rules out byte-identical overwriting for those samples, but does not prove that every import/build reference points to the intended implementation. The remaining 22 basename groups still require path/reference ownership review.
+
+## 10. Current disposition
 
 **NOT CERTIFIED.**
