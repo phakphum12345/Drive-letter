@@ -6,7 +6,7 @@
 function runCommand(cmd){
  var shell=new ActiveXObject("WScript.Shell"), fso=new ActiveXObject("Scripting.FileSystemObject");
  var here=unescape(document.location.pathname).replace(/^\//,"").replace(/\//g,"\");
- var root=fso.GetParentFolderName(fso.GetParentFolderName(here));
+ var root=fso.GetParentFolderName(fso.GetParentFolderName(fso.GetParentFolderName(here)));
  var engine=root+"\platform\recon-sync\recon-sync-engine.ps1";
  var command='powershell.exe -NoProfile -ExecutionPolicy Bypass -File "'+engine+'" -Command '+cmd+' -RepoRoot "'+root+'" -Json';
  document.getElementById("result").innerText="Running "+cmd+"...";
