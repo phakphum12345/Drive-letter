@@ -1,0 +1,85 @@
+{
+  "protocol_id": "M2-SOURCE-INTEGRITY-RECOVERY-001",
+  "version": "1.0.0",
+  "status": "ACTIVE_DIAGNOSTIC_PROTOCOL",
+  "authority": {
+    "m2_role": "diagnostic_only",
+    "final_gate_role": "release_and_merge_authority",
+    "bypass_gates": false,
+    "unknown_provenance_decision": "HOLD"
+  },
+  "required_invariants": [
+    "immutable_source_identity",
+    "single_tested_sha_across_evidence",
+    "path_preserving_inventory",
+    "sha256_and_byte_length_for_each_tracked_file",
+    "detect_nul_bom_empty_truncated_and_invalid_text",
+    "restore_only_from_trusted_source_revision",
+    "ui_api_contract_artifact_version_alignment",
+    "workflow_path_filter_and_checkout_sha_coverage",
+    "fail_closed_on_missing_or_ambiguous_evidence",
+    "rerun_all_applicable_gates_on_recovery_sha"
+  ],
+  "required_evidence_fields": [
+    "source_repository",
+    "source_commit_sha",
+    "target_repository",
+    "target_branch",
+    "tested_commit_sha",
+    "parent_sha",
+    "path_inventory",
+    "sha256_inventory",
+    "missing_paths",
+    "unexpected_paths",
+    "casefold_path_collisions",
+    "duplicate_basename_review",
+    "byte_integrity_findings",
+    "ui_api_artifact_alignment",
+    "workflow_coverage",
+    "restoration_provenance",
+    "gate_results",
+    "decision",
+    "decision_reasons"
+  ],
+  "decision_rules": {
+    "PASS": "All required source, path, content, UI/API/artifact, workflow, and gate evidence is complete and consistent for the exact tested SHA.",
+    "FAIL": "A verified integrity or consistency invariant is violated.",
+    "HOLD": "Required source provenance or evidence is missing, ambiguous, stale, or cannot be independently verified."
+  },
+  "known_findings": [
+    {
+      "id": "M2-SIR-001",
+      "status": "CONFIRMED",
+      "path": "tools/create_change_queue.py",
+      "finding": "File content is only UTF-8 BOM bytes at candidate and parent commit.",
+      "disposition": "Restore from trusted source revision; do not synthesize replacement."
+    },
+    {
+      "id": "M2-SIR-002",
+      "status": "CONFIRMED_HISTORICAL",
+      "path": "tools/tests/test_aeos_assurance_universe_compiler.py",
+      "finding": "Earlier CI Lite reported NUL bytes; later candidate commit replaced the file.",
+      "disposition": "Re-run byte-level scan and regression tests on current candidate."
+    },
+    {
+      "id": "M2-SIR-003",
+      "status": "CONFIRMED",
+      "path": "current/BASELINE_TRUTH_CONTRACT.json",
+      "finding": "Referenced source-history anchors were not verifiable in the target checkout during Baseline Truth Gate.",
+      "disposition": "Verify the source repository/history and provenance; do not replace anchors with candidate SHA."
+    },
+    {
+      "id": "M2-SIR-004",
+      "status": "CONFIRMED",
+      "path": ".github/workflows/",
+      "finding": "CI Lite and V3.5 production-readiness checks fail on candidate; Exact-SHA gate passing is not sufficient evidence of complete workflow coverage.",
+      "disposition": "Inspect failing job logs and reconcile all workflow inputs and checked-out SHAs."
+    }
+  ],
+  "non_goals": [
+    "Do not convert expected authorization denials into success responses.",
+    "Do not disable or weaken failing gates.",
+    "Do not infer a file's identity from basename alone.",
+    "Do not treat a green subset of workflows as overall PASS."
+  ]
+}
