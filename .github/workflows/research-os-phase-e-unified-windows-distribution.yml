@@ -59,7 +59,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      - uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
           channel: stable
           cache: true

@@ -24,7 +24,7 @@ jobs:
           ref: f1ef9671e5b76dac0fc5df62f64fe31f54845072
 
       - name: Setup exact Flutter toolchain
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
           flutter-version: "3.44.9"
           channel: stable
