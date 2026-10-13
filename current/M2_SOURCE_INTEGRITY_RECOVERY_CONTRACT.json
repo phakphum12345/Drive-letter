@@ -87,8 +87,12 @@
       "id": "SIR-011",
       "kind": "nul_and_invalid_utf8_in_markdown_path",
       "path": "versions/v1.0.0-draft/docs/00_FOUNDATION/ANEF-001_PROJECT_OVERVIEW.md",
-      "status": "confirmed_by_m2_audit_on_522057f",
-      "repair_policy": "recover_authoritative_blob_before_replacement"
+      "status": "restored_from_authoritative_blob_reaudit_pending",
+      "repair_policy": "recover_authoritative_blob_before_replacement",
+      "recovery_commit": "4837ee6ff890f26f5332c02b0f42f0b405fcbe70",
+      "authoritative_source_repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "authoritative_source_commit": "565ab068d5a1540ea799b594ff031ba003e068af",
+      "authoritative_blob_sha": "b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0"
     },
     {
       "id": "SIR-012",
@@ -169,6 +173,11 @@
       "version": "1.0.1",
       "date": "2026-10-13",
       "change": "Record exact-head M.2 findings (20 errors, 22 warnings), additional BOM/non-UTF8 damage, missing baseline anchors, workflow asset mismatch, duplicate basenames, and current audit implementation limits."
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-10-13",
+      "change": "Record ANEF-001 restoration from an authoritative source blob with exact Git blob SHA equality; require a new exact-head M.2 audit before closure."
     }
   ],
   "latest_audit": {
@@ -189,5 +198,16 @@
     "baseline_truth_run_id": 38407688988,
     "production_readiness_job_url": "https://github.com/phakphum12345/Drive-letter/actions/runs/38407689007/job/115332592608",
     "checked_at_utc": "2026-10-13T13:50:33Z"
+  },
+  "latest_recovery": {
+    "path": "versions/v1.0.0-draft/docs/00_FOUNDATION/ANEF-001_PROJECT_OVERVIEW.md",
+    "prior_corrupt_blob_sha": "1f393559390921bb5282c0a93da7cc208b10a971",
+    "restored_blob_sha": "b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0",
+    "authoritative_blob_sha": "b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0",
+    "source_repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+    "source_commit": "565ab068d5a1540ea799b594ff031ba003e068af",
+    "recovery_commit": "4837ee6ff890f26f5332c02b0f42f0b405fcbe70",
+    "status": "BYTE_IDENTICAL_RESTORE_REAUDIT_PENDING",
+    "release_authority": "FINAL_GATE"
   }
 }
