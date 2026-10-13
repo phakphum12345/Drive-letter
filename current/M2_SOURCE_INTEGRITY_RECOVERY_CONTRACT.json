@@ -5,76 +5,20 @@
   "status": "ACTIVE_INVESTIGATION_NOT_CERTIFIED",
   "target_repository": "phakphum12345/Drive-letter",
   "target_pr": 1,
-  "target_sha": "41f44b5348ccae453a685047e3fb7a5789cd395b",
+  "incident_observed_sha": "41f44b5348ccae453a685047e3fb7a5789cd395b",
   "release_authority": "FINAL_GATE",
   "audit_authority": "M2_AUDIT_EVIDENCE_ONLY",
   "fail_closed": true,
   "known_findings": [
-    {
-      "id": "SIR-001",
-      "kind": "historical_nul_byte",
-      "path": "tools/tests/test_aeos_assurance_universe_compiler.py",
-      "status": "repair_commit_present_reverify_required",
-      "evidence_commit": "41f44b5348ccae453a685047e3fb7a5789cd395b"
-    },
-    {
-      "id": "SIR-002",
-      "kind": "utf8_bom",
-      "path": "multiple_files",
-      "count": 14,
-      "status": "reported_by_current_ci_audit",
-      "repair_policy": "compare_authoritative_bytes_before_repair"
-    },
-    {
-      "id": "SIR-003",
-      "kind": "bom_only_empty_source",
-      "path": "tools/create_change_queue.py",
-      "status": "confirmed_blocking",
-      "observed_base64": "77u/",
-      "repair_policy": "restore_from_trusted_blob_or_remain_blocked"
-    },
-    {
-      "id": "SIR-004",
-      "kind": "missing_git_history_anchor",
-      "path": "current/BASELINE_TRUTH_CONTRACT.json",
-      "status": "confirmed_gate_failure",
-      "expected_commits": [
-        "565ab068d5a1540ea799b594ff031ba003e068af",
-        "fab39afc15739c3dc9952f6f21db46d26f54b683"
-      ]
-    },
-    {
-      "id": "SIR-005",
-      "kind": "missing_squash_object",
-      "path": "git_object_graph",
-      "status": "historical_gap_reverify",
-      "expected_object": "14750f63b0c1871b768874f36f6b7ee32e48cc99"
-    },
-    {
-      "id": "SIR-006",
-      "kind": "mutable_action_reference_policy",
-      "path": ".github/workflows/**",
-      "status": "historical_issue_current_tree_reaudit_required",
-      "required": "external actions pinned to full immutable commit SHA"
-    },
-    {
-      "id": "SIR-007",
-      "kind": "workflow_path_coverage",
-      "path": ".github/workflows/**",
-      "status": "coverage_risk_reaudit_required"
-    },
-    {
-      "id": "SIR-008",
-      "kind": "ui_source_sha_mismatch",
-      "path": "apps/research_os_flutter/**;apps/research_os_web/**",
-      "status": "hypothesis_not_yet_proven"
-    },
-    {
-      "id": "SIR-009",
-      "kind": "cross_path_file_swallow_or_shadow",
-      "path": "repository_tree",
-      "status": "hypothesis_not_yet_proven"
-    }
+    {"id":"SIR-001","kind":"historical_nul_byte","path":"tools/tests/test_aeos_assurance_universe_compiler.py","status":"repair_commit_present_reverify_required","evidence_commit":"41f44b5348ccae453a685047e3fb7a5789cd395b"},
+    {"id":"SIR-002","kind":"utf8_bom","path":"multiple_files","count":14,"status":"reported_by_current_ci_audit","repair_policy":"compare_authoritative_bytes_before_repair"},
+    {"id":"SIR-003","kind":"bom_only_empty_source","path":"tools/create_change_queue.py","status":"confirmed_blocking","observed_base64":"77u/","repair_policy":"restore_from_trusted_blob_or_remain_blocked"},
+    {"id":"SIR-004","kind":"missing_git_history_anchor","path":"current/BASELINE_TRUTH_CONTRACT.json","status":"confirmed_gate_failure","expected_commits":["565ab068d5a1540ea799b594ff031ba003e068af","fab39afc15739c3dc9952f6f21db46d26f54b683"]},
+    {"id":"SIR-005","kind":"missing_squash_object","path":"git_object_graph","status":"historical_gap_reverify","expected_object":"14750f63b0c1871b768874f36f6b7ee32e48cc99"},
+    {"id":"SIR-006","kind":"mutable_action_reference_policy","path":".github/workflows/**","status":"historical_issue_current_tree_reaudit_required","required":"external actions pinned to full immutable commit SHA"},
+    {"id":"SIR-007","kind":"workflow_path_coverage","path":".github/workflows/**","status":"coverage_risk_reaudit_required"},
+    {"id":"SIR-008","kind":"ui_source_sha_mismatch","path":"apps/research_os_flutter/**;apps/research_os_web/**","status":"hypothesis_not_yet_proven"},
+    {"id":"SIR-009","kind":"cross_path_file_swallow_or_shadow","path":"repository_tree","status":"hypothesis_not_yet_proven"}
   ],
   "required_checks": [
     "exact_target_checkout",
@@ -88,12 +32,7 @@
     "independent_repeat_audit",
     "final_gate_evidence_reconciliation"
   ],
-  "decision_states": [
-    "PASS",
-    "FAIL",
-    "BLOCKED_SOURCE_UNAVAILABLE",
-    "UNKNOWN"
-  ],
+  "decision_states": ["PASS","FAIL","BLOCKED_SOURCE_UNAVAILABLE","UNKNOWN"],
   "invariants": {
     "target_sha_equals_checkout_sha_equals_tested_source_sha": true,
     "missing_evidence_is_pass": false,
@@ -119,10 +58,6 @@
     "tools/harden_resource_semantic_platform.py"
   ],
   "revision_history": [
-    {
-      "version": "1.0.0",
-      "date": "2026-10-13",
-      "change": "Initial evidence-backed protocol for SHA/provenance drift, damaged files, workflow coverage, UI lineage, and path collisions."
-    }
+    {"version":"1.0.0","date":"2026-10-13","change":"Initial evidence-backed protocol for SHA/provenance drift, damaged files, workflow coverage, UI lineage, and path collisions."}
   ]
 }
