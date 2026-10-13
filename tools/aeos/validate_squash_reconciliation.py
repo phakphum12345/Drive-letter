@@ -51,9 +51,61 @@ def main() -> int:
     if stage == "forensic" and data["independent_forensic_status"] != "VERIFIED":
         raise SystemExit("FAIL: independent forensic verification is required")
 
+    # The source stage validates the manifest's internal contract only. Imported
+    # repositories often do not carry the historical object database; that must
+    # never be misreported as forensic verification. The forensic stage below
+    # remains fail-closed and requires every referenced object to exist.
+    sha_fields = ("base_sha", "head_sha", "merge_sha", "merge_parent_sha", "accepted_payload_digest")
+    for field in sha_fields:
+        value = data[field]
+        if not isinstance(value, str) or not __import__("re").fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", value):
+            raise SystemExit(f"FAIL: {field} is not a full Git object ID")
+    if data["merge_sha"] != data["accepted_payload_digest"]:
+        raise SystemExit("FAIL: accepted payload digest does not equal merge commit SHA")
+    divergent_list = data["divergent_paths"]
+    accepted_list = data["accepted_payload_paths"]
+    if not isinstance(divergent_list, list) or not all(isinstance(p, str) and p for p in divergent_list):
+        raise SystemExit("FAIL: divergent_paths must be a list of non-empty paths")
+    if len(set(divergent_list)) != len(divergent_list):
+        raise SystemExit("FAIL: duplicate path in divergent_paths")
+    if not isinstance(accepted_list, list) or not all(isinstance(p, str) and p for p in accepted_list):
+        raise SystemExit("FAIL: accepted_payload_paths must be a list of non-empty paths")
+    if len(set(accepted_list)) != len(accepted_list):
+        raise SystemExit("FAIL: duplicate path in accepted_payload_paths")
+    declared = set(divergent_list)
+    evidence = data["canonical_conflict_evidence"]
+    if not isinstance(evidence, dict) or set(evidence) != declared:
+        raise SystemExit("FAIL: every divergent path needs canonical conflict evidence")
+    for path in sorted(declared):
+        item = evidence[path]
+        if not isinstance(item, dict) or item.get("stale_or_conflicting") is not True or not isinstance(item.get("evidence"), str) or not item["evidence"].strip():
+            raise SystemExit(f"FAIL: incomplete stale/conflict proof for divergent path: {path}")
+    if stage == "source":
+        print(json.dumps({
+            "status": "STRUCTURE_VALID_NOT_FORENSIC",
+            "stage": "source",
+            "schema": data["schema"],
+            "pr_number": data["pr_number"],
+            "base_sha": data["base_sha"],
+            "head_sha": data["head_sha"],
+            "merge_sha": data["merge_sha"],
+            "divergent_paths": sorted(declared),
+            "accepted_payload_paths": sorted(set(accepted_list)),
+            "independent_forensic_status": data["independent_forensic_status"],
+            "merge_authority": False,
+            "self_certification": False,
+            "note": "Manifest structure validated; Git-object existence and historical ancestry were not verified in source stage."
+        }, indent=2))
+        return 0
+
     base = data["base_sha"]
     head = data["head_sha"]
     merge = data["merge_sha"]
+    for object_id in (base, head, merge):
+        try:
+            run("git", "cat-file", "-e", f"{object_id}^{{commit}}")
+        except subprocess.CalledProcessError:
+            raise SystemExit(f"FAIL: required historical Git commit is unavailable: {object_id}")
     parents = run("git", "rev-list", "--parents", "-n", "1", merge).split()[1:]
     if parents != [data["merge_parent_sha"]] or parents != [base]:
         raise SystemExit("FAIL: squash merge must have exactly BASE as its only parent")
