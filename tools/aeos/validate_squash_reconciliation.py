@@ -51,10 +51,10 @@ def main() -> int:
     if stage == "forensic" and data["independent_forensic_status"] != "VERIFIED":
         raise SystemExit("FAIL: independent forensic verification is required")
 
-    # The source stage validates the manifest's internal contract only. Imported
-    # repositories often do not carry the historical object database; that must
-    # never be misreported as forensic verification. The forensic stage below
-    # remains fail-closed and requires every referenced object to exist.
+    # Both stages verify the referenced Git object graph. The source stage permits
+    # pending independent forensic status; the forensic stage additionally requires
+    # independent verification. Workflows must fetch the manifest's source history
+    # explicitly instead of weakening checks when historical objects are absent.
     sha_fields = ("base_sha", "head_sha", "merge_sha", "merge_parent_sha", "accepted_payload_digest")
     for field in sha_fields:
         value = data[field]
