@@ -90,6 +90,15 @@ Related exact-head failures:
 
 Implementation boundary: the current `tools/m2_source_integrity_audit.py` checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, and external action SHA pins. It does **not yet** independently prove historical ancestry, workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. These remain open checks and cannot be reported PASS from the current audit.
 
-## 8. Current disposition
+## 8. Recovery event — ANEF-001 source restoration
+
+The corrupted `ANEF-001_PROJECT_OVERVIEW.md` was restored in commit [`4837ee6ff890f26f5332c02b0f42f0b405fcbe70`](https://github.com/phakphum12345/Drive-letter/commit/4837ee6ff890f26f5332c02b0f42f0b405fcbe70) from the authoritative repository `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`, commit `565ab068d5a1540ea799b594ff031ba003e068af`.
+
+- Previous target blob: `1f393559390921bb5282c0a93da7cc208b10a971` (M.2 detected NUL and invalid UTF-8).
+- Authoritative source blob: `b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0`.
+- Restored target blob: `b9a9e9c38300bb13ea9ca8afe32dc5e499af1fd0` — exact Git blob SHA match.
+- Disposition: **restored; independent exact-head re-audit pending**. This does not certify the remaining BOM files, missing source helpers, baseline gate, workflow coverage, UI SHA lineage, or path-shadow warnings.
+
+## 9. Current disposition
 
 **NOT CERTIFIED.**
