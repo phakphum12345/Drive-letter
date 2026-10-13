@@ -74,6 +74,22 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 The protocol is complete only when the incident register is updated with confirmed/resolved/blocked status; every repaired file has authoritative provenance; all changed files have validation coverage; source/UI/artifact SHAs reconcile; historical anchor availability is independently proven; and the exact target's required gates pass without weakening their assertions.
 
-## 7. Current disposition
+## 7. Latest evidence update — exact PR head `522057f6e4622535a085d7c55b053fe280a1ddb7`
 
-**NOT CERTIFIED.** This protocol records confirmed defects and the investigation method. It does not claim that the 14 BOM files, missing Git history, workflow coverage, UI parity, or path-collision hypotheses have all been repaired or verified.
+Audit evidence: [M.2 Source Integrity run 38407689847](https://github.com/phakphum12345/Drive-letter/actions/runs/38407689847). The run checked out the exact PR head and returned **FAIL** with 20 errors and 22 warnings.
+
+Confirmed byte findings:
+- 17 files with unexpected UTF-8 BOM, plus the BOM-only `tools/create_change_queue.py` (18 BOM-affected files in total).
+- `versions/v1.0.0-draft/docs/00_FOUNDATION/ANEF-001_PROJECT_OVERVIEW.md` contains NUL bytes and fails UTF-8 decoding. Its original bytes are not presumed to be ordinary Markdown; restore only from an authoritative blob.
+- 22 duplicate-source-basename groups are review warnings. They are not automatically file collisions; compare Git blob IDs, imports, build targets, and ownership before moving or deleting any file.
+
+Related exact-head failures:
+- [CI Lite run 38407687735](https://github.com/phakphum12345/Drive-letter/actions/runs/38407687735) still fails the 6x6 file audit on the 14 Python files whose first character is U+FEFF.
+- [Baseline Truth Gate run 38407688988](https://github.com/phakphum12345/Drive-letter/actions/runs/38407688988) cannot find the declared production/canonical history anchors in the checked-out object graph. This is a provenance failure, not permission to replace the anchors with the current head.
+- [Production readiness job](https://github.com/phakphum12345/Drive-letter/actions/runs/38407689007/job/115332592608) expects `render.yaml`, `render.staging.yaml`, `scripts/backup-research-os.ps1`, and `scripts/restore-research-os.ps1`. The two render manifests are absent from both the PR head and its base commit, so the evidence points to a workflow/source-snapshot contract mismatch rather than a PR deletion. Do not create placeholder manifests to satisfy the check.
+
+Implementation boundary: the current `tools/m2_source_integrity_audit.py` checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, and external action SHA pins. It does **not yet** independently prove historical ancestry, workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. These remain open checks and cannot be reported PASS from the current audit.
+
+## 8. Current disposition
+
+**NOT CERTIFIED.**
