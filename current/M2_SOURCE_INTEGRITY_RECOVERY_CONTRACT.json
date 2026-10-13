@@ -10,15 +10,108 @@
   "audit_authority": "M2_AUDIT_EVIDENCE_ONLY",
   "fail_closed": true,
   "known_findings": [
-    {"id":"SIR-001","kind":"historical_nul_byte","path":"tools/tests/test_aeos_assurance_universe_compiler.py","status":"repair_commit_present_reverify_required","evidence_commit":"41f44b5348ccae453a685047e3fb7a5789cd395b"},
-    {"id":"SIR-002","kind":"utf8_bom","path":"multiple_files","count":14,"status":"reported_by_current_ci_audit","repair_policy":"compare_authoritative_bytes_before_repair"},
-    {"id":"SIR-003","kind":"bom_only_empty_source","path":"tools/create_change_queue.py","status":"confirmed_blocking","observed_base64":"77u/","repair_policy":"restore_from_trusted_blob_or_remain_blocked"},
-    {"id":"SIR-004","kind":"missing_git_history_anchor","path":"current/BASELINE_TRUTH_CONTRACT.json","status":"confirmed_gate_failure","expected_commits":["565ab068d5a1540ea799b594ff031ba003e068af","fab39afc15739c3dc9952f6f21db46d26f54b683"]},
-    {"id":"SIR-005","kind":"missing_squash_object","path":"git_object_graph","status":"historical_gap_reverify","expected_object":"14750f63b0c1871b768874f36f6b7ee32e48cc99"},
-    {"id":"SIR-006","kind":"mutable_action_reference_policy","path":".github/workflows/**","status":"historical_issue_current_tree_reaudit_required","required":"external actions pinned to full immutable commit SHA"},
-    {"id":"SIR-007","kind":"workflow_path_coverage","path":".github/workflows/**","status":"coverage_risk_reaudit_required"},
-    {"id":"SIR-008","kind":"ui_source_sha_mismatch","path":"apps/research_os_flutter/**;apps/research_os_web/**","status":"hypothesis_not_yet_proven"},
-    {"id":"SIR-009","kind":"cross_path_file_swallow_or_shadow","path":"repository_tree","status":"hypothesis_not_yet_proven"}
+    {
+      "id": "SIR-001",
+      "kind": "historical_nul_byte",
+      "path": "tools/tests/test_aeos_assurance_universe_compiler.py",
+      "status": "repair_commit_present_reverify_required",
+      "evidence_commit": "41f44b5348ccae453a685047e3fb7a5789cd395b"
+    },
+    {
+      "id": "SIR-002",
+      "kind": "utf8_bom",
+      "path": "multiple_files",
+      "count": 14,
+      "status": "reported_by_current_ci_audit",
+      "repair_policy": "compare_authoritative_bytes_before_repair"
+    },
+    {
+      "id": "SIR-003",
+      "kind": "bom_only_empty_source",
+      "path": "tools/create_change_queue.py",
+      "status": "confirmed_blocking",
+      "observed_base64": "77u/",
+      "repair_policy": "restore_from_trusted_blob_or_remain_blocked"
+    },
+    {
+      "id": "SIR-004",
+      "kind": "missing_git_history_anchor",
+      "path": "current/BASELINE_TRUTH_CONTRACT.json",
+      "status": "confirmed_gate_failure",
+      "expected_commits": [
+        "565ab068d5a1540ea799b594ff031ba003e068af",
+        "fab39afc15739c3dc9952f6f21db46d26f54b683"
+      ]
+    },
+    {
+      "id": "SIR-005",
+      "kind": "missing_squash_object",
+      "path": "git_object_graph",
+      "status": "historical_gap_reverify",
+      "expected_object": "14750f63b0c1871b768874f36f6b7ee32e48cc99"
+    },
+    {
+      "id": "SIR-006",
+      "kind": "mutable_action_reference_policy",
+      "path": ".github/workflows/**",
+      "status": "historical_issue_current_tree_reaudit_required",
+      "required": "external actions pinned to full immutable commit SHA"
+    },
+    {
+      "id": "SIR-007",
+      "kind": "workflow_path_coverage",
+      "path": ".github/workflows/**",
+      "status": "coverage_risk_reaudit_required"
+    },
+    {
+      "id": "SIR-008",
+      "kind": "ui_source_sha_mismatch",
+      "path": "apps/research_os_flutter/**;apps/research_os_web/**",
+      "status": "hypothesis_not_yet_proven"
+    },
+    {
+      "id": "SIR-009",
+      "kind": "cross_path_file_swallow_or_shadow",
+      "path": "repository_tree",
+      "status": "hypothesis_not_yet_proven"
+    },
+    {
+      "id": "SIR-010",
+      "kind": "additional_bom_damage_outside_python",
+      "path": ".github/workflows/aeos-master-assurance.yml;.gitignore;apps/research_os_flutter/test/desktop_shell_test.dart;owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1",
+      "status": "confirmed_by_m2_audit_on_522057f",
+      "count": 4,
+      "repair_policy": "compare_authoritative_bytes_before_repair"
+    },
+    {
+      "id": "SIR-011",
+      "kind": "nul_and_invalid_utf8_in_markdown_path",
+      "path": "versions/v1.0.0-draft/docs/00_FOUNDATION/ANEF-001_PROJECT_OVERVIEW.md",
+      "status": "confirmed_by_m2_audit_on_522057f",
+      "repair_policy": "recover_authoritative_blob_before_replacement"
+    },
+    {
+      "id": "SIR-012",
+      "kind": "duplicate_source_basename_review",
+      "path": "repository_tree",
+      "status": "22_warning_groups_from_m2_audit",
+      "count": 22,
+      "repair_policy": "compare_git_blob_sha_import_resolution_and_expected_surface_before_any_move"
+    },
+    {
+      "id": "SIR-013",
+      "kind": "production_workflow_expected_assets_absent_from_both_base_and_head",
+      "path": "render.yaml;render.staging.yaml;scripts/backup-research-os.ps1;scripts/restore-research-os.ps1",
+      "status": "confirmed_workflow_asset_contract_mismatch",
+      "details": "The production-readiness job fails because render.yaml is absent from both base commit 43cc4f6f4ca6c5b98d7e99e1a8682ff08e18b5bb and PR head 522057f6e4622535a085d7c55b053fe280a1ddb7. This is not evidence that the PR deleted it; it indicates the imported workflow expects assets not present in either checked tree."
+    },
+    {
+      "id": "SIR-014",
+      "kind": "m2_audit_coverage_limit",
+      "path": "tools/m2_source_integrity_audit.py",
+      "status": "confirmed_implementation_limit",
+      "details": "Current script detects bytes, case-fold collisions, duplicate source basenames, and external action pins; it does not yet independently prove historical Git ancestry, workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative source restoration."
+    }
   ],
   "required_checks": [
     "exact_target_checkout",
@@ -32,7 +125,12 @@
     "independent_repeat_audit",
     "final_gate_evidence_reconciliation"
   ],
-  "decision_states": ["PASS","FAIL","BLOCKED_SOURCE_UNAVAILABLE","UNKNOWN"],
+  "decision_states": [
+    "PASS",
+    "FAIL",
+    "BLOCKED_SOURCE_UNAVAILABLE",
+    "UNKNOWN"
+  ],
   "invariants": {
     "target_sha_equals_checkout_sha_equals_tested_source_sha": true,
     "missing_evidence_is_pass": false,
@@ -42,6 +140,10 @@
     "final_gate_is_sole_release_authority": true
   },
   "known_bom_file_paths": [
+    ".github/workflows/aeos-master-assurance.yml",
+    ".gitignore",
+    "apps/research_os_flutter/test/desktop_shell_test.dart",
+    "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1",
     "tools/add_parser_regression.py",
     "tools/add_resource_translator.py",
     "tools/bootstrap_resource_semantic_platform.py",
@@ -58,6 +160,34 @@
     "tools/harden_resource_semantic_platform.py"
   ],
   "revision_history": [
-    {"version":"1.0.0","date":"2026-10-13","change":"Initial evidence-backed protocol for SHA/provenance drift, damaged files, workflow coverage, UI lineage, and path collisions."}
-  ]
+    {
+      "version": "1.0.0",
+      "date": "2026-10-13",
+      "change": "Initial evidence-backed protocol for SHA/provenance drift, damaged files, workflow coverage, UI lineage, and path collisions."
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-10-13",
+      "change": "Record exact-head M.2 findings (20 errors, 22 warnings), additional BOM/non-UTF8 damage, missing baseline anchors, workflow asset mismatch, duplicate basenames, and current audit implementation limits."
+    }
+  ],
+  "latest_audit": {
+    "target_sha": "522057f6e4622535a085d7c55b053fe280a1ddb7",
+    "workflow_run_id": 38407689847,
+    "workflow_run_url": "https://github.com/phakphum12345/Drive-letter/actions/runs/38407689847",
+    "result": "FAIL",
+    "errors": 20,
+    "warnings": 22,
+    "error_classes": {
+      "unexpected_utf8_bom": 17,
+      "bom_only_empty_source": 1,
+      "text_nul_byte": 1,
+      "invalid_utf8": 1
+    },
+    "duplicate_source_basename_review_groups": 22,
+    "ci_lite_run_id": 38407687735,
+    "baseline_truth_run_id": 38407688988,
+    "production_readiness_job_url": "https://github.com/phakphum12345/Drive-letter/actions/runs/38407689007/job/115332592608",
+    "checked_at_utc": "2026-10-13T13:50:33Z"
+  }
 }
