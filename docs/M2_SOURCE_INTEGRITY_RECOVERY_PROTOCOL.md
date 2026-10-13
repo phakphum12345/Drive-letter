@@ -109,6 +109,18 @@ The 14 damaged Python helper paths listed in the incident contract were not pres
 
 Sampled same-basename implementations (`apps/research_os_flutter/lib/main.dart`, `owner_special/flutter_app/lib/main.dart`, `v3/flutter_app/lib/main.dart`, plus selected `brain.py` and `service.py` files) have distinct Git blob SHAs. That rules out byte-identical overwriting for those samples, but does not prove that every import/build reference points to the intended implementation. The remaining 22 basename groups still require path/reference ownership review.
 
-## 10. Current disposition
+## 10. UI source revision check — sampled, not full certification
+
+The three sampled UI entry points below have exact Git blob SHA equality with authoritative production commit `565ab068d5a1540ea799b594ff031ba003e068af` in `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`:
+
+| Path | Source and target Git blob SHA | Result |
+|---|---|---|
+| `apps/research_os_flutter/lib/main.dart` | `077a1f64fc2f4572d8323870d17d9dcd93dfb13d` | Exact match |
+| `owner_special/flutter_app/lib/main.dart` | `5aea08ec59adb7f70606901a5116dc48484f62d9` | Exact match |
+| `v3/flutter_app/lib/main.dart` | `99379d902cc6e468dc8bec077351291c5bb74021` | Exact match |
+
+The Unified 10x10 workflow explicitly checks out its selected `TARGET_SHA` and compares it with `git rev-parse HEAD`. The artifact workflow records `TARGET_SHA` in its website manifest. These are positive controls, but they do not establish that every UI asset, dependency lockfile, generated output, or artifact in this PR was built from the same revision. Full UI/build/artifact lineage remains open.
+
+## 11. Current disposition
 
 **NOT CERTIFIED.**
