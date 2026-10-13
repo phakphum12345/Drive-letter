@@ -67,7 +67,72 @@ def tracked_paths(root: Path) -> list[str]:
     return [item.decode("utf-8", "surrogateescape") for item in output.stdout.split(b"\x00") if item]
 
 
-def audit(root: Path, expected_sha: str | None = None) -> dict[str, Any]:
+def verify_baseline_history(root: Path, truth_ref: str | None) -> tuple[str, list[dict[str, str]], dict[str, str]]:
+    """Verify declared baseline anchors exist and descend from the authoritative ref."""
+    if not truth_ref:
+        return "UNKNOWN", [], {}
+    contract_path = root / "current" / "BASELINE_TRUTH_CONTRACT.json"
+    if not contract_path.is_file():
+        return "FAIL", [{
+            "severity": "error",
+            "code": "BASELINE_CONTRACT_MISSING",
+            "path": "current/BASELINE_TRUTH_CONTRACT.json",
+            "message": "baseline truth contract is missing",
+        }], {}
+    try:
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        anchors = {
+            "production": contract["production_code_truth"]["commit"],
+            "canonical": contract["canonical_main_history_truth"]["commit"],
+        }
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        return "FAIL", [{
+            "severity": "error",
+            "code": "BASELINE_CONTRACT_INVALID",
+            "path": "current/BASELINE_TRUTH_CONTRACT.json",
+            "message": str(exc),
+        }], {}
+
+    findings: list[dict[str, str]] = []
+    verified: dict[str, str] = {}
+    for label, sha in anchors.items():
+        exists = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f"{sha}^{{commit}}"],
+            capture_output=True, text=True, check=False,
+        )
+        if exists.returncode != 0:
+            findings.append({
+                "severity": "error", "code": "BASELINE_ANCHOR_MISSING",
+                "path": "current/BASELINE_TRUTH_CONTRACT.json",
+                "message": f"{label} anchor {sha} is absent from fetched Git objects",
+            })
+            continue
+        ancestor = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", sha, truth_ref],
+            capture_output=True, text=True, check=False,
+        )
+        if ancestor.returncode == 1:
+            findings.append({
+                "severity": "error", "code": "BASELINE_ANCHOR_NOT_ANCESTOR",
+                "path": "current/BASELINE_TRUTH_CONTRACT.json",
+                "message": f"{label} anchor {sha} is not an ancestor of {truth_ref}",
+            })
+        elif ancestor.returncode != 0:
+            findings.append({
+                "severity": "error", "code": "BASELINE_TRUTH_REF_UNAVAILABLE",
+                "path": "current/BASELINE_TRUTH_CONTRACT.json",
+                "message": ancestor.stderr.strip() or f"unable to verify {label} against {truth_ref}",
+            })
+        else:
+            verified[label] = sha
+    return ("FAIL" if findings else "PASS"), findings, verified
+
+
+def audit(
+    root: Path,
+    expected_sha: str | None = None,
+    truth_ref: str | None = None,
+) -> dict[str, Any]:
     root = root.resolve()
     head = run_git(root, "rev-parse", "HEAD")
     expected = (expected_sha or os.environ.get("TARGET_SHA") or head).strip()
@@ -76,6 +141,9 @@ def audit(root: Path, expected_sha: str | None = None) -> dict[str, Any]:
         findings.append({"severity": "error", "code": "INVALID_TARGET_SHA", "path": ".", "message": "TARGET_SHA must be a full 40-character lowercase Git commit SHA"})
     elif head != expected:
         findings.append({"severity": "error", "code": "CHECKOUT_SHA_MISMATCH", "path": ".", "message": f"expected {expected}, checked out {head}"})
+
+    baseline_history_status, baseline_findings, baseline_anchors_verified = verify_baseline_history(root, truth_ref)
+    findings.extend(baseline_findings)
 
     paths = tracked_paths(root)
     casefold_paths: dict[str, list[str]] = defaultdict(list)
@@ -124,7 +192,7 @@ def audit(root: Path, expected_sha: str | None = None) -> dict[str, Any]:
     counts: dict[str, int] = defaultdict(int)
     for item in findings:
         counts[item["severity"]] += 1
-    status = "FAIL" if counts.get("error", 0) else "PASS"
+    status = "FAIL" if counts.get("error", 0) else "PASS" if baseline_history_status == "PASS" else "UNKNOWN"
     return {
         "schema_version": "1.0.0",
         "protocol_id": "M2-SIRP-001",
@@ -133,6 +201,9 @@ def audit(root: Path, expected_sha: str | None = None) -> dict[str, Any]:
         "target_sha": expected,
         "checked_out_sha": head,
         "exact_sha_match": head == expected,
+        "authoritative_truth_ref": truth_ref,
+        "baseline_history_status": baseline_history_status,
+        "baseline_anchors_verified": baseline_anchors_verified,
         "files_scanned": scanned,
         "workflow_and_composite_action_files_scanned": len(action_files),
         "external_action_references_scanned": len(action_refs),
@@ -141,8 +212,8 @@ def audit(root: Path, expected_sha: str | None = None) -> dict[str, Any]:
         "findings": findings,
         "raw_sha256_by_path": raw_sha256,
         "limitations": [
-            "This first implementation checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, and external action SHA pins.",
-            "It does not independently prove historical Git ancestry, workflow trigger coverage, UI/artifact SHA lineage, or authoritative recovery. Those remain separate required protocol checks.",
+            "This implementation checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
+            "It does not yet independently prove workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. Those remain open protocol checks.",
             "A clean byte scan does not certify semantic correctness or authorize release."
         ],
     }
@@ -152,10 +223,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--expected-sha", default=None)
+    parser.add_argument("--truth-ref", default=None, help="Authoritative source-history ref containing immutable baseline anchors")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
     try:
-        report = audit(args.root, args.expected_sha)
+        report = audit(args.root, args.expected_sha, args.truth_ref)
     except (OSError, RuntimeError) as exc:
         print(f"M2_SOURCE_INTEGRITY_AUDIT=BLOCKED: {exc}", file=sys.stderr)
         return 2
