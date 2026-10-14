@@ -66,29 +66,6 @@
         "action": "Do not rewrite or synthesize these files until authoritative source blobs are available."
       },
       {
-        "id": "M2-PROD-ASSET-001",
-        "status": "BLOCKED_SOURCE_UNAVAILABLE",
-        "paths": [
-          "render.yaml",
-          "render.staging.yaml",
-          "scripts/backup-research-os.ps1",
-          "scripts/restore-research-os.ps1"
-        ],
-        "evidence": "V3.5 Master Final Gate run 38405063515 reports missing render.yaml in the PR checkout. Presence and source provenance of the other three required paths have not been established.",
-        "action": "Locate exact authoritative assets or retain the blocker; do not fabricate production deployment or recovery configuration."
-      },
-      {
-        "id": "M2-BASELINE-001",
-        "status": "BLOCKED_SOURCE_UNAVAILABLE",
-        "paths": [
-          "current/BASELINE_TRUTH_CONTRACT.json",
-          "tools/verify_baseline_truth.py",
-          ".github/workflows/baseline-truth-gate.yml"
-        ],
-        "evidence": "Baseline Truth run 38405064054 reports source anchors 565ab068d5a1540ea799b594ff031ba003e068af and fab39afc15739c3dc9952f6f21db46d26f54b683 missing from the Drive-letter checkout. The contract names phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH as the canonical repository; those foreign-repository anchors must be verified against that repository, not assumed to exist in the target repository object database.",
-        "action": "Verify canonical repository visibility and commit availability, then correct the provenance check to validate anchors in their declared repository without changing the anchors."
-      },
-      {
         "id": "M2-SHA-001",
         "status": "BLOCKED_SHA_RECONCILIATION",
         "paths": [
@@ -98,23 +75,87 @@
         ],
         "evidence": "CI Lite config selects pull_request.head.sha as TARGET_SHA, while the inspected Baseline Truth and Final Gate runs checked out PR merge candidate 35e8de392bb2395722d56dd46198a9382517723c. These are distinct validation subjects and must not be reported as one SHA's test bundle.",
         "action": "Declare source-head and merge-candidate SHA separately in evidence, then rerun the required checks for the explicitly declared candidate and verify every job's checkout SHA."
+      },
+      {
+        "id": "M2-PROD-ASSET-001",
+        "status": "RESTORED_FROM_VERIFIED_SOURCE_PENDING_CI",
+        "paths": [
+          "render.yaml",
+          "render.staging.yaml",
+          "scripts/backup-research-os.ps1",
+          "scripts/restore-research-os.ps1"
+        ],
+        "evidence": "Exact source blobs retrieved from phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH@565ab068d5a1540ea799b594ff031ba003e068af. Source blob SHAs: render.yaml=1df582f3078f3e2282fd91de569cc925eab34be2; render.staging.yaml=237879fe0b43ae6f76e4edb2750cf96bb0541e06; scripts/backup-research-os.ps1=e114616bbc0303f3622b42fc1ddf7cf92427e8f8; scripts/restore-research-os.ps1=00e70d2545e45276968a4e7b3bc2a99072eea9ed",
+        "action": "Verify destination blob SHAs equal source blob SHAs, then rerun production-readiness and full CI on the new candidate SHA."
+      },
+      {
+        "id": "M2-BASELINE-001",
+        "status": "RESOLVED_ON_HEAD_SHA_PENDING_MERGE_SHA_RECONCILIATION",
+        "paths": [
+          "current/BASELINE_TRUTH_CONTRACT.json",
+          "tools/verify_baseline_truth.py",
+          ".github/workflows/baseline-truth-gate.yml"
+        ],
+        "evidence": "Baseline Truth Gate run 38624048797 passed on head SHA 5cf669b0756d3136e2012c96304d243572e7bdf1 by fetching refs/heads/main from the declared authoritative source repository before verifying anchors. Earlier failure 38405064054 used a merge-candidate checkout with an older workflow definition that did not fetch that remote.",
+        "action": "Retain source-aware verification and ensure merge-candidate evidence uses the same workflow version or reports its tested SHA separately."
+      },
+      {
+        "id": "M2-EXTRA-BOM-001",
+        "status": "BLOCKED_SOURCE_UNAVAILABLE",
+        "paths": [
+          ".github/workflows/aeos-master-assurance.yml",
+          ".gitignore",
+          "apps/research_os_flutter/test/desktop_shell_test.dart"
+        ],
+        "evidence": "M.2 source integrity audit run 38624049221 found unexpected UTF-8 BOMs in these three paths. No exact source blob comparison has yet been recorded.",
+        "action": "Compare each raw blob with authoritative source; restore exact source if available, otherwise retain BLOCKED_SOURCE_UNAVAILABLE."
+      },
+      {
+        "id": "M2-SOURCE-HELPERS-001",
+        "status": "BLOCKED_SOURCE_UNAVAILABLE",
+        "paths": [
+          "tools/add_parser_regression.py",
+          "tools/add_resource_translator.py",
+          "tools/bootstrap_resource_semantic_platform.py",
+          "tools/create_change_queue.py",
+          "tools/create_resource_identity_allocator.py",
+          "tools/create_resource_instance.py",
+          "tools/create_resource_parser_tests.py",
+          "tools/create_resource_variables.py",
+          "tools/fix_resource_builder.py",
+          "tools/fix_resource_builder_validator.py",
+          "tools/fix_resource_manifest_collision.py",
+          "tools/fix_resource_parser_identity.py",
+          "tools/harden_resource_drift.py",
+          "tools/harden_resource_semantic_platform.py"
+        ],
+        "evidence": "Sampled exact paths were not found at the named source repository's main or inspected branches. tools/create_change_queue.py is BOM-only at the candidate path. No verified source blobs have been established for these paths.",
+        "action": "Keep unchanged and blocked until a trusted commit/blob or forensic archive proves exact path and content."
       }
     ],
     "observed_gate_results": {
       "ci_lite_run": {
-        "id": 38405062914,
+        "id": 38624049489,
         "conclusion": "failure",
-        "reason": "14 Python syntax errors caused by U+FEFF"
+        "tested_head_sha": "5cf669b0756d3136e2012c96304d243572e7bdf1",
+        "reason": "API unit tests still fail on the 14 Python helper U+FEFF syntax errors; recheck after verified source recovery."
       },
       "baseline_truth_run": {
-        "id": 38405064054,
-        "conclusion": "failure",
-        "reason": "Two canonical source anchors missing from target repository object database"
+        "id": 38624048797,
+        "conclusion": "success",
+        "tested_head_sha": "5cf669b0756d3136e2012c96304d243572e7bdf1",
+        "evidence": "Source-aware baseline verifier fetched authoritative main and reported both immutable anchors present."
       },
       "v35_master_final_gate_run": {
         "id": 38405063515,
         "conclusion": "failure",
         "reason": "Missing render.yaml production readiness asset"
+      },
+      "m2_source_integrity_run": {
+        "id": 38624049221,
+        "conclusion": "failure",
+        "tested_head_sha": "5cf669b0756d3136e2012c96304d243572e7bdf1",
+        "reason": "17 errors: 14 Python helper BOM/BOM-only errors plus 3 additional unexpected BOMs; 22 duplicate-basename review warnings."
       }
     }
   },
