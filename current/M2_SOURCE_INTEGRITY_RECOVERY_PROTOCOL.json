@@ -1,0 +1,122 @@
+{
+  "protocol_id": "M2_SOURCE_INTEGRITY_RECOVERY_PROTOCOL",
+  "schema_version": "1.0.0",
+  "status": "BLOCKED_SOURCE_UNAVAILABLE",
+  "intent": "Recover corrupted or missing repository files only from an authoritative, independently verifiable source; preserve file identity and bind every validation result to one immutable candidate SHA.",
+  "non_goals": [
+    "Do not synthesize replacement source code when authoritative content is unavailable.",
+    "Do not strip corruption markers and call the result recovered without source comparison.",
+    "Do not weaken, skip, or relabel a failing quality gate as passing.",
+    "Do not treat a PR merge SHA, head SHA, production anchor SHA, or UI-reported SHA as interchangeable."
+  ],
+  "source_authority_rules": [
+    "Prefer an exact blob at a recorded commit in the canonical source repository.",
+    "Accept a recovered-branch or forensic archive only when repository identity, commit or archive provenance, exact path, and content hash are independently recorded.",
+    "Compare Git blob SHA and a cryptographic content hash before restoring; retain the original source locator and evidence.",
+    "If the source repository, commit, path, or blob cannot be retrieved and verified, assign BLOCKED_SOURCE_UNAVAILABLE and leave the candidate file unchanged."
+  ],
+  "path_identity_rules": [
+    "Match exact repository-relative paths; never substitute a same-named file from another directory.",
+    "Record rename or move evidence explicitly; a path collision is not proof of equivalence.",
+    "Reject empty, BOM-only, truncated, invalid-encoding, or syntax-invalid content as recovered source.",
+    "Treat UTF-8 BOM removal as normalization only after the underlying content has been proven identical to the authoritative source."
+  ],
+  "sha_binding_rules": [
+    "Record PR head SHA, PR merge candidate SHA, target/base SHA, and canonical production/history anchors as separate fields.",
+    "Every gate report must record the exact checkout SHA and tested tree SHA.",
+    "A validation bundle is eligible for Final Gate only when all required checks refer to the same immutable candidate SHA, or explicitly identify a tested merge candidate derived from that SHA and the declared base.",
+    "If a workflow checks out a different SHA than the candidate declared in its inputs, mark the result SHA_MISMATCH and do not reuse its PASS status.",
+    "Do not rewrite canonical history or silently promote the working candidate to production truth."
+  ],
+  "required_recovery_sequence": [
+    "Inventory corrupted, missing, duplicate-path, renamed, and suspiciously empty files.",
+    "Trace each path through PR diff, parent commits, canonical source repository, and available forensic archives.",
+    "Capture source locator, source commit, exact path, Git blob SHA, SHA-256, target blob SHA, and comparison result.",
+    "Restore only exact, proven source content in a minimal-diff commit.",
+    "Write BLOCKED_SOURCE_UNAVAILABLE to the recovery ledger for every file without verified source evidence.",
+    "Run syntax/encoding checks, path inventory, duplicate-path checks, source hash checks, targeted regression tests, and the full required CI/gate set.",
+    "Re-read the final candidate SHA and each gate's tested SHA; reject mixed-SHA evidence.",
+    "Request Final Gate only after every required check is successful on the declared candidate and no unresolved blocker remains."
+  ],
+  "current_findings": {
+    "inspected_repository": "phakphum12345/Drive-letter",
+    "inspected_candidate_head_sha": "41f44b5348ccae453a685047e3fb7a5789cd395b",
+    "observed_pr_merge_candidate_sha": "35e8de392bb2395722d56dd46198a9382517723c",
+    "known_blockers": [
+      {
+        "id": "M2-BOM-001",
+        "status": "BLOCKED_SOURCE_UNAVAILABLE",
+        "paths": [
+          "tools/add_parser_regression.py",
+          "tools/add_resource_translator.py",
+          "tools/bootstrap_resource_semantic_platform.py",
+          "tools/create_change_queue.py",
+          "tools/create_resource_identity_allocator.py",
+          "tools/create_resource_instance.py",
+          "tools/create_resource_parser_tests.py",
+          "tools/create_resource_variables.py",
+          "tools/fix_resource_builder.py",
+          "tools/fix_resource_builder_validator.py",
+          "tools/fix_resource_manifest_collision.py",
+          "tools/fix_resource_parser_identity.py",
+          "tools/harden_resource_drift.py",
+          "tools/harden_resource_semantic_platform.py"
+        ],
+        "evidence": "CI Lite run 38405062914 reports U+FEFF Python syntax failures for all 14 paths. tools/create_change_queue.py currently contains only a UTF-8 BOM and newline. The configured alternate source repository path fetch returned 404 for sampled files, so exact authoritative blobs have not been verified.",
+        "action": "Do not rewrite or synthesize these files until authoritative source blobs are available."
+      },
+      {
+        "id": "M2-PROD-ASSET-001",
+        "status": "BLOCKED_SOURCE_UNAVAILABLE",
+        "paths": [
+          "render.yaml",
+          "render.staging.yaml",
+          "scripts/backup-research-os.ps1",
+          "scripts/restore-research-os.ps1"
+        ],
+        "evidence": "V3.5 Master Final Gate run 38405063515 reports missing render.yaml in the PR checkout. Presence and source provenance of the other three required paths have not been established.",
+        "action": "Locate exact authoritative assets or retain the blocker; do not fabricate production deployment or recovery configuration."
+      },
+      {
+        "id": "M2-BASELINE-001",
+        "status": "BLOCKED_SOURCE_UNAVAILABLE",
+        "paths": [
+          "current/BASELINE_TRUTH_CONTRACT.json",
+          "tools/verify_baseline_truth.py",
+          ".github/workflows/baseline-truth-gate.yml"
+        ],
+        "evidence": "Baseline Truth run 38405064054 reports source anchors 565ab068d5a1540ea799b594ff031ba003e068af and fab39afc15739c3dc9952f6f21db46d26f54b683 missing from the Drive-letter checkout. The contract names phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH as the canonical repository; those foreign-repository anchors must be verified against that repository, not assumed to exist in the target repository object database.",
+        "action": "Verify canonical repository visibility and commit availability, then correct the provenance check to validate anchors in their declared repository without changing the anchors."
+      },
+      {
+        "id": "M2-SHA-001",
+        "status": "BLOCKED_SHA_RECONCILIATION",
+        "paths": [
+          ".github/workflows/ci-lite.yml",
+          ".github/workflows/baseline-truth-gate.yml",
+          ".github/workflows/final-gate.yml"
+        ],
+        "evidence": "CI Lite config selects pull_request.head.sha as TARGET_SHA, while the inspected Baseline Truth and Final Gate runs checked out PR merge candidate 35e8de392bb2395722d56dd46198a9382517723c. These are distinct validation subjects and must not be reported as one SHA's test bundle.",
+        "action": "Declare source-head and merge-candidate SHA separately in evidence, then rerun the required checks for the explicitly declared candidate and verify every job's checkout SHA."
+      }
+    ],
+    "observed_gate_results": {
+      "ci_lite_run": {
+        "id": 38405062914,
+        "conclusion": "failure",
+        "reason": "14 Python syntax errors caused by U+FEFF"
+      },
+      "baseline_truth_run": {
+        "id": 38405064054,
+        "conclusion": "failure",
+        "reason": "Two canonical source anchors missing from target repository object database"
+      },
+      "v35_master_final_gate_run": {
+        "id": 38405063515,
+        "conclusion": "failure",
+        "reason": "Missing render.yaml production readiness asset"
+      }
+    }
+  },
+  "release_rule": "Final Gate must remain blocked while any BLOCKED_SOURCE_UNAVAILABLE, BLOCKED_SHA_RECONCILIATION, source-integrity error, missing required asset, or mixed-SHA validation evidence remains unresolved."
+}
