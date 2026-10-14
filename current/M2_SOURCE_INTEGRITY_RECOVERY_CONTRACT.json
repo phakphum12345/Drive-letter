@@ -189,6 +189,37 @@
       "target_status": "both paths absent at inspected PR head",
       "evidence": "Production readiness job fails first on render.yaml; both manifests are present at the authoritative source commit but missing from the imported target branch.",
       "repair_policy": "restore exact source blobs and verify destination blob SHAs; do not add placeholders or weaken the workflow."
+    },
+    {
+      "id": "SIR-021",
+      "kind": "historical_contract_implementation_cardinality_mismatch",
+      "status": "historical_failure_observed_not_classified_as_source_corruption",
+      "source_commit": "c31e9b84976ae150fdd1586cee6b2320c04b6378",
+      "test_path": "tools/tests/test_aeos_assurance_universe_compiler.py",
+      "observed_test_result": "4 passed, 3 failed",
+      "mismatch": {
+        "contract_expected_assurance_families": 100,
+        "implementation_assurance_families": 105,
+        "extra_families": [
+          "common_mode_resistance",
+          "assurance_completeness",
+          "assurance_of_assurance",
+          "constitutional_integrity",
+          "knowledge_lifecycle_integrity"
+        ]
+      },
+      "interpretation": "The implementation and test/contract disagree on cardinality. This alone does not prove file corruption. Resolve the canonical intended count and update implementation or contract/tests together with evidence; do not delete five families solely to satisfy a hard-coded count."
+    },
+    {
+      "id": "SIR-022",
+      "kind": "historical_snapshot_binary_or_corrupt_file_suspicion",
+      "status": "historical_observation_requires_byte_and_authoritative_blob_recheck",
+      "source_commit": "c31e9b84976ae150fdd1586cee6b2320c04b6378",
+      "paths": [
+        "tools/copilot_chat/__init__.py",
+        "tools/copilot_chat/test file reported in the same snapshot review"
+      ],
+      "interpretation": "Files appeared binary/corrupted in the imported snapshot. Do not infer corruption solely from a text renderer; compare raw bytes, file mode, Git blob SHA, file history, and authoritative source before repair."
     }
   ],
   "required_checks": [
@@ -267,6 +298,11 @@
       "version": "1.0.5",
       "date": "2026-10-14",
       "change": "Confirm render.yaml and render.staging.yaml were omitted by source transfer: exact source blobs exist at authoritative production commit but are absent from the imported target branch; record latest exact-head CI/M.2 status."
+    },
+    {
+      "version": "1.0.6",
+      "date": "2026-10-14",
+      "change": "Add historical M.2 evidence for the 100-vs-105 assurance-family contract mismatch and suspicious binary-rendered snapshot files, explicitly distinguishing contract disagreement from proven byte corruption."
     }
   ],
   "latest_audit": {
