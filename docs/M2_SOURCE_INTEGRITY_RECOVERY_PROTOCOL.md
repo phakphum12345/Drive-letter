@@ -185,3 +185,13 @@ Both paths are absent from the inspected `Drive-letter` import branch. Therefore
 At PR head `e5f9317869430a30c5f258a18d9652238935ae3f`, CI Lite run `38422967217` and M.2 audit run `38422967510` still fail on the 14 BOM-affected Python helper paths. `tools/create_change_queue.py` remains BOM-only and is absent from the authoritative source tree at the inspected production anchor, so it remains blocked pending another trusted recovery source. Baseline Truth Gate run `38422967410` now passes after the authoritative-history check was corrected. Production readiness run `38422967420` still fails on `render.yaml`.
 
 The 22 duplicate-basename warnings remain review-only until each relevant import/build reference is traced to an expected path and blob. Sampled UI entry-point blobs match their authoritative source, and the version-alignment test passes, but complete UI/build/package artifact SHA lineage is still unverified. The PR remains **NOT CERTIFIED**.
+
+
+## 14. Historical M.2 findings — distinguish corruption from contract drift
+
+Two older observations are retained as historical findings and must not be mislabeled as confirmed source corruption:
+
+- At snapshot commit `c31e9b84976ae150fdd1586cee6b2320c04b6378`, the test `tools/tests/test_aeos_assurance_universe_compiler.py -q` reported **4 passed, 3 failed**. The implementation declared 105 `ASSURANCE_FAMILIES`, while the contract/test expected exactly 100. The additional families were `common_mode_resistance`, `assurance_completeness`, `assurance_of_assurance`, `constitutional_integrity`, and `knowledge_lifecycle_integrity`. This is an implementation-versus-contract cardinality disagreement until the canonical intended count is established; do not delete valid families merely to satisfy a hard-coded assertion.
+- In the same source-snapshot review, `tools/copilot_chat/__init__.py` and its related test appeared binary/corrupted in the snapshot renderer. That is a **suspicion**, not proof. Recheck raw bytes, file mode, Git blob SHA, history, and authoritative source before restoring or rewriting either file.
+
+This distinction is mandatory in M.2: byte corruption, source-transfer omission, SHA/provenance drift, path shadowing, and contract/implementation disagreement are separate finding classes and require different repairs.
