@@ -22,10 +22,12 @@
     "Treat UTF-8 BOM removal as normalization only after the underlying content has been proven identical to the authoritative source."
   ],
   "sha_binding_rules": [
-    "Record PR head SHA, PR merge candidate SHA, target/base SHA, and canonical production/history anchors as separate fields.",
-    "Every gate report must record the exact checkout SHA and tested tree SHA.",
-    "A validation bundle is eligible for Final Gate only when all required checks refer to the same immutable candidate SHA, or explicitly identify a tested merge candidate derived from that SHA and the declared base.",
-    "If a workflow checks out a different SHA than the candidate declared in its inputs, mark the result SHA_MISMATCH and do not reuse its PASS status.",
+    "For pull_request workflows, github.sha is the synthetic merge-candidate SHA; for workflow_dispatch, use inputs.target_sha when explicitly provided, otherwise github.sha.",
+    "Record PR head SHA and synthetic merge-candidate SHA separately; do not treat the workflow-run head_sha metadata as proof of the commit actually checked out.",
+    "Every gate must assert and log TARGET_SHA == git rev-parse HEAD and report the tested tree SHA.",
+    "M.2, CI Lite, Unified 10x10, Unified Final Gate, and Completion Validation must use the same target selection expression inputs.target_sha || github.sha.",
+    "A validation bundle is eligible for Final Gate only when all required checks name the same candidate SHA/tree or explicitly declare a separate base/head comparison.",
+    "If a workflow checks out a different SHA than the declared candidate, mark SHA_MISMATCH and do not reuse its PASS status.",
     "Do not rewrite canonical history or silently promote the working candidate to production truth."
   ],
   "required_recovery_sequence": [
@@ -67,14 +69,14 @@
       },
       {
         "id": "M2-SHA-001",
-        "status": "BLOCKED_SHA_RECONCILIATION",
+        "status": "FIX_APPLIED_PENDING_CI",
         "paths": [
           ".github/workflows/ci-lite.yml",
           ".github/workflows/baseline-truth-gate.yml",
           ".github/workflows/final-gate.yml"
         ],
-        "evidence": "CI Lite config selects pull_request.head.sha as TARGET_SHA, while the inspected Baseline Truth and Final Gate runs checked out PR merge candidate 35e8de392bb2395722d56dd46198a9382517723c. These are distinct validation subjects and must not be reported as one SHA's test bundle.",
-        "action": "Declare source-head and merge-candidate SHA separately in evidence, then rerun the required checks for the explicitly declared candidate and verify every job's checkout SHA."
+        "evidence": "The prior M.2/CI Lite workflows selected pull_request.head.sha while default-checkout gates tested github.sha (the synthetic merge candidate). Five workflows are now being aligned to inputs.target_sha || github.sha for PRs, with an explicit checkout assertion added to CI Lite.",
+        "action": "Confirm new workflow runs log identical TARGET_SHA/CHECKED_OUT_SHA across M.2, CI Lite, Unified 10x10, Unified Final Gate, and Completion Validation before Final Gate."
       },
       {
         "id": "M2-PROD-ASSET-001",
@@ -90,14 +92,14 @@
       },
       {
         "id": "M2-BASELINE-001",
-        "status": "RESOLVED_ON_HEAD_SHA_PENDING_MERGE_SHA_RECONCILIATION",
+        "status": "PASS_ON_PREVIOUS_CANDIDATE_SHA",
         "paths": [
           "current/BASELINE_TRUTH_CONTRACT.json",
           "tools/verify_baseline_truth.py",
           ".github/workflows/baseline-truth-gate.yml"
         ],
-        "evidence": "Baseline Truth Gate run 38624048797 passed on head SHA 5cf669b0756d3136e2012c96304d243572e7bdf1 by fetching refs/heads/main from the declared authoritative source repository before verifying anchors. Earlier failure 38405064054 used a merge-candidate checkout with an older workflow definition that did not fetch that remote.",
-        "action": "Retain source-aware verification and ensure merge-candidate evidence uses the same workflow version or reports its tested SHA separately."
+        "evidence": "Baseline Truth run 38624048797 succeeded after fetching refs/heads/main from the declared canonical source. Its actual checkout was merge SHA 5b3a7d026c768ae59cc56878d2d5b61f70946c68 while the PR head was 5cf669b0756d3136e2012c96304d243572e7bdf1; the run is historical and must be repeated on the aligned candidate.",
+        "action": "Use the new merge candidate SHA and verify baseline source fetch and anchor checks again."
       },
       {
         "id": "M2-EXTRA-BOM-001",
@@ -129,8 +131,8 @@
           "tools/harden_resource_drift.py",
           "tools/harden_resource_semantic_platform.py"
         ],
-        "evidence": "Sampled exact paths were not found at the named source repository's main or inspected branches. tools/create_change_queue.py is BOM-only at the candidate path. No verified source blobs have been established for these paths.",
-        "action": "Keep unchanged and blocked until a trusted commit/blob or forensic archive proves exact path and content."
+        "evidence": "Sampled exact paths were absent at canonical source commit 565ab068d5a1540ea799b594ff031ba003e068af. Path-specific history queries returned no commits for tools/create_change_queue.py, tools/add_parser_regression.py, and tools/add_resource_translator.py. Other paths remain blocked because no exact verified source blobs have been established; tools/create_change_queue.py is BOM-only in the candidate.",
+        "action": "Keep unchanged and blocked until each path has a trusted commit/blob or forensic archive proving exact path and content."
       }
     ],
     "observed_gate_results": {
@@ -143,8 +145,9 @@
       "baseline_truth_run": {
         "id": 38624048797,
         "conclusion": "success",
-        "tested_head_sha": "5cf669b0756d3136e2012c96304d243572e7bdf1",
-        "evidence": "Source-aware baseline verifier fetched authoritative main and reported both immutable anchors present."
+        "run_head_sha": "5cf669b0756d3136e2012c96304d243572e7bdf1",
+        "checked_out_sha": "5b3a7d026c768ae59cc56878d2d5b61f70946c68",
+        "evidence": "Fetched canonical main and verified both immutable anchors; tested merge candidate differs from run head SHA."
       },
       "v35_master_final_gate_run": {
         "id": 38405063515,

@@ -22,7 +22,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      TARGET_SHA: ${{ inputs.target_sha || github.event.pull_request.head.sha || github.sha }}
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
     steps:
       - name: Checkout workflow definition
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

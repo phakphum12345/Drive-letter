@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  TARGET_SHA: ${{ github.event.pull_request.head.sha || inputs.target_sha || github.sha }}
+  TARGET_SHA: ${{ inputs.target_sha || github.sha }}
 
 concurrency:
   group: research-os-completion-${{ github.ref }}

@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: m2-source-integrity-${{ github.event.pull_request.head.sha || inputs.target_sha || github.sha }}
+  group: m2-source-integrity-${{ inputs.target_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      TARGET_SHA: ${{ github.event.pull_request.head.sha || inputs.target_sha || github.sha }}
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
     steps:
       - name: Checkout exact target
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
