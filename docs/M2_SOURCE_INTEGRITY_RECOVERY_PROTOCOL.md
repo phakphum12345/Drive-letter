@@ -171,3 +171,17 @@ Three sampled UI entry-point blobs match the authoritative production source exa
 ### 12.4 Required next decision
 
 Restore damaged files only from a verified authoritative blob or branch. Keep the PR blocked where provenance cannot be established. Resolve the production-readiness workflow's required-asset contract against the intended deployment model, with explicit evidence, rather than adding guessed placeholders or weakening the validation. Re-run all relevant checks against one new immutable target SHA and preserve the report and diff.
+
+
+## 13. Exact source-transfer proof — 2026-10-14
+
+The source-transfer hypothesis is now confirmed for the two deployment manifests. At authoritative source commit `565ab068d5a1540ea799b594ff031ba003e068af` in `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`, the exact Git blob SHAs are:
+
+- `render.yaml` — `1df582f3078f3e2282fd91de569cc925eab34be2`
+- `render.staging.yaml` — `237879fe0b43ae6f76e4edb2750cf96bb0541e06`
+
+Both paths are absent from the inspected `Drive-letter` import branch. Therefore the production-readiness failure is not just a workflow expectation mismatch: the manifests exist in the authoritative source tree and were omitted from this imported snapshot. Restore those exact blobs, then verify destination blob SHAs and run the production-readiness checks; do not create placeholders.
+
+At PR head `e5f9317869430a30c5f258a18d9652238935ae3f`, CI Lite run `38422967217` and M.2 audit run `38422967510` still fail on the 14 BOM-affected Python helper paths. `tools/create_change_queue.py` remains BOM-only and is absent from the authoritative source tree at the inspected production anchor, so it remains blocked pending another trusted recovery source. Baseline Truth Gate run `38422967410` now passes after the authoritative-history check was corrected. Production readiness run `38422967420` still fails on `render.yaml`.
+
+The 22 duplicate-basename warnings remain review-only until each relevant import/build reference is traced to an expected path and blob. Sampled UI entry-point blobs match their authoritative source, and the version-alignment test passes, but complete UI/build/package artifact SHA lineage is still unverified. The PR remains **NOT CERTIFIED**.
