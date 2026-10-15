@@ -99,6 +99,31 @@ def tracked_paths(root: Path) -> list[str]:
     return [item.decode("utf-8", "surrogateescape") for item in output.stdout.split(b"\x00") if item]
 
 
+def verify_working_tree(root: Path) -> tuple[bool, list[dict[str, str]]]:
+    """Fail closed when tracked/index content differs from the exact committed tree.
+
+    Git's diff machinery applies the repository's configured clean filters, avoiding
+    false positives from legitimate checkout line-ending conversions while still
+    detecting source edits that would otherwise be hashed but not audited as HEAD.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(root), "diff", "--quiet", "HEAD", "--"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True, []
+    if result.returncode == 1:
+        return False, [{
+            "severity": "error",
+            "code": "WORKING_TREE_DIFFERS_FROM_HEAD",
+            "path": ".",
+            "message": "tracked/index content differs from HEAD; audit must run against an unmodified exact checkout",
+        }]
+    raise RuntimeError(result.stderr.strip() or "git diff HEAD failed while verifying working-tree identity")
+
+
 def verify_baseline_history(root: Path, truth_ref: str | None) -> tuple[str, list[dict[str, str]], dict[str, str]]:
     """Verify declared baseline anchors exist and descend from the authoritative ref."""
     if not truth_ref:
@@ -174,6 +199,10 @@ def audit(
     elif head != expected:
         findings.append({"severity": "error", "code": "CHECKOUT_SHA_MISMATCH", "path": ".", "message": f"expected {expected}, checked out {head}"})
 
+    tree_sha = run_git(root, "rev-parse", "HEAD^{tree}")
+    working_tree_clean, worktree_findings = verify_working_tree(root)
+    findings.extend(worktree_findings)
+
     baseline_history_status, baseline_findings, baseline_anchors_verified = verify_baseline_history(root, truth_ref)
     findings.extend(baseline_findings)
 
@@ -236,7 +265,9 @@ def audit(
         "repository_root": str(root),
         "target_sha": expected,
         "checked_out_sha": head,
+        "tree_sha": tree_sha,
         "exact_sha_match": head == expected,
+        "working_tree_clean": working_tree_clean,
         "authoritative_truth_ref": truth_ref,
         "baseline_history_status": baseline_history_status,
         "baseline_anchors_verified": baseline_anchors_verified,
@@ -249,7 +280,7 @@ def audit(
         "raw_sha256_by_path": raw_sha256,
         "git_blob_sha_by_path": git_blob_sha_by_path,
         "limitations": [
-            "This implementation checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
+            "This implementation checks tracked-file bytes, exact checkout SHA and tree SHA, tracked/index cleanliness against HEAD using Git's configured filters, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
             "It does not yet independently prove workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. Those remain open protocol checks.",
             "A clean byte scan does not certify semantic correctness or authorize release."
         ],

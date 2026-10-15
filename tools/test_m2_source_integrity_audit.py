@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -62,6 +64,44 @@ class SourceIntegrityByteClassificationTests(unittest.TestCase):
 
     def test_clean_utf8_source_passes_byte_checks(self) -> None:
         self.assertEqual(AUDIT.classify_bytes("lib/main.dart", "void main() {}\n".encode()), [])
+
+
+
+class WorkingTreeIdentityTests(unittest.TestCase):
+    def _committed_repo(self, root: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.email", "m2-audit-test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.name", "M2 Audit Test"], check=True)
+        (root / "sample.py").write_text("print('committed')\\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "sample.py"], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
+
+    def test_clean_checkout_matches_head(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._committed_repo(root)
+            clean, findings = AUDIT.verify_working_tree(root)
+            self.assertTrue(clean)
+            self.assertEqual(findings, [])
+
+    def test_modified_tracked_file_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._committed_repo(root)
+            (root / "sample.py").write_text("print('modified')\\n", encoding="utf-8")
+            clean, findings = AUDIT.verify_working_tree(root)
+            self.assertFalse(clean)
+            self.assertIn("WORKING_TREE_DIFFERS_FROM_HEAD", {item["code"] for item in findings})
+
+    def test_staged_change_also_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._committed_repo(root)
+            (root / "sample.py").write_text("print('staged')\\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "sample.py"], check=True)
+            clean, findings = AUDIT.verify_working_tree(root)
+            self.assertFalse(clean)
+            self.assertIn("WORKING_TREE_DIFFERS_FROM_HEAD", {item["code"] for item in findings})
 
 
 if __name__ == "__main__":

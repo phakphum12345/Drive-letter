@@ -48,7 +48,7 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 ## 4. One-pass audit protocol
 
-1. **Freeze the target.** Resolve PR head once, check out that exact SHA, and assert `git rev-parse HEAD == TARGET_SHA`. Do not silently switch to default branch or a moving ref.
+1. **Freeze the target.** Resolve PR head once, check out that exact SHA, and assert `git rev-parse HEAD == TARGET_SHA`. Record `git rev-parse 'HEAD^{tree}'`. Before scanning, require the tracked/index state to match HEAD (`git diff --quiet HEAD --`); a dirty or staged tree is `FAIL`, not evidence about the committed candidate. Do not silently switch to default branch or a moving ref.
 2. **Prove provenance.** Check expected source commits and squash objects exist; inspect ancestry, trees, and relevant blobs against authoritative remotes. Keep current work HEAD separate from production truth.
 3. **Scan bytes before text.** Walk all tracked files and report NUL bytes, UTF-8 BOM, BOM-only/zero-byte files, invalid UTF-8 where UTF-8 is required, suspiciously truncated files, and parser/compiler errors. Do not rewrite files during the audit.
 4. **Compare authoritative file lineage.** For every finding, compare path, mode, blob SHA, raw bytes, and file history against a trusted source commit. Never infer intended content from the filename or a nearby file.
@@ -61,7 +61,8 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 ## 5. Required invariants
 
-- `TARGET_SHA == checked_out_SHA == tested_source_SHA`.
+- `TARGET_SHA == checked_out_SHA == tested_source_SHA`, and the reported tree SHA is the tree object for that exact commit.
+- The audit must fail closed if tracked/index content differs from HEAD; raw working-tree hashes must never be presented as proof of committed-source identity.
 - A release artifact must identify the same source SHA and have a verified artifact hash.
 - A path/name match alone never establishes file identity; use Git blob SHA and raw-byte SHA-256.
 - Missing historical Git objects cannot be “repaired” by changing a contract to point at an unrelated commit.
@@ -195,3 +196,11 @@ Two older observations are retained as historical findings and must not be misla
 - In the same source-snapshot review, `tools/copilot_chat/__init__.py` and its related test appeared binary/corrupted in the snapshot renderer. That is a **suspicion**, not proof. Recheck raw bytes, file mode, Git blob SHA, history, and authoritative source before restoring or rewriting either file.
 
 This distinction is mandatory in M.2: byte corruption, source-transfer omission, SHA/provenance drift, path shadowing, and contract/implementation disagreement are separate finding classes and require different repairs.
+
+## 10. Source-recovery search update — candidate lineage `69bcc3ebc53e7548b79ae179bc03f2df2614b8cf`
+
+A read-only recovery search checked the 14 paths listed in SIR-016 against the default branches of both `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH` and `phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`. All 14 exact paths were absent from both default trees. Additional spot checks covered the M.2 audit/integration, committed-history recovery, authoritative-provider, semantic-binding, and legacy platform branches; the exact `tools/create_change_queue.py` path was absent in those refs as well. GitHub repository code search returned no result for `filename:create_change_queue.py` in either source repository.
+
+The target blob for `tools/create_change_queue.py` is `5f282702bb03ef11d7184d19c80927b47f919764`; its decoded content is only the UTF-8 BOM (`77u/`) and contains no implementation body. This is evidence of an empty target blob, not evidence of intended implementation. The other 13 helper files contain text but remain unverified against an authoritative blob; their BOMs are not being stripped as a blanket operation.
+
+**Disposition:** all 14 paths remain `BLOCKED_SOURCE_UNAVAILABLE`. Do not execute their one-off generator/patch scripts, reconstruct `create_change_queue.py`, or treat a same-named file or plausible implementation as proof of provenance. The search was not exhaustive across every branch and historical Git object in both source repositories; any newly identified candidate must be checked by exact commit, tree, path, mode, and blob SHA before recovery. The CI Lite and M.2 failures remain blocking, and no merge/release is authorized by this investigation.

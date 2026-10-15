@@ -40,10 +40,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid TARGET_SHA: $TARGET_SHA" >&2; exit 2; }
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$TARGET_SHA"
+          tree="$(git rev-parse 'HEAD^{tree}')"
           echo "TARGET_SHA=$TARGET_SHA"
           echo "CHECKED_OUT_SHA=$actual"
+          echo "TREE_SHA=$tree"
 
       - name: Fetch authoritative baseline history
         shell: bash
@@ -68,5 +71,5 @@ jobs:
         with:
           name: m2-source-integrity-${{ github.run_id }}-${{ env.TARGET_SHA }}
           path: m2-source-integrity-report.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30

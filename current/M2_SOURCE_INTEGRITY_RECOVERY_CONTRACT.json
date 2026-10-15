@@ -137,7 +137,48 @@
       "kind": "corrupt_helper_source_unavailable",
       "path": "tools/create_change_queue.py;tools/add_parser_regression.py;tools/add_resource_translator.py;tools/bootstrap_resource_semantic_platform.py;tools/create_resource_identity_allocator.py;tools/create_resource_instance.py;tools/create_resource_parser_tests.py;tools/create_resource_variables.py;tools/fix_resource_builder.py;tools/fix_resource_builder_validator.py;tools/fix_resource_manifest_collision.py;tools/fix_resource_parser_identity.py;tools/harden_resource_drift.py;tools/harden_resource_semantic_platform.py",
       "status": "exact_paths_absent_from_authoritative_production_and_canonical_trees_reviewed",
-      "repair_policy": "remain_blocked_until_an_authoritative_branch_or_blob_is_found; do_not_reconstruct_from_filename"
+      "repair_policy": "remain_blocked_until_an_authoritative_branch_or_blob_is_found; do_not_reconstruct_from_filename",
+      "latest_source_recovery_search": {
+        "target_repository": "phakphum12345/Drive-letter",
+        "target_candidate_sha": "69bcc3ebc53e7548b79ae179bc03f2df2614b8cf",
+        "empty_file": {
+          "path": "tools/create_change_queue.py",
+          "blob_sha": "5f282702bb03ef11d7184d19c80927b47f919764",
+          "decoded_content_length": 1,
+          "base64_observation": "77u/",
+          "status": "BOM_ONLY_NO_SOURCE_BODY"
+        },
+        "authoritative_repositories_checked": [
+          {
+            "repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+            "default_branch": "main",
+            "result": "all 14 exact paths absent"
+          },
+          {
+            "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+            "default_branch": "main",
+            "result": "all 14 exact paths absent"
+          }
+        ],
+        "additional_refs_checked": [
+          "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:feat/m2-code-integration-protocol",
+          "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:feat/m2-audit-index-implementation",
+          "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:recovery/committed-history-20261011",
+          "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:feat/authoritative-provider-measurement",
+          "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:m2/integrate-permanent-semantic-binding",
+          "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH:Research-OS-Platform-/-Enterprise-API-Architecture-Logic"
+        ],
+        "repository_code_search": {
+          "query": "filename:create_change_queue.py",
+          "repositories_checked": [
+            "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+            "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH"
+          ],
+          "results": 0
+        },
+        "conclusion": "No authoritative blob was recovered from the checked repositories/refs. Keep all 14 paths BLOCKED_SOURCE_UNAVAILABLE; do not strip BOMs, synthesize create_change_queue.py, or run the one-off generator scripts.",
+        "scope_limit": "This was not an exhaustive scan of every branch/ref in both repositories; a new candidate branch or historical blob may still contain authoritative source."
+      }
     },
     {
       "id": "SIR-017",
@@ -232,7 +273,10 @@
     "ui_source_and_artifact_sha_binding",
     "repair_diff_and_regression_tests",
     "independent_repeat_audit",
-    "final_gate_evidence_reconciliation"
+    "final_gate_evidence_reconciliation",
+    "working_tree_clean_against_exact_head",
+    "tree_sha_recorded_for_target_commit",
+    "working_tree_drift_regression_tests"
   ],
   "decision_states": [
     "PASS",
@@ -437,6 +481,20 @@
     "unverified": [
       "Complete UI/build/package artifact SHA lineage",
       "Whether every duplicate-basename reference resolves to the intended implementation"
+    ]
+  },
+  "implementation_revision": {
+    "candidate_branch": "fix/m2-source-integrity-exact-tree-coverage",
+    "changes": [
+      "fail closed on tracked/index drift from HEAD",
+      "record exact HEAD tree SHA",
+      "test clean, modified, and staged repository states"
+    ],
+    "validation_state": "PENDING_CI_ON_EXACT_CANDIDATE_SHA",
+    "limitations_retained": [
+      "workflow path-filter coverage",
+      "UI/build/artifact SHA lineage",
+      "authoritative recovery of source-unavailable helpers"
     ]
   }
 }
