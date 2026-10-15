@@ -139,7 +139,7 @@ def _read_text(path: Path) -> str | None:
     if b"\x00" in raw[:8192]:
         return None
     try:
-        return raw.decode("utf-8")
+        # Python source decoding ignores a leading UTF-8 BOM; mirror that behavior.\n        encoding = "utf-8-sig" if path.suffix.lower() == ".py" else "utf-8"\n        return raw.decode(encoding)
     except UnicodeDecodeError:
         return raw.decode("utf-8", errors="replace")
 
