@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 path = Path("tools/validate_resource_builder_contract.py")
 text = path.read_text(encoding="utf-8")
