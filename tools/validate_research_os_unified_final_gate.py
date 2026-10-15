@@ -158,15 +158,27 @@ def main() -> None:
     text = CONTRACT.read_text(encoding="utf-8")
     workflow_path = ROOT / ".github" / "workflows" / "research-os-unified-final-gate.yml"
     workflow_text = workflow_path.read_text(encoding="utf-8") if workflow_path.is_file() else ""
+    required_release_gate_paths = (
+        ".github/workflows/research-os-unified-final-gate.yml",
+        ".github/workflows/research-os-final-gate.yml",
+        ".github/workflows/final-gate.yml",
+        ".github/workflows/research-os-unified-10x10-gate.yml",
+    )
+    for relative_path in required_release_gate_paths:
+        gate_path = ROOT / relative_path
+        if not gate_path.is_file():
+            fail("required release gate workflow is missing: " + relative_path)
+        gate_text = gate_path.read_text(encoding="utf-8")
+        if "python tools/m2_source_integrity_audit.py" not in gate_text:
+            fail("release gate omits mandatory M.2 source integrity audit: " + relative_path)
     required_gate_wiring = (
-        "python tools/m2_source_integrity_audit.py",
         'CI_LITE: ${{ needs.ci_lite.result }}',
         'test "$CI_LITE" = success',
         "ci_lite, flutter_surface, python_surface, laravel_surface",
     )
     missing_gate_wiring = [item for item in required_gate_wiring if item not in workflow_text]
     if missing_gate_wiring:
-        fail("source-integrity/CI Lite are not required by Unified Final Gate: " + ", ".join(missing_gate_wiring))
+        fail("CI Lite is not required by Unified Final Gate: " + ", ".join(missing_gate_wiring))
     if "name: Research OS Unified Final Gate" not in text:
         fail("contract name is missing")
     if "release_authority: final_gate" not in text:

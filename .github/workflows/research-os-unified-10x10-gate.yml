@@ -174,3 +174,56 @@ jobs:
         run: |
           .\scripts\stop-research-os-local.ps1 -Port 8787 -ErrorAction SilentlyContinue
           if(Test-Path "$env:RUNNER_TEMP\v3.pid"){$p=(Get-Content "$env:RUNNER_TEMP\v3.pid" -ErrorAction SilentlyContinue);if($p){Stop-Process -Id ([int]$p) -Force -ErrorAction SilentlyContinue}}
+
+  source_integrity:
+    name: M.2 source integrity — required for release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+    steps:
+      - name: Checkout exact target SHA
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+      - name: Verify exact target SHA and tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "TARGET_SHA=$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+          echo "TREE_SHA=$(git rev-parse 'HEAD^{tree}')"
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Fetch authoritative baseline history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --filter=blob:none \
+            https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git \
+            refs/heads/main:refs/remotes/baseline-truth/main
+      - name: Run M.2 source integrity audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/m2_source_integrity_audit.py \
+            --root . \
+            --expected-sha "$TARGET_SHA" \
+            --truth-ref refs/remotes/baseline-truth/main \
+            --output m2-source-integrity-report.json
+      - name: Upload M.2 source integrity evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: m2-source-integrity-${{ env.TARGET_SHA }}
+          path: |
+            m2-source-integrity-report.json
+            current/M2_SOURCE_INTEGRITY_RECOVERY_PROTOCOL.json
+            current/M2_SOURCE_RECOVERY_LEDGER.json
+          if-no-files-found: warn
+          retention-days: 30

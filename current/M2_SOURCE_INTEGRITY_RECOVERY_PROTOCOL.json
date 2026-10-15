@@ -177,7 +177,7 @@
   "release_rule": "Final Gate must remain blocked while any BLOCKED_SOURCE_UNAVAILABLE, BLOCKED_SHA_RECONCILIATION, source-integrity error, missing required asset, or mixed-SHA validation evidence remains unresolved.",
   "evidence_binding_note": "current_findings is a pre-enforcement snapshot, not release evidence. Use per-run artifacts and require TARGET_SHA == CHECKED_OUT_SHA plus matching TREE_SHA in every required job.",
   "gate_enforcement": {
-    "status": "FAIL_CLOSED_VERIFIED_ON_PRIOR_SNAPSHOT_REVALIDATE_AFTER_LEDGER_UPDATE",
+    "status": "PATCHED_FAIL_CLOSED_PENDING_CI",
     "workflow": ".github/workflows/research-os-unified-final-gate.yml",
     "required_jobs": [
       "m2_audit",
@@ -208,6 +208,33 @@
       "decision_conclusion": "failure",
       "contract_job_id": 116201337857,
       "contract_conclusion": "success"
-    }
+    },
+    "required_workflows": [
+      ".github/workflows/research-os-unified-final-gate.yml",
+      ".github/workflows/research-os-final-gate.yml",
+      ".github/workflows/final-gate.yml",
+      ".github/workflows/research-os-unified-10x10-gate.yml"
+    ],
+    "additional_historical_false_green": [
+      {
+        "run_id": 38667435123,
+        "workflow": "Research OS Final Gate",
+        "conclusion": "success",
+        "finding": "No M.2 source integrity job; this gate could be green while M.2 audit failed."
+      },
+      {
+        "run_id": 38667434829,
+        "workflow": "V3.5 Master Final Gate",
+        "conclusion": "success",
+        "finding": "No M.2 source integrity job; this gate could be green while M.2 audit failed."
+      },
+      {
+        "run_id": 38667435038,
+        "workflow": "Research OS Unified 10x10 Exact SHA Gate",
+        "conclusion": "success",
+        "finding": "Exact SHA runtime gate did not run M.2 source integrity audit."
+      }
+    ],
+    "required_rule": "Every workflow named as a release/final gate must run the M.2 byte-level source integrity audit on its own exact TARGET_SHA and fail if it fails. Unified Final Gate additionally requires CI Lite. Surface-specific non-release checks may pass, but must not be treated as release approval."
   }
 }

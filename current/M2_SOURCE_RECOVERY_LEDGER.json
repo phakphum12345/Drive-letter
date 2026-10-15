@@ -51,6 +51,54 @@
       "repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
       "ref": "565ab068d5a1540ea799b594ff031ba003e068af",
       "result": "exact-path fetch returned 404 for all 14 helper paths"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-execution-bridge",
+      "tree": "9c55321c1961d96632a24ba6fb853bda9213e141",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-http-boundary-13",
+      "tree": "80ae89390795665833a79ea8e5d1fe715104889e",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-production-composition-14",
+      "tree": "d3fe47d4cb60e785083309c221dcb16b00b8766d",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-provider-boundary-10",
+      "tree": "ebe227a5ad061764dcdf35733f01dbd9e2f069b0",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-runtime-admission",
+      "tree": "982c4a79efb636ebac0fcb52267c030e78e6c932",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-http-unified-runtime-12",
+      "tree": "589175db1c20e37d48f418885bafe7ec1163f994",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-consolidated-hardening-13",
+      "tree": "d92dfcc7fad090156d4cc4fd295d73d4f5fe017a",
+      "result": "no matching helper basenames"
+    },
+    {
+      "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "branch": "feat/resource-control-factory-boundary-9",
+      "tree": "a0b97981a344a43c221ba2a5c2a9ae19e00f50e8",
+      "result": "no matching helper basenames"
     }
   ],
   "blocked_files": [
@@ -304,11 +352,38 @@
     }
   ],
   "gate_composition": {
-    "status": "ENFORCEMENT_PATCH_PENDING_CI",
+    "status": "PATCHED_FAIL_CLOSED_PENDING_CI",
     "failed_source_integrity_run": 38624873654,
     "failed_ci_lite_run": 38624873716,
     "green_final_gate_run": 38624873437,
-    "required_change": "Unified Final Gate must directly require source-integrity and CI Lite on the same target/tree SHA."
+    "required_change": "Unified Final Gate must directly require source-integrity and CI Lite on the same target/tree SHA.",
+    "additional_prepatch_false_green": [
+      {
+        "run_id": 38667435123,
+        "workflow": "Research OS Final Gate",
+        "result": "success",
+        "source_integrity_job_present": false
+      },
+      {
+        "run_id": 38667434829,
+        "workflow": "V3.5 Master Final Gate",
+        "result": "success",
+        "source_integrity_job_present": false
+      },
+      {
+        "run_id": 38667435038,
+        "workflow": "Research OS Unified 10x10 Exact SHA Gate",
+        "result": "success",
+        "source_integrity_job_present": false
+      }
+    ],
+    "enforcement_patch_paths": [
+      ".github/workflows/research-os-final-gate.yml",
+      ".github/workflows/final-gate.yml",
+      ".github/workflows/research-os-unified-10x10-gate.yml",
+      "tools/validate_research_os_unified_final_gate.py",
+      "tools/test_validate_research_os_unified_final_gate.py"
+    ]
   },
   "path_identity_review": {
     "status": "REVIEW_REQUIRED_NOT_AUTOMATICALLY_A_DEFECT",
