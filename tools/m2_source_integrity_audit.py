@@ -99,6 +99,19 @@ def tracked_paths(root: Path) -> list[str]:
     return [item.decode("utf-8", "surrogateescape") for item in output.stdout.split(b"\x00") if item]
 
 
+def working_tree_matches_head(root: Path) -> bool:
+    """Return whether tracked files match the checked-out commit."""
+    result = subprocess.run(
+        ["git", "-C", str(root), "diff", "--quiet", "HEAD", "--"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    raise RuntimeError(result.stderr.strip() or "git diff HEAD failed")
+
+
 def verify_baseline_history(root: Path, truth_ref: str | None) -> tuple[str, list[dict[str, str]], dict[str, str]]:
     """Verify declared baseline anchors exist and descend from the authoritative ref."""
     if not truth_ref:
@@ -173,6 +186,12 @@ def audit(
         findings.append({"severity": "error", "code": "INVALID_TARGET_SHA", "path": ".", "message": "TARGET_SHA must be a full 40-character lowercase Git commit SHA"})
     elif head != expected:
         findings.append({"severity": "error", "code": "CHECKOUT_SHA_MISMATCH", "path": ".", "message": f"expected {expected}, checked out {head}"})
+
+    try:
+        if not working_tree_matches_head(root):
+            findings.append({"severity": "error", "code": "WORKTREE_CONTENT_MISMATCH", "path": ".", "message": "tracked working-tree or index content differs from the checked-out commit; audit result is not commit-pure"})
+    except RuntimeError as exc:
+        findings.append({"severity": "error", "code": "WORKTREE_COMPARISON_FAILED", "path": ".", "message": str(exc)})
 
     baseline_history_status, baseline_findings, baseline_anchors_verified = verify_baseline_history(root, truth_ref)
     findings.extend(baseline_findings)
