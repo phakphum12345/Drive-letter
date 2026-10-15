@@ -232,7 +232,10 @@
     "ui_source_and_artifact_sha_binding",
     "repair_diff_and_regression_tests",
     "independent_repeat_audit",
-    "final_gate_evidence_reconciliation"
+    "final_gate_evidence_reconciliation",
+    "working_tree_clean_against_exact_head",
+    "tree_sha_recorded_for_target_commit",
+    "working_tree_drift_regression_tests"
   ],
   "decision_states": [
     "PASS",
@@ -437,6 +440,20 @@
     "unverified": [
       "Complete UI/build/package artifact SHA lineage",
       "Whether every duplicate-basename reference resolves to the intended implementation"
+    ]
+  },
+  "implementation_revision": {
+    "candidate_branch": "fix/m2-source-integrity-exact-tree-coverage",
+    "changes": [
+      "fail closed on tracked/index drift from HEAD",
+      "record exact HEAD tree SHA",
+      "test clean, modified, and staged repository states"
+    ],
+    "validation_state": "PENDING_CI_ON_EXACT_CANDIDATE_SHA",
+    "limitations_retained": [
+      "workflow path-filter coverage",
+      "UI/build/artifact SHA lineage",
+      "authoritative recovery of source-unavailable helpers"
     ]
   }
 }
