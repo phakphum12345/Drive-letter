@@ -69,14 +69,14 @@
       },
       {
         "id": "M2-SHA-001",
-        "status": "CURRENT_SNAPSHOT_SHA_BOUND_PENDING_GATE_ENFORCEMENT",
+        "status": "TARGET_AND_TREE_MATCH_CONFIRMED_ON_VERIFICATION_SNAPSHOT",
         "paths": [
           ".github/workflows/ci-lite.yml",
           ".github/workflows/baseline-truth-gate.yml",
           ".github/workflows/final-gate.yml"
         ],
-        "evidence": "On PR head 3666dd38655fdd73130cf94e239546aa8a299552, M.2 run 38624873654 and CI Lite run 38624873716 both checked out synthetic merge candidate 1b7b1de6a706740bc40bad9038773e49f5113ced. Do not reuse these results after a new head update.",
-        "action": "Compare target and tree SHA from every required job before Final Gate."
+        "evidence": "Unified Final Gate internal M.2 job 116201502776 and CI Lite job 116201502872 both logged TARGET_SHA=CHECKED_OUT_SHA=a226f811eb619b95e893be2fd7a9af10bb5e12d3 and TREE_SHA=892ba3dbe9aa134439507f9f9292be8cbfd150ab. This snapshot's M.2 and CI Lite jobs failed, and decision job 116201840769 failed closed.",
+        "action": "Repeat this exact target/tree binding check for every new PR head; never reuse evidence from a prior merge candidate."
       },
       {
         "id": "M2-PROD-ASSET-001",
@@ -103,14 +103,14 @@
       },
       {
         "id": "M2-EXTRA-BOM-001",
-        "status": "SOURCE_COMPARISON_REPAIR_PENDING_CI",
+        "status": "REPAIRS_VERIFIED_BY_SOURCE_AUDIT_PENDING_NEXT_SHA",
         "paths": [
           ".github/workflows/aeos-master-assurance.yml",
           ".gitignore",
           "apps/research_os_flutter/test/desktop_shell_test.dart"
         ],
-        "evidence": "desktop_shell_test.dart blob 55c9ff4e76455ce20b2a3757f3364deaed38f598 exactly matches source main and is an exact-blob BOM exception. Candidate .gitignore was 55 lines/716 characters versus verified source 374 lines/5245 characters; restore source while retaining unique candidate rules. aeos-master-assurance.yml differs from source only at three action references pinned to full commit SHAs; remove BOM but retain these pins.",
-        "action": "Re-run source-integrity audit and verify only 14 unavailable helper files remain blocked."
+        "evidence": "On target a226f811eb619b95e893be2fd7a9af10bb5e12d3, the M.2 report classifies desktop_shell_test.dart as AUTHORITATIVE_BOM_MATCH and does not report .gitignore or aeos-master-assurance.yml as BOM errors. Only the 14 unavailable helper files remain as blocking byte-integrity findings.",
+        "action": "Re-run after the ledger-only commit and confirm the same 14 helper blockers and no new path/encoding regressions."
       },
       {
         "id": "M2-SOURCE-HELPERS-001",
@@ -136,34 +136,40 @@
       },
       {
         "id": "M2-GATE-COMPOSITION-001",
-        "status": "ENFORCEMENT_PATCH_PENDING_CI",
+        "status": "FAIL_CLOSED_VERIFIED_ON_PRIOR_SNAPSHOT",
         "paths": [
           ".github/workflows/research-os-unified-final-gate.yml",
           "tools/validate_research_os_unified_final_gate.py"
         ],
-        "evidence": "Unified Final Gate run 38624873437 reported success while source-integrity run 38624873654 and CI Lite run 38624873716 failed on the same synthetic merge candidate. Final decision consumed the M.2 index only.",
-        "action": "Require source-integrity audit and CI Lite as direct dependencies; keep release blocked while helper files remain unavailable."
+        "evidence": "Unified Final Gate run 38667067644 decision job 116201840769 failed because required M.2 job 116201502776 and CI Lite job 116201502872 failed; the contract job 116201337857 passed. Both failed jobs bound to the same target SHA a226f811eb619b95e893be2fd7a9af10bb5e12d3 and tree 892ba3dbe9aa134439507f9f9292be8cbfd150ab.",
+        "action": "Revalidate the fail-closed decision on the new ledger commit SHA."
       }
     ],
     "observed_gate_results": {
-      "ci_lite_run": {
-        "id": 38624873716,
-        "conclusion": "failure",
-        "tested_sha": "1b7b1de6a706740bc40bad9038773e49f5113ced",
-        "reason": "API unit tests fail on 14 helper BOM/BOM-only errors."
-      },
-      "m2_source_integrity_run": {
-        "id": 38624873654,
-        "conclusion": "failure",
-        "tested_sha": "1b7b1de6a706740bc40bad9038773e49f5113ced",
-        "reason": "17 byte-integrity errors before source comparison."
-      },
       "unified_final_gate_run": {
-        "id": 38624873437,
+        "id": 38667067644,
+        "conclusion": "failure",
+        "tested_sha": "a226f811eb619b95e893be2fd7a9af10bb5e12d3",
+        "tree_sha": "892ba3dbe9aa134439507f9f9292be8cbfd150ab",
+        "decision_job_id": 116201840769,
+        "decision_conclusion": "failure"
+      },
+      "ci_lite_job": {
+        "id": 116201502872,
+        "conclusion": "failure",
+        "tested_sha": "a226f811eb619b95e893be2fd7a9af10bb5e12d3",
+        "tree_sha": "892ba3dbe9aa134439507f9f9292be8cbfd150ab"
+      },
+      "m2_job": {
+        "id": 116201502776,
+        "conclusion": "failure",
+        "tested_sha": "a226f811eb619b95e893be2fd7a9af10bb5e12d3",
+        "tree_sha": "892ba3dbe9aa134439507f9f9292be8cbfd150ab"
+      },
+      "contract_job": {
+        "id": 116201337857,
         "conclusion": "success",
-        "tested_sha": "1b7b1de6a706740bc40bad9038773e49f5113ced",
-        "validity": "INVALID_FOR_RELEASE_DECISION",
-        "reason": "The release decision did not consume source-integrity or CI Lite results."
+        "tested_head_sha": "e41aa1e80ebd6bd00bc669e3553e53ec8bb02b33"
       }
     },
     "snapshot_timestamp_utc": "2026-10-14T19:37:57Z"
@@ -171,7 +177,7 @@
   "release_rule": "Final Gate must remain blocked while any BLOCKED_SOURCE_UNAVAILABLE, BLOCKED_SHA_RECONCILIATION, source-integrity error, missing required asset, or mixed-SHA validation evidence remains unresolved.",
   "evidence_binding_note": "current_findings is a pre-enforcement snapshot, not release evidence. Use per-run artifacts and require TARGET_SHA == CHECKED_OUT_SHA plus matching TREE_SHA in every required job.",
   "gate_enforcement": {
-    "status": "ENFORCEMENT_PATCH_PENDING_CI",
+    "status": "FAIL_CLOSED_VERIFIED_ON_PRIOR_SNAPSHOT_REVALIDATE_AFTER_LEDGER_UPDATE",
     "workflow": ".github/workflows/research-os-unified-final-gate.yml",
     "required_jobs": [
       "m2_audit",
@@ -189,6 +195,19 @@
       "TREE_SHA",
       "m2-source-integrity-report.json",
       "current/M2_SOURCE_RECOVERY_LEDGER.json"
-    ]
+    ],
+    "verified_snapshot": {
+      "pr_head_sha": "e41aa1e80ebd6bd00bc669e3553e53ec8bb02b33",
+      "target_sha": "a226f811eb619b95e893be2fd7a9af10bb5e12d3",
+      "tree_sha": "892ba3dbe9aa134439507f9f9292be8cbfd150ab",
+      "m2_job_id": 116201502776,
+      "m2_conclusion": "failure",
+      "ci_lite_job_id": 116201502872,
+      "ci_lite_conclusion": "failure",
+      "decision_job_id": 116201840769,
+      "decision_conclusion": "failure",
+      "contract_job_id": 116201337857,
+      "contract_conclusion": "success"
+    }
   }
 }
