@@ -7,6 +7,14 @@ on:
         description: Exact commit SHA to build
         required: false
         type: string
+      deployment_mode:
+        description: API endpoint profile compiled into the app
+        required: true
+        type: choice
+        options:
+          - local
+          - render
+        default: local
       build_windows:
         description: Build Windows EXE and installer
         required: false
@@ -37,6 +45,8 @@ jobs:
     timeout-minutes: 20
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -53,7 +63,7 @@ jobs:
           flutter create --platforms=web .
           flutter pub get
           flutter test test/widget_test.dart
-          flutter build web --release --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
+          flutter build web --release --dart-define=RESEARCH_OS_API_BASE_URL="$API_BASE_URL"
       - name: Stage website bundle
         run: |
           mkdir -p artifact/website-static artifact/flutter-web
@@ -62,7 +72,7 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          Path("artifact/manifest.json").write_text(json.dumps({"artifact":"research-os-website","target_sha":os.environ["TARGET_SHA"],"parts":["website-static","flutter-web"],"api_base_default":"http://127.0.0.1:8787"}, indent=2), encoding="utf-8")
+          Path("artifact/manifest.json").write_text(json.dumps({"artifact":"research-os-website","target_sha":os.environ["TARGET_SHA"],"deployment_mode":os.environ["DEPLOYMENT_MODE"],"parts":["website-static","flutter-web"],"api_base_default":os.environ["API_BASE_URL"]}, indent=2), encoding="utf-8")
           PY
       - name: Upload website artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -78,6 +88,8 @@ jobs:
     timeout-minutes: 60
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
       RESEARCH_OS_PROVIDER: mock
       RESEARCH_OS_SYNC_KEY: artifact-build-test-key
     steps:
@@ -127,7 +139,7 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
-          flutter build windows --release
+          flutter build windows --release --dart-define=RESEARCH_OS_API_BASE_URL="$env:API_BASE_URL"
           if (-not (Test-Path "D:\w\build\windows\x64\runner\Release\research_os_flutter.exe")) { throw "Windows app executable is missing" }
       - name: Publish ServiceHost
         working-directory: src
@@ -200,7 +212,14 @@ jobs:
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path "$release\*", "$out\Research-OS-Setup-*-x64.exe" -DestinationPath $zip -Force
           Copy-Item $zip "$out" -Force
-          Get-ChildItem "$out" -Recurse -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path)" } | Set-Content "$out\SHA256SUMS.txt" -Encoding utf8
+          $manifest = [ordered]@{
+            artifact = "research-os-windows"
+            target_sha = $env:TARGET_SHA
+            deployment_mode = $env:DEPLOYMENT_MODE
+            api_base_default = $env:API_BASE_URL
+          } | ConvertTo-Json -Depth 4
+          Set-Content -Path "$out\deployment-manifest.json" -Value $manifest -Encoding utf8
+          Get-ChildItem "$out" -Recurse -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path)" } | Set-Content "$out\SHA256SUMS.txt" -Encoding utf8
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -215,6 +234,8 @@ jobs:
     timeout-minutes: 45
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -231,7 +252,7 @@ jobs:
           flutter create --platforms=ios --project-name=research_os_flutter .
           flutter pub get
           flutter test test/widget_test.dart
-          flutter build ios --release --no-codesign --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
+          flutter build ios --release --no-codesign --dart-define=RESEARCH_OS_API_BASE_URL="$API_BASE_URL"
           test -d build/ios/iphoneos/Runner.app
       - name: Package unsigned IPA
         working-directory: apps/research_os_flutter
