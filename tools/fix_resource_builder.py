@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 path = Path("tools/research_os_resource_builder.py")
 text = path.read_text(encoding="utf-8")
