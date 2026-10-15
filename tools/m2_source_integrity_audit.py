@@ -29,6 +29,11 @@ TRUSTED_SOURCE_BOM_BLOBS = {
         "repository": "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
         "commit": "565ab068d5a1540ea799b594ff031ba003e068af",
     },
+    "apps/research_os_flutter/test/desktop_shell_test.dart": {
+        "blob_sha": "55c9ff4e76455ce20b2a3757f3364deaed38f598",
+        "repository": "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+        "commit": "e67e2cf707c015212cb8cd3843c9f3a13ab4e80c",
+    },
 }
 EXTERNAL_ACTION_RE = re.compile(r"^\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)", re.MULTILINE)
 

@@ -35,6 +35,16 @@ class SourceIntegrityByteClassificationTests(unittest.TestCase):
         self.assertNotIn("UTF8_BOM", codes)
         self.assertIn("AUTHORITATIVE_BOM_MATCH", codes)
 
+    def test_authoritative_desktop_shell_bom_is_not_misclassified(self) -> None:
+        path = "apps/research_os_flutter/test/desktop_shell_test.dart"
+        blob_sha = "55c9ff4e76455ce20b2a3757f3364deaed38f598"
+        raw_findings = AUDIT.classify_bytes(path, b"\xef\xbb\xbfimport 'package:flutter/material.dart';\n")
+        self.assertIn("UTF8_BOM", {item["code"] for item in raw_findings})
+        findings = AUDIT.apply_authoritative_bom_policy(path, blob_sha, raw_findings)
+        codes = {item["code"] for item in findings}
+        self.assertNotIn("UTF8_BOM", codes)
+        self.assertIn("AUTHORITATIVE_BOM_MATCH", codes)
+
     def test_bom_exception_does_not_apply_to_different_blob(self) -> None:
         path = "owner_special/installer/scripts/research-os-owner-runtime-quiesce.ps1"
         findings = AUDIT.apply_authoritative_bom_policy(

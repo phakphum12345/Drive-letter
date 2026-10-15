@@ -1,4 +1,4 @@
-﻿name: AEOS Master Assurance
+name: AEOS Master Assurance
 
 on:
   pull_request:

@@ -137,19 +137,42 @@ jobs:
         with:
           ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
-      - name: Verify exact target SHA
+      - name: Verify exact target SHA and tree
+        shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "TARGET_SHA=$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+          echo "TREE_SHA=$(git rev-parse 'HEAD^{tree}')"
+      - name: Fetch authoritative baseline history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --filter=blob:none \
+            https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git \
+            refs/heads/main:refs/remotes/baseline-truth/main
       - name: Build M.2 index
         run: python tools/research_os_m2_audit.py --output m2_audit_index.json --summary m2_audit_index_summary.txt
       - name: Test M.2 index
         run: python -m unittest tools.test_research_os_m2_audit -v
+      - name: Test source-integrity corruption detectors
+        run: python -m unittest tools.test_m2_source_integrity_audit -v
       - name: Verify M.2 source identity
         run: |
           set -euo pipefail
           grep -F "SOURCE_SHA=$TARGET_SHA" m2_audit_index_summary.txt
           grep -F "M2_AUDIT_INDEX=PASS" m2_audit_index_summary.txt
+      - name: Run repository-wide M.2 source integrity audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/m2_source_integrity_audit.py \
+            --root . \
+            --expected-sha "$TARGET_SHA" \
+            --truth-ref refs/remotes/baseline-truth/main \
+            --output m2-source-integrity-report.json
       - name: Upload M.2 evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -158,8 +181,48 @@ jobs:
           path: |
             m2_audit_index.json
             m2_audit_index_summary.txt
-          if-no-files-found: error
+            m2-source-integrity-report.json
+            current/M2_SOURCE_RECOVERY_LEDGER.json
+          if-no-files-found: warn
           retention-days: 30
+  ci_lite:
+    name: CI Lite API and source regression
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RESEARCH_OS_PROVIDER: mock
+      RESEARCH_OS_SYNC_KEY: ci-lite-test-key
+      RESEARCH_OS_ALLOW_LEGACY_IDENTITY_HEADERS: "1"
+    steps:
+      - name: Checkout exact target SHA
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+      - name: Verify exact target SHA and tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "TARGET_SHA=$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+          echo "TREE_SHA=$(git rev-parse 'HEAD^{tree}')"
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Compile API modules
+        run: python -m compileall -q tools/research_os_api tools/research_curator
+      - name: Run API unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RESEARCH_OS_DATA_DIR="$RUNNER_TEMP/ResearchOSData"
+          export RESEARCH_OS_CONVERSATION_STORE="$RUNNER_TEMP/ResearchOSData/sessions/conversations.json"
+          python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
+
   flutter_surface:
     name: Shared Flutter application surface
     needs: contract
@@ -367,7 +430,7 @@ jobs:
 
   decision:
     name: Unified release decision
-    needs: [contract, aeos_recheck, m2_audit, flutter_surface, python_surface, laravel_surface]
+    needs: [contract, aeos_recheck, m2_audit, ci_lite, flutter_surface, python_surface, laravel_surface]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -378,6 +441,7 @@ jobs:
           PYTHON_SURFACE: ${{ needs.python_surface.result }}
           AEOS_RECHECK: ${{ needs.aeos_recheck.result }}
           M2_AUDIT: ${{ needs.m2_audit.result }}
+          CI_LITE: ${{ needs.ci_lite.result }}
           LARAVEL_SURFACE: ${{ needs.laravel_surface.result }}
         run: |
           set -euo pipefail
@@ -386,12 +450,14 @@ jobs:
           printf 'python_surface=%s\n' "$PYTHON_SURFACE"
           printf 'aeos_recheck=%s\n' "$AEOS_RECHECK"
           printf 'm2_audit=%s\n' "$M2_AUDIT"
+          printf 'ci_lite=%s\n' "$CI_LITE"
           printf 'laravel_surface=%s\n' "$LARAVEL_SURFACE"
           test "$CONTRACT" = success
           test "$FLUTTER_SURFACE" = success
           test "$PYTHON_SURFACE" = success
           test "$AEOS_RECHECK" = success
           test "$M2_AUDIT" = success
+          test "$CI_LITE" = success
           test "$LARAVEL_SURFACE" = success
           echo "RESEARCH_OS_UNIFIED_FINAL_GATE=PASS"
           echo "RELEASE_AUTHORITY=FINAL_GATE"

@@ -5,6 +5,14 @@ import sys
 
 
 class UnifiedFinalGateValidatorTest(unittest.TestCase):
+    def test_release_decision_requires_source_integrity_and_ci_lite(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "research-os-unified-final-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("python tools/m2_source_integrity_audit.py", workflow)
+        self.assertIn("CI_LITE: ${{ needs.ci_lite.result }}", workflow)
+        self.assertIn('test "$CI_LITE" = success', workflow)
+        self.assertIn("ci_lite, flutter_surface, python_surface, laravel_surface", workflow)
+
     def test_validator_passes_on_current_source(self) -> None:
         root = Path(__file__).resolve().parents[1]
         script = root / "tools" / "validate_research_os_unified_final_gate.py"
