@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 p = Path("tools/research_os_resource_variables.py")
 
