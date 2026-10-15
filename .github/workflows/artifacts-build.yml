@@ -261,7 +261,20 @@ jobs:
           mkdir -p Payload artifacts-ios
           cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
           /usr/bin/zip -qry "artifacts-ios/research-os-unsigned-${TARGET_SHA}.ipa" Payload
-          shasum -a 256 "artifacts-ios/research-os-unsigned-${TARGET_SHA}.ipa" > artifacts-ios/SHA256SUMS.txt
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest = {
+              "artifact": "research-os-ios-unsigned",
+              "target_sha": os.environ["TARGET_SHA"],
+              "deployment_mode": os.environ["DEPLOYMENT_MODE"],
+              "api_base_default": os.environ["API_BASE_URL"],
+          }
+          Path("artifacts-ios/deployment-manifest.json").write_text(
+              json.dumps(manifest, indent=2), encoding="utf-8"
+          )
+          PY
+          shasum -a 256 artifacts-ios/research-os-unsigned-${TARGET_SHA}.ipa artifacts-ios/deployment-manifest.json > artifacts-ios/SHA256SUMS.txt
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
