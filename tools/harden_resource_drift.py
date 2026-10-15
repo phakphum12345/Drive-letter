@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 module = Path("tools/research_os_resource_drift.py")
 test = Path("tools/test_research_os_resource_drift.py")
