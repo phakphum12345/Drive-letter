@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 p = Path("tools/test_research_os_resource_semantic_binding.py")
 
