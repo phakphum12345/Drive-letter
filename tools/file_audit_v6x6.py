@@ -139,7 +139,9 @@ def _read_text(path: Path) -> str | None:
     if b"\x00" in raw[:8192]:
         return None
     try:
-        # Python source decoding ignores a leading UTF-8 BOM; mirror that behavior.\n        encoding = "utf-8-sig" if path.suffix.lower() == ".py" else "utf-8"\n        return raw.decode(encoding)
+        # Python source decoding ignores a leading UTF-8 BOM; mirror that behavior.
+        encoding = "utf-8-sig" if path.suffix.lower() == ".py" else "utf-8"
+        return raw.decode(encoding)
     except UnicodeDecodeError:
         return raw.decode("utf-8", errors="replace")
 
@@ -207,17 +209,28 @@ def audit_file(path: Path, root: Path) -> FileResult:
                 Finding(rel, "error", "invalid-json", f"JSON parse error: {exc.msg} at line {exc.lineno}.")
             )
     elif suffix == ".py":
-        try:
-            ast.parse(text, filename=rel)
-        except SyntaxError as exc:
+        # Preserve a blocking finding when a BOM-only file decodes to empty text.
+        if not text.strip():
             findings.append(
                 Finding(
                     rel,
                     "error",
-                    "python-syntax",
-                    f"Python syntax error at line {exc.lineno}: {exc.msg}",
+                    "empty-python-source",
+                    "Python source file is empty after UTF-8 BOM handling.",
                 )
             )
+        else:
+            try:
+                ast.parse(text, filename=rel)
+            except SyntaxError as exc:
+                findings.append(
+                    Finding(
+                        rel,
+                        "error",
+                        "python-syntax",
+                        f"Python syntax error at line {exc.lineno}: {exc.msg}",
+                    )
+                )
 
     return FileResult(rel, tuple(findings))
 
