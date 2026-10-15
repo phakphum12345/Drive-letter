@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -26,6 +27,30 @@ def _load_auditor():
 
 
 class CandidateFileAuditV6x6GateTests(unittest.TestCase):
+    def test_valid_utf8_bom_python_is_parsed_without_false_syntax_error(self) -> None:
+        auditor = _load_auditor()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "valid.py"
+            source.write_bytes(b"\xef\xbb\xbfvalue = 1\n")
+            result = auditor.audit_file(source, root)
+
+        codes = {item.code for item in result.findings}
+        self.assertNotIn("python-syntax", codes)
+        self.assertFalse(any(item.severity == "error" for item in result.findings))
+
+    def test_bom_only_python_remains_a_blocking_error(self) -> None:
+        auditor = _load_auditor()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "empty.py"
+            source.write_bytes(b"\xef\xbb\xbf")
+            result = auditor.audit_file(source, root)
+
+        codes = {item.code for item in result.findings}
+        self.assertIn("empty-python-source", codes)
+        self.assertTrue(any(item.severity == "error" for item in result.findings))
+
     def test_candidate_repository_passes_adaptive_6x6_file_audit(self) -> None:
         auditor = _load_auditor()
         report = auditor.audit_repository(REPO_ROOT)
