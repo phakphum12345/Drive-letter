@@ -48,7 +48,7 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 ## 4. One-pass audit protocol
 
-1. **Freeze the target.** Resolve PR head once, check out that exact SHA, and assert `git rev-parse HEAD == TARGET_SHA`. Do not silently switch to default branch or a moving ref.
+1. **Freeze the target.** Resolve PR head once, check out that exact SHA, and assert `git rev-parse HEAD == TARGET_SHA`. Record `git rev-parse 'HEAD^{tree}'`. Before scanning, require the tracked/index state to match HEAD (`git diff --quiet HEAD --`); a dirty or staged tree is `FAIL`, not evidence about the committed candidate. Do not silently switch to default branch or a moving ref.
 2. **Prove provenance.** Check expected source commits and squash objects exist; inspect ancestry, trees, and relevant blobs against authoritative remotes. Keep current work HEAD separate from production truth.
 3. **Scan bytes before text.** Walk all tracked files and report NUL bytes, UTF-8 BOM, BOM-only/zero-byte files, invalid UTF-8 where UTF-8 is required, suspiciously truncated files, and parser/compiler errors. Do not rewrite files during the audit.
 4. **Compare authoritative file lineage.** For every finding, compare path, mode, blob SHA, raw bytes, and file history against a trusted source commit. Never infer intended content from the filename or a nearby file.
@@ -61,7 +61,8 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 ## 5. Required invariants
 
-- `TARGET_SHA == checked_out_SHA == tested_source_SHA`.
+- `TARGET_SHA == checked_out_SHA == tested_source_SHA`, and the reported tree SHA is the tree object for that exact commit.
+- The audit must fail closed if tracked/index content differs from HEAD; raw working-tree hashes must never be presented as proof of committed-source identity.
 - A release artifact must identify the same source SHA and have a verified artifact hash.
 - A path/name match alone never establishes file identity; use Git blob SHA and raw-byte SHA-256.
 - Missing historical Git objects cannot be “repaired” by changing a contract to point at an unrelated commit.
