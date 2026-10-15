@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +12,29 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError("Unable to load M.2 source-integrity audit module")
 AUDIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AUDIT)
+
+
+class WorkingTreePurityTests(unittest.TestCase):
+    def _repository(self, root: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(root), "config", "user.name", "Test"], check=True)
+        (root / "sample.py").write_text("print('original')\\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(root), "add", "sample.py"], check=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-qm", "fixture"], check=True)
+
+    def test_clean_checkout_matches_head(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._repository(root)
+            self.assertTrue(AUDIT.working_tree_matches_head(root))
+
+    def test_modified_tracked_file_does_not_match_head(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._repository(root)
+            (root / "sample.py").write_text("print('changed')\\n", encoding="utf-8")
+            self.assertFalse(AUDIT.working_tree_matches_head(root))
 
 
 class SourceIntegrityByteClassificationTests(unittest.TestCase):
