@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 # ------------------------------------------------------------
 # Fix validator newline handling and import root.
