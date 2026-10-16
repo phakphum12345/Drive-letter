@@ -197,7 +197,14 @@ foreach ($service in $services) {
         service_process_id = [int]$service.process_id
         service_host_in_inventory = ($hostProcess.Count -gt 0)
         direct_relevant_children = $children
-        runtime_child_process_ids = @($children | Where-Object { $_.executable_path -match '(?i)\\runtime\\python\\python\.exe
+        runtime_child_process_ids = @($children | Where-Object { $_.executable_path -and $_.executable_path.ToLowerInvariant().EndsWith('\runtime\python\python.exe') } | ForEach-Object process_id)
+    }
+    if ($service.state -eq 'Running' -and $hostProcess.Count -eq 0) {
+        Add-Finding 'WARN' 'SERVICE_PID_NOT_IN_INVENTORY' "Service $($service.name) PID $($service.process_id) was not found among the inventoried service hosts." @{
+            service_name = $service.name; service_process_id = [int]$service.process_id
+        }
+    }
+}
 $logEvidence = @(
     Get-LogEvidence -DataDir $ApiDataDir -Label 'research_os_api'
     Get-LogEvidence -DataDir $OwnerDataDir -Label 'owner_friend'
