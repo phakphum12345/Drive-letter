@@ -162,6 +162,7 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "OWNER_SPECIAL_PLATFORM_UI=PASS",
         "Generate canonical Platform installer branding",
         "Canonical Platform installer branding generation failed.",
+        "  pull_request:",
         "Bundled API import smoke test",
         "BUNDLED_API_IMPORT=PASS",
         "Get-WinEvent",
