@@ -10,6 +10,7 @@ class ResearchOSSidebarV2 extends StatelessWidget {
     required this.selectedIndex,
     required this.onToggle,
     required this.onSelected,
+    this.onLogout,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class ResearchOSSidebarV2 extends StatelessWidget {
   final int selectedIndex;
   final VoidCallback onToggle;
   final ValueChanged<int> onSelected;
+  final VoidCallback? onLogout;
 
   static const compactWidth = 76.0;
   static const expandedWidth = 264.0;
@@ -224,6 +226,48 @@ class ResearchOSSidebarV2 extends StatelessWidget {
               children: entries(),
             ),
           ),
+          if (onLogout != null)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: expanded ? 10 : 8,
+                vertical: 2,
+              ),
+              child: Tooltip(
+                message: 'ออกจากระบบ',
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(13),
+                  child: InkWell(
+                    key: const Key('research-os-logout'),
+                    borderRadius: BorderRadius.circular(13),
+                    onTap: onLogout,
+                    child: SizedBox(
+                      height: 43,
+                      child: Row(
+                        children: <Widget>[
+                          SizedBox(
+                            width: expanded ? 44 : 58,
+                            child: Icon(
+                              Icons.logout,
+                              color: scheme.onSurfaceVariant,
+                              size: 21,
+                            ),
+                          ),
+                          if (expanded)
+                            const Expanded(
+                              child: Text(
+                                'ออกจากระบบ',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           _securityStatus(context),
         ],
       ),
