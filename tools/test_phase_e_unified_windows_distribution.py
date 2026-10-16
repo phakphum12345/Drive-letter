@@ -71,6 +71,12 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("server.py", source)
         self.assertNotIn("render_server.py", source)
 
+    def test_installer_e2e_runs_for_relevant_pull_requests(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("  pull_request:", workflow)
+        self.assertIn("      - main", workflow)
+        self.assertIn('"tools/**"', workflow)
+
     def test_bundled_api_import_smoke_is_required(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
         self.assertIn("Bundled API import smoke test", workflow)
