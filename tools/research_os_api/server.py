@@ -62,10 +62,20 @@ from tools.project_scale_readiness import PROJECT_COUNT, build_project_definitio
 import copilot_service
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_web_dir(root: Path) -> Path:
+    """Resolve the source-tree or canonical packaged web UI directory."""
+    source_web = root / "apps" / "research_os_web"
+    if source_web.is_dir():
+        return source_web
+    return root / "platform" / "research_os_web"
+
+
 CURATOR_PATH = ROOT / "tools" / "research_curator" / "curator.py"
 KNOWLEDGE_OPS_PATH = ROOT / "tools" / "research_curator" / "knowledge_ops.py"
 ARTIFACT_DIR = ROOT / "research" / "artifacts"
-WEB_DIR = ROOT / "apps" / "research_os_web"
+WEB_DIR = _resolve_web_dir(ROOT)
 STATIC_ROUTES = {"/": "index.html", "/index.html": "index.html", "/app.css": "app.css", "/app.js": "app.js"}
 DEFAULT_GITHUB_REPOSITORY = "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH"
 
