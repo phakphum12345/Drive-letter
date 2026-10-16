@@ -47,6 +47,17 @@ class _ResearchOSAppState extends State<ResearchOSApp> {
     });
   }
 
+  Future<void> _signOut() async {
+    final client = _apiClient;
+    if (client == null) return;
+
+    // Do not report a completed logout until the API confirms session revocation.
+    await client.signOut();
+    client.clearSession();
+    if (!mounted) return;
+    setState(() => _authenticated = false);
+  }
+
   Future<void> _changeApiEndpoint(String value) async {
     final normalized = ApiEndpointStore.normalize(value);
     await ApiEndpointStore.save(normalized);
@@ -97,6 +108,7 @@ class _ResearchOSAppState extends State<ResearchOSApp> {
                 setState(() => _themeMode = value);
               },
               onApiBaseUrlChanged: _changeApiEndpoint,
+              onLogout: _signOut,
             )
                       : LoginPage(
                   key: ValueKey(_apiBaseUrl),
