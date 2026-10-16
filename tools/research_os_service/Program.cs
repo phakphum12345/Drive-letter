@@ -255,13 +255,17 @@ sealed class ResearchOsApiWorker : BackgroundService
     {
         await using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         await using var writer = new StreamWriter(stream) { AutoFlush = true };
-        while (!reader.EndOfStream && !token.IsCancellationRequested)
+        while (!token.IsCancellationRequested)
         {
+            // Do not query EndOfStream synchronously: it can block before the
+            // asynchronous read starts and prevent the second pipe from draining.
             var line = await reader.ReadLineAsync(token);
-            if (line is not null)
+            if (line is null)
             {
-                await writer.WriteLineAsync($"[{DateTimeOffset.Now:O}] {line}");
+                break;
             }
+
+            await writer.WriteLineAsync($"[{DateTimeOffset.Now:O}] {line}");
         }
     }
 
