@@ -493,17 +493,20 @@ jobs:
           $checks['owner_http_ready'] = $true
 
           $apiReady = $false
+          $apiHealth = $null
           for ($i = 0; $i -lt 30; $i++) {
             try {
-              $apiResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8787/' -TimeoutSec 2 -UseBasicParsing
-              if ($apiResponse.StatusCode -ge 200 -and $apiResponse.StatusCode -lt 500) { $apiReady = $true; break }
-            } catch {
-              if ($_.Exception.Response) { $apiReady = $true; break }
-            }
+              $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+              if ($apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) { $apiReady = $true; break }
+            } catch {}
             Start-Sleep -Milliseconds 500
           }
-          if (-not $apiReady) { throw 'Research OS API HTTP readiness check failed.' }
+          if (-not $apiReady) {
+            Write-Host "Research OS API health payload: $($apiHealth | ConvertTo-Json -Depth 5 -Compress)"
+            throw 'Research OS API /health must report status=ok and ui=true.'
+          }
           $checks['research_os_api_ready'] = $true
+          $checks['research_os_api_ui_ready'] = $true
 
           $appPath = Join-Path $installRoot 'app\research_os_flutter.exe'
           $app = Start-Process -FilePath $appPath -WorkingDirectory (Split-Path $appPath) -PassThru
