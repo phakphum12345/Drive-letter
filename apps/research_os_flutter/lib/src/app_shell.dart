@@ -38,6 +38,11 @@ class ResearchOSAppShell extends StatefulWidget {
   final Future<void> Function(String value)? onApiBaseUrlChanged;
   final Future<void> Function()? onLogout;
 
+  @override
+  State<ResearchOSAppShell> createState() => _ResearchOSAppShellState();
+}
+
+class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
   Future<void> _handleLogout() async {
     final callback = widget.onLogout;
     if (callback == null) return;
@@ -51,11 +56,6 @@ class ResearchOSAppShell extends StatefulWidget {
     }
   }
 
-  @override
-  State<ResearchOSAppShell> createState() => _ResearchOSAppShellState();
-}
-
-class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
   int _selectedIndex = 0;
   bool _sidebarExpanded = false;
 
