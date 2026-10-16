@@ -7,6 +7,18 @@ on:
         description: Exact immutable source SHA to build and validate
         required: true
         type: string
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/research-os-phase-e-unified-windows-distribution.yml"
+      - "apps/research_os_flutter/**"
+      - "apps/research_os_web/**"
+      - "owner_special/**"
+      - "tools/**"
+      - "v3/**"
+      - "current/**"
+      - "scripts/**"
   push:
     branches:
       - feat/research-os-phase-e-unified-windows-distribution
