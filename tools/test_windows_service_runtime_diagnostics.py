@@ -30,6 +30,8 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
             "parent_process_id",
             "command_line",
             "SHARED_RUNTIME_IN_USE",
+            "service_process_ownership",
+            "SERVICE_PID_NOT_IN_INVENTORY",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.source)
