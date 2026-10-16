@@ -167,6 +167,8 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "BUNDLED_API_IMPORT=PASS",
         "Get-WinEvent",
         "INSTALLED_API_IMPORT_EXIT=",
+        "apiHealth.status -eq 'ok'",
+        "apiHealth.ui -eq $true",
     ):
         if marker not in workflow:
             errors.append(f"Phase E workflow missing required marker: {marker}")
