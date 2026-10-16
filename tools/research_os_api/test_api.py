@@ -57,6 +57,22 @@ class ResearchOSAPITests(unittest.TestCase):
         error = raised.exception
         return error.code, json.loads(error.read().decode("utf-8"))
 
+    def test_web_dir_falls_back_to_canonical_distribution_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            packaged_web = root / "platform" / "research_os_web"
+            packaged_web.mkdir(parents=True)
+            self.assertEqual(packaged_web, server._resolve_web_dir(root))
+
+    def test_web_dir_prefers_source_tree_when_both_layouts_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_web = root / "apps" / "research_os_web"
+            packaged_web = root / "platform" / "research_os_web"
+            source_web.mkdir(parents=True)
+            packaged_web.mkdir(parents=True)
+            self.assertEqual(source_web, server._resolve_web_dir(root))
+
     def test_health(self):
         status, payload = self.request("GET", "/health")
         self.assertEqual(200, status)
