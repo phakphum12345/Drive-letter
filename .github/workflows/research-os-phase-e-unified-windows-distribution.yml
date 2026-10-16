@@ -170,6 +170,20 @@ jobs:
           Copy-Item "$py\*" "$p\runtime\python" -Recurse -Force
           if (-not (Test-Path "$p\runtime\python\python.exe")) { throw 'Bundled Python missing.' }
 
+      - name: Bundled API import smoke test
+        shell: pwsh
+        run: |
+          $p = "$env:GITHUB_WORKSPACE\phase-e\package"
+          $python = Join-Path $p 'runtime\python\python.exe'
+          if (-not (Test-Path $python -PathType Leaf)) { throw 'Bundled Python runtime is missing before API import smoke test.' }
+          Push-Location $p
+          try {
+            & $python -c "import tools.research_os_api.server; print('BUNDLED_API_IMPORT=PASS')"
+            if ($LASTEXITCODE -ne 0) { throw "Bundled Python could not import the canonical Research OS API (exit=$LASTEXITCODE)." }
+          } finally {
+            Pop-Location
+          }
+
       - name: Manifest and package validation
         shell: pwsh
         run: |
@@ -408,6 +422,37 @@ jobs:
             $outLog = Join-Path $dataRoot 'logs\service-api.out.log'
             if (Test-Path $errLog) { Write-Host '--- Research OS service stderr ---'; Get-Content $errLog -Tail 100 | Out-Host }
             if (Test-Path $outLog) { Write-Host '--- Research OS service stdout ---'; Get-Content $outLog -Tail 100 | Out-Host }
+
+            # Capture the child runtime's import failure and SCM/.NET crash events.
+            # Never print the complete process environment because it may contain secrets.
+            $bundledPython = Join-Path $installRoot 'runtime\python\python.exe'
+            if (Test-Path $bundledPython -PathType Leaf) {
+              Write-Host "--- Bundled API import diagnostic: $bundledPython ---"
+              Push-Location $installRoot
+              try {
+                & $bundledPython -c "import sys; print('PYTHON_EXE=' + sys.executable); print('PYTHON_VERSION=' + sys.version.split()[0]); import tools.research_os_api.server; print('INSTALLED_API_IMPORT=PASS')" 2>&1 | Out-Host
+                Write-Host "INSTALLED_API_IMPORT_EXIT=$LASTEXITCODE"
+              } catch {
+                Write-Host "INSTALLED_API_IMPORT_EXCEPTION=$($_.Exception.GetType().FullName): $($_.Exception.Message)"
+              } finally {
+                Pop-Location
+              }
+            } else {
+              Write-Host "BUNDLED_PYTHON_MISSING=$bundledPython"
+            }
+
+            $eventStart = (Get-Date).AddMinutes(-15)
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $eventStart } -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.ProviderName -match 'Application Error|\.NET Runtime|Windows Error Reporting' -or
+                $_.Message -match 'ResearchOSService|ResearchOS\.ServiceHost|Research OS API|python\.exe'
+              } |
+              Select-Object -First 30 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-Host
+            Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $eventStart } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -match 'Service Control Manager' -and $_.Message -match 'ResearchOSService|Research OS' } |
+              Select-Object -First 20 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-Host
             throw 'Research OS service did not reach Running state after install.'
           }
 
