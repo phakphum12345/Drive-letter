@@ -176,9 +176,11 @@ jobs:
           $p = "$env:GITHUB_WORKSPACE\phase-e\package"
           $python = Join-Path $p 'runtime\python\python.exe'
           if (-not (Test-Path $python -PathType Leaf)) { throw 'Bundled Python runtime is missing before API import smoke test.' }
-          Push-Location $p
+          $apiDir = Join-Path $p 'tools\research_os_api'
+          if (-not (Test-Path (Join-Path $apiDir 'server.py') -PathType Leaf)) { throw 'Canonical API entrypoint is missing from staged package.' }
+          Push-Location $apiDir
           try {
-            & $python -c "import tools.research_os_api.server; print('BUNDLED_API_IMPORT=PASS')"
+            & $python -c "import server; print('BUNDLED_API_IMPORT=PASS')"
             if ($LASTEXITCODE -ne 0) { throw "Bundled Python could not import the canonical Research OS API (exit=$LASTEXITCODE)." }
           } finally {
             Pop-Location
@@ -428,9 +430,10 @@ jobs:
             $bundledPython = Join-Path $installRoot 'runtime\python\python.exe'
             if (Test-Path $bundledPython -PathType Leaf) {
               Write-Host "--- Bundled API import diagnostic: $bundledPython ---"
-              Push-Location $installRoot
+              $apiDir = Join-Path $installRoot 'tools\research_os_api'
+              Push-Location $apiDir
               try {
-                & $bundledPython -c "import sys; print('PYTHON_EXE=' + sys.executable); print('PYTHON_VERSION=' + sys.version.split()[0]); import tools.research_os_api.server; print('INSTALLED_API_IMPORT=PASS')" 2>&1 | Out-Host
+                & $bundledPython -c "import sys; print('PYTHON_EXE=' + sys.executable); print('PYTHON_VERSION=' + sys.version.split()[0]); import server; print('INSTALLED_API_IMPORT=PASS')" 2>&1 | Out-Host
                 Write-Host "INSTALLED_API_IMPORT_EXIT=$LASTEXITCODE"
               } catch {
                 Write-Host "INSTALLED_API_IMPORT_EXCEPTION=$($_.Exception.GetType().FullName): $($_.Exception.Message)"
