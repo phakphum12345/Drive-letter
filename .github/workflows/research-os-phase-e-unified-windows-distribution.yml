@@ -54,7 +54,7 @@ jobs:
       - run: python tools/validate_phase_e_unified_windows_distribution.py
       - env:
           PYTHONPATH: .
-        run: python -m unittest tools.test_phase_e_unified_windows_distribution -v
+        run: python -m unittest tools.test_phase_e_unified_windows_distribution tools.test_windows_service_runtime_diagnostics -v
 
   build:
     needs: validate
