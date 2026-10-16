@@ -36,6 +36,14 @@ function Protect-CommandLine {
     return $safe
 }
 
+function Protect-LogLine {
+    param([AllowNull()][string]$Line)
+    if ($null -eq $Line) { return $null }
+    $safe = $Line -replace '(?i)((?:token|password|passwd|secret|api[-_]?key|authorization)\s*[:=]\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key|authorization)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    return $safe
+}
+
 function Get-ServiceEvidence {
     param([string]$Name)
     try {
@@ -75,7 +83,7 @@ function Get-LogEvidence {
             $_.Name -match '(?i)(service|api|stdout|stderr|\.log$|\.txt$)'
         })) {
             try {
-                $lines = @(Get-Content -LiteralPath $file.FullName -Tail $LogTailLines -ErrorAction Stop)
+                $lines = @(Get-Content -LiteralPath $file.FullName -Tail $LogTailLines -ErrorAction Stop | ForEach-Object { Protect-LogLine -Line $_ })
                 $result.Add([pscustomobject]@{
                     component = $Label
                     path = $file.FullName
@@ -152,7 +160,8 @@ try {
 }
 
 $listenerEvidence = @()
-foreach ($port in @($ApiPort, $OwnerPort) | Select-Object -Unique) {
+$portsToInspect = @($ApiPort, $OwnerPort) | Select-Object -Unique
+foreach ($port in $portsToInspect) {
     try {
         $connections = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction Stop)
         foreach ($connection in $connections) {
@@ -225,7 +234,6 @@ foreach ($endpoint in $http) {
     }
 }
 foreach ($listener in $listenerEvidence) {
-    if ($listener.local_address -notin @('127.0.0.1','::1','0.0.0.0','::')) { continue }
     if ($listener.local_address -in @('0.0.0.0','::')) {
         Add-Finding 'WARN' 'NON_LOOPBACK_LISTENER' "Port $($listener.port) is listening on a wildcard address" $listener
     }
