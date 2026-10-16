@@ -53,7 +53,7 @@ jobs:
           flutter create --platforms=web .
           flutter pub get
           flutter test test/widget_test.dart
-          flutter build web --release --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
+          flutter build web --release --dart-define=RESEARCH_OS_API_BASE_URL=https://research-os-api-phakphoum.onrender.com
       - name: Stage website bundle
         run: |
           mkdir -p artifact/website-static artifact/flutter-web
@@ -62,7 +62,7 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          Path("artifact/manifest.json").write_text(json.dumps({"artifact":"research-os-website","target_sha":os.environ["TARGET_SHA"],"parts":["website-static","flutter-web"],"api_base_default":"http://127.0.0.1:8787"}, indent=2), encoding="utf-8")
+          Path("artifact/manifest.json").write_text(json.dumps({"artifact":"research-os-website","target_sha":os.environ["TARGET_SHA"],"parts":["website-static","flutter-web"],"api_base_default":"https://research-os-api-phakphoum.onrender.com"}, indent=2), encoding="utf-8")
           PY
       - name: Upload website artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -127,7 +127,7 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
-          flutter build windows --release
+          flutter build windows --release --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
           if (-not (Test-Path "D:\w\build\windows\x64\runner\Release\research_os_flutter.exe")) { throw "Windows app executable is missing" }
       - name: Publish ServiceHost
         working-directory: src
@@ -231,7 +231,7 @@ jobs:
           flutter create --platforms=ios --project-name=research_os_flutter .
           flutter pub get
           flutter test test/widget_test.dart
-          flutter build ios --release --no-codesign --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
+          flutter build ios --release --no-codesign --dart-define=RESEARCH_OS_API_BASE_URL=https://research-os-api-phakphoum.onrender.com
           test -d build/ios/iphoneos/Runner.app
       - name: Package unsigned IPA
         working-directory: apps/research_os_flutter

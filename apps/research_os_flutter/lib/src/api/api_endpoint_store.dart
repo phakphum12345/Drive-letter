@@ -118,13 +118,8 @@ class ApiEndpointStore {
 
     final normalized = normalize(saved);
 
-    // Migrate older Windows builds that persisted the development loopback
-    // endpoint when the canonical PORT 1 endpoint is different.
-    if (normalized == localDefault && port1BuildDefault != localDefault) {
-      await prefs.setString(_storageKey, port1BuildDefault);
-      return normalize(port1BuildDefault);
-    }
-
+    // A saved endpoint is an explicit user choice. Never silently replace
+    // Local with Render (or vice versa) based on the build-time default.
     return normalized;
   }
 
