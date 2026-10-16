@@ -186,6 +186,125 @@ $http = @(
     Test-LocalHttpEndpoint -Name 'owner_friend_health' -Uri "http://127.0.0.1:$OwnerPort/owner/health"
 )
 
+$serviceOwnership = @()
+foreach ($service in $services) {
+    if (-not $service.registered -or -not $service.process_id) { continue }
+    $hostProcess = @($processes | Where-Object { $_.process_id -eq [int]$service.process_id })
+    $children = @($processes | Where-Object { $_.parent_process_id -eq [int]$service.process_id })
+    $serviceOwnership += [pscustomobject]@{
+        service_name = $service.name
+        service_state = $service.state
+        service_process_id = [int]$service.process_id
+        service_host_in_inventory = ($hostProcess.Count -gt 0)
+        direct_relevant_children = $children
+        runtime_child_process_ids = @($children | Where-Object { $_.executable_path -match '(?i)\\runtime\\python\\python\.exe
+$logEvidence = @(
+    Get-LogEvidence -DataDir $ApiDataDir -Label 'research_os_api'
+    Get-LogEvidence -DataDir $OwnerDataDir -Label 'owner_friend'
+)
+
+$eventEvidence = @()
+$eventStart = (Get-Date).AddMinutes(-$EventLookbackMinutes)
+foreach ($logName in @('Application','System')) {
+    try {
+        $events = @(Get-WinEvent -FilterHashtable @{ LogName = $logName; StartTime = $eventStart } -MaxEvents 500 -ErrorAction Stop |
+            Where-Object {
+                $_.Message -match "(?i)$([regex]::Escape($ApiServiceName))|$([regex]::Escape($OwnerServiceName))|Research OS API|ResearchOS\.ServiceHost|python\.exe" -or
+                ($logName -eq 'System' -and $_.ProviderName -match 'Service Control Manager')
+            } | Select-Object -First 60)
+        foreach ($event in $events) {
+            $eventEvidence += [pscustomobject]@{
+                log = $logName
+                time_created = $event.TimeCreated.ToString('o')
+                provider = $event.ProviderName
+                event_id = $event.Id
+                level = $event.LevelDisplayName
+                message = $event.Message
+            }
+        }
+    } catch {
+        Add-Finding 'INFO' 'EVENT_LOG_UNAVAILABLE' "Could not read $logName event log" $_.Exception.Message
+    }
+}
+
+$apiRuntime = $processes | Where-Object { $_.role_hints -contains 'research_os_api_entrypoint' }
+$ownerRuntime = $processes | Where-Object { $_.role_hints -contains 'owner_friend_entrypoint' }
+if ($apiRuntime.Count -gt 0 -and $ownerRuntime.Count -gt 0) {
+    Add-Finding 'INFO' 'SHARED_RUNTIME_IN_USE' 'API and Owner Friend entrypoints are running under an inventoried bundled Python runtime; cleanup must identify the exact service-owned process, not just the interpreter path.' @{
+        api_pids = @($apiRuntime | ForEach-Object process_id)
+        owner_friend_pids = @($ownerRuntime | ForEach-Object process_id)
+    }
+}
+foreach ($service in $services) {
+    if ($service.registered -and $service.state -ne 'Running') {
+        Add-Finding 'ERROR' 'SERVICE_NOT_RUNNING' "Service $($service.name) is $($service.state)" $service
+    }
+}
+foreach ($endpoint in $http) {
+    if (-not $endpoint.reachable) {
+        Add-Finding 'ERROR' 'HTTP_HEALTH_FAILED' "Endpoint $($endpoint.name) did not return a successful response" $endpoint
+    }
+}
+foreach ($listener in $listenerEvidence) {
+    if ($listener.local_address -in @('0.0.0.0','::')) {
+        Add-Finding 'WARN' 'NON_LOOPBACK_LISTENER' "Port $($listener.port) is listening on a wildcard address" $listener
+    }
+}
+
+$report = [pscustomobject]@{
+    schema = 'research-os.windows-service-diagnostics/v1'
+    captured_at = $startedAt.ToString('o')
+    computer = $env:COMPUTERNAME
+    read_only = $true
+    no_processes_stopped = $true
+    parameters = [pscustomobject]@{
+        install_root = $InstallRoot; owner_root = $OwnerRoot
+        api_service = $ApiServiceName; owner_service = $OwnerServiceName
+        api_port = $ApiPort; owner_port = $OwnerPort
+        event_lookback_minutes = $EventLookbackMinutes
+    }
+    services = $services
+    relevant_processes = $processes
+    service_process_ownership = $serviceOwnership
+    listeners = $listenerEvidence
+    http_health = $http
+    log_tails = $logEvidence
+    events = $eventEvidence
+    findings = @($findings)
+    summary = [pscustomobject]@{
+        service_count = $services.Count
+        process_count = $processes.Count
+        listener_count = $listenerEvidence.Count
+        failed_http_checks = @($http | Where-Object { -not $_.reachable }).Count
+        error_findings = @($findings | Where-Object severity -eq 'ERROR').Count
+        warning_findings = @($findings | Where-Object severity -eq 'WARN').Count
+        diagnostic_status = 'COLLECTED_NOT_CERTIFIED'
+    }
+}
+
+$json = $report | ConvertTo-Json -Depth 10
+if ($OutputPath) {
+    $fullOutputPath = [IO.Path]::GetFullPath($OutputPath)
+    $parent = Split-Path -Parent $fullOutputPath
+    if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+    Set-Content -LiteralPath $fullOutputPath -Value $json -Encoding UTF8
+    Write-Host "DIAGNOSTIC_REPORT=$fullOutputPath"
+} else {
+    Write-Output $json
+}
+Write-Host "DIAGNOSTIC_FINDINGS=$($findings.Count)"
+Write-Host 'DIAGNOSTIC_STATUS=COLLECTED_NOT_CERTIFIED'
+ } | ForEach-Object process_id)
+    }
+    if ($service.state -eq 'Running' -and $hostProcess.Count -eq 0) {
+        Add-Finding 'WARN' 'SERVICE_PID_NOT_IN_INVENTORY' "Service $($service.name) PID $($service.process_id) was not found among the inventoried service hosts." @{
+            service_name = $service.name; service_process_id = [int]$service.process_id
+        }
+    }
+}
+
 $logEvidence = @(
     Get-LogEvidence -DataDir $ApiDataDir -Label 'research_os_api'
     Get-LogEvidence -DataDir $OwnerDataDir -Label 'owner_friend'
