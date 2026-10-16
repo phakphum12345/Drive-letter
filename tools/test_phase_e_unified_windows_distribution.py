@@ -71,6 +71,18 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("server.py", source)
         self.assertNotIn("render_server.py", source)
 
+    def test_bundled_api_import_smoke_is_required(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("Bundled API import smoke test", workflow)
+        self.assertIn("BUNDLED_API_IMPORT=PASS", workflow)
+        self.assertIn("import tools.research_os_api.server", workflow)
+
+    def test_service_start_failure_collects_runtime_and_event_diagnostics(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("Get-WinEvent", workflow)
+        self.assertIn("INSTALLED_API_IMPORT_EXIT=", workflow)
+        self.assertIn("Research OS service did not reach Running state after install.", workflow)
+
     def test_workflow_must_bind_owner_special(self) -> None:
         with patch.object(validator, "_read_phase_e_workflow", return_value=""):
             self.assertIn(
