@@ -518,23 +518,21 @@ jobs:
           $apiPidBefore = [int]$apiServiceBefore.ProcessId
           $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
             param([int]$ExpectedApiPid)
-            $findings = [System.Collections.Generic.List[string]]::new()
             while ($true) {
               try {
                 $service = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
                 if (-not $service -or $service.State -ne 'Running' -or [int]$service.ProcessId -ne $ExpectedApiPid) {
-                  $findings.Add("API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)")
+                  Write-Output "API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)"
                 }
                 $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
                 if ($health.status -ne 'ok' -or $health.ui -ne $true) {
-                  $findings.Add("API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)")
+                  Write-Output "API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)"
                 }
               } catch {
-                $findings.Add("API_HEALTH_PROBE_FAILED $($_.Exception.Message)")
+                Write-Output "API_HEALTH_PROBE_FAILED $($_.Exception.Message)"
               }
               Start-Sleep -Milliseconds 250
             }
-            return @($findings)
           }
           try {
             $ownerLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
