@@ -34,10 +34,19 @@ function Show-OwnerServiceDiagnostics {
 }
 
 function Get-OwnerBundledPythonProcesses {
+    # The bundled interpreter is shared by API and Owner Friend. The executable
+    # path alone is not process ownership; require this install's exact entrypoint.
     $pythonPath = [IO.Path]::GetFullPath((Join-Path $Root 'runtime\python\python.exe'))
+    $entrypoint = [IO.Path]::GetFullPath((Join-Path $Root 'owner_special\scripts\run_friend_service.py'))
     return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
-        $_.Name -ieq 'python.exe' -and $_.ExecutablePath -and
-        ([IO.Path]::GetFullPath($_.ExecutablePath) -ieq $pythonPath)
+        if ($_.Name -ine 'python.exe' -or -not $_.ExecutablePath -or -not $_.CommandLine) {
+            return $false
+        }
+        if ([IO.Path]::GetFullPath($_.ExecutablePath) -ine $pythonPath) {
+            return $false
+        }
+        # Match the full entrypoint path, not a generic Python runtime path.
+        return $_.CommandLine.IndexOf($entrypoint, [StringComparison]::OrdinalIgnoreCase) -ge 0
     })
 }
 
