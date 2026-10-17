@@ -5,6 +5,7 @@ on:
     paths:
       - current/AEOS_SQUASH_RECONCILIATION_CONTRACT.json
       - current/AEOS_SQUASH_RECONCILIATIONS.json
+      - current/AEOS_SQUASH_RECONCILIATION_PR12.json
       - tools/aeos/validate_squash_reconciliation.py
       - .github/workflows/aeos-squash-reconciliation-contract.yml
 
@@ -27,4 +28,6 @@ jobs:
           git fetch --no-tags https://github.com/phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH.git feat/aeos-hold-recovery-engine
           python3 tools/aeos/validate_squash_reconciliation.py \
             current/AEOS_SQUASH_RECONCILIATIONS.json source
+          python3 tools/aeos/validate_squash_reconciliation.py \
+            current/AEOS_SQUASH_RECONCILIATION_PR12.json source
           python3 -m unittest tools.aeos.test_validate_squash_reconciliation -v

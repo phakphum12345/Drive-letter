@@ -89,14 +89,17 @@ def main() -> int:
         except subprocess.CalledProcessError:
             raise SystemExit(f"FAIL: required historical Git commit is unavailable: {object_id}")
     parents = run("git", "rev-list", "--parents", "-n", "1", merge).split()[1:]
-    if parents != [data["merge_parent_sha"]] or parents != [base]:
-        raise SystemExit("FAIL: squash merge must have exactly BASE as its only parent")
+    if parents != [data["merge_parent_sha"]]:
+        raise SystemExit("FAIL: squash merge must have exactly the declared merge-time parent")
+    merge_parent = data["merge_parent_sha"]
+    if run("git", "merge-base", base, merge_parent) != base:
+        raise SystemExit("FAIL: original PR base is not an ancestor of the merge-time parent")
 
     head_paths = changed_paths(base, head)
-    merge_paths = changed_paths(base, merge)
+    merge_paths = changed_paths(merge_parent, merge)
     divergent = {
         path for path in head_paths | merge_paths
-        if path_patch(base, head, path) != path_patch(base, merge, path)
+        if path_patch(base, head, path) != path_patch(merge_parent, merge, path)
     }
     declared = set(data["divergent_paths"])
     if divergent != declared:
