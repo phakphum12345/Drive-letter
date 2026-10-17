@@ -14,6 +14,12 @@ from typing import Any
 
 PASS_CONCLUSIONS = {"success"}
 UNPROVEN_CONCLUSIONS = {"neutral", "skipped"}
+# Explicitly non-required check contract. The trusted main workflow defines
+# push-image with `if: event_name == push && registry credentials available`,
+# so its skip on pull_request is intentional and non-certifying.
+NOT_APPLICABLE_SKIPPED_CHECKS = {
+    "push-image": "NOT_APPLICABLE: publish step runs only on push when registry credentials are available",
+}
 PENDING_STATUSES = {"queued", "in_progress", "pending", "requested", "waiting"}
 TRANSIENT_HTTP_STATUS = {429, 500, 502, 503, 504}
 
@@ -109,15 +115,20 @@ def normalize_check_run(check: dict[str, Any], current_run_id: str) -> dict[str,
         return None
     status = str(check.get("status") or "").lower()
     conclusion = str(check.get("conclusion") or "").lower()
+    name = str(check.get("name") or "").strip()
+    reason_code = None
     if status != "completed":
         bucket, state = "pending", status.upper() or "UNKNOWN"
     elif conclusion in PASS_CONCLUSIONS:
         bucket, state = "pass", conclusion.upper()
+    elif conclusion == "skipped" and name in NOT_APPLICABLE_SKIPPED_CHECKS:
+        bucket, state = "not_applicable", conclusion.upper()
+        reason_code = NOT_APPLICABLE_SKIPPED_CHECKS[name]
     elif conclusion in UNPROVEN_CONCLUSIONS:
         bucket, state = "unproven", conclusion.upper()
     else:
         bucket, state = "fail", conclusion.upper() or "FAILED"
-    return {"source":"check_run","name":check.get("name"),"bucket":bucket,"state":state,"details_url":check.get("details_url") or check.get("html_url")}
+    return {"source":"check_run","name":name,"bucket":bucket,"state":state,"reason_code":reason_code,"details_url":check.get("details_url") or check.get("html_url")}
 
 
 def normalize_status_context(status: dict[str, Any], current_run_id: str) -> dict[str, Any] | None:
@@ -134,7 +145,7 @@ def normalize_status_context(status: dict[str, Any], current_run_id: str) -> dic
 
 
 def summarize(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"source":c.get("source"),"name":c.get("name"),"state":c.get("state"),"bucket":c.get("bucket"),"details_url":c.get("details_url")} for c in checks]
+    return [{"source":c.get("source"),"name":c.get("name"),"state":c.get("state"),"bucket":c.get("bucket"),"reason_code":c.get("reason_code"),"details_url":c.get("details_url")} for c in checks]
 
 
 def classify(checks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
