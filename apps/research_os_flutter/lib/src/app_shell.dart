@@ -28,6 +28,7 @@ class ResearchOSAppShell extends StatefulWidget {
     this.themeMode = ThemeMode.system,
     this.onThemeModeChanged,
     this.onApiBaseUrlChanged,
+    this.onLogout,
     super.key,
   });
 
@@ -35,12 +36,26 @@ class ResearchOSAppShell extends StatefulWidget {
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode>? onThemeModeChanged;
   final Future<void> Function(String value)? onApiBaseUrlChanged;
+  final Future<void> Function()? onLogout;
 
   @override
   State<ResearchOSAppShell> createState() => _ResearchOSAppShellState();
 }
 
 class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
+  Future<void> _handleLogout() async {
+    final callback = widget.onLogout;
+    if (callback == null) return;
+    try {
+      await callback();
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ออกจากระบบไม่สำเร็จ: $error')),
+      );
+    }
+  }
+
   int _selectedIndex = 0;
   bool _sidebarExpanded = false;
 
@@ -101,6 +116,7 @@ class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
               selectedIndex: _selectedIndex,
               onToggle: _toggleSidebar,
               onSelected: _selectFromSidebar,
+              onLogout: widget.onLogout == null ? null : _handleLogout,
             ),
             Expanded(
               child: Column(
