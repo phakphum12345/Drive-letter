@@ -186,7 +186,7 @@ jobs:
 
           echo "=== RECON: SOURCE INPUTS (PRE-GENERATION) ==="
           test -f v3/flutter_app/pubspec.yaml
-          test -f v3/packages/research_os_contracts/pubspec.yaml
+          test -f packages/research_os_contracts/pubspec.yaml
           echo "RECON_SOURCE_INPUTS=PASS"
 
           echo "=== RECON: MAVEN CENTRAL REACHABILITY ==="
