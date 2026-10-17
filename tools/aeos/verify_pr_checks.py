@@ -12,7 +12,14 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-PASS_CONCLUSIONS = {"success", "neutral", "skipped"}
+PASS_CONCLUSIONS = {"success"}
+UNPROVEN_CONCLUSIONS = {"neutral", "skipped"}
+# Explicitly non-required check contract. The trusted main workflow defines
+# push-image with `if: event_name == push && registry credentials available`,
+# so its skip on pull_request is intentional and non-certifying.
+NOT_APPLICABLE_SKIPPED_CHECKS = {
+    "push-image": "NOT_APPLICABLE: publish step runs only on push when registry credentials are available",
+}
 PENDING_STATUSES = {"queued", "in_progress", "pending", "requested", "waiting"}
 TRANSIENT_HTTP_STATUS = {429, 500, 502, 503, 504}
 
@@ -93,10 +100,14 @@ def current_pr_head(repository: str, pr_number: str) -> str:
 
 
 def is_self_check(check: dict[str, Any], current_run_id: str) -> bool:
+    """Exclude this aggregator from its own evidence, including prior retry runs."""
     url = str(check.get("details_url") or check.get("html_url") or check.get("target_url") or "")
-    if not current_run_id:
-        return False
-    return re.search(rf"/actions/runs/{re.escape(current_run_id)}(?:$|[/?#])", url) is not None
+    if current_run_id and re.search(rf"/actions/runs/{re.escape(current_run_id)}(?:$|[/?#])", url):
+        return True
+    # Previous runs of this meta-workflow can be red because their wait budget
+    # expired. They are not source checks and must not poison a later resumed run.
+    name = str(check.get("name") or check.get("context") or "").strip().casefold()
+    return name in {"comprehensive-review", "aeos one-shot comprehensive review"}
 
 
 def normalize_check_run(check: dict[str, Any], current_run_id: str) -> dict[str, Any] | None:
@@ -104,13 +115,20 @@ def normalize_check_run(check: dict[str, Any], current_run_id: str) -> dict[str,
         return None
     status = str(check.get("status") or "").lower()
     conclusion = str(check.get("conclusion") or "").lower()
+    name = str(check.get("name") or "").strip()
+    reason_code = None
     if status != "completed":
         bucket, state = "pending", status.upper() or "UNKNOWN"
     elif conclusion in PASS_CONCLUSIONS:
         bucket, state = "pass", conclusion.upper()
+    elif conclusion == "skipped" and name in NOT_APPLICABLE_SKIPPED_CHECKS:
+        bucket, state = "not_applicable", conclusion.upper()
+        reason_code = NOT_APPLICABLE_SKIPPED_CHECKS[name]
+    elif conclusion in UNPROVEN_CONCLUSIONS:
+        bucket, state = "unproven", conclusion.upper()
     else:
         bucket, state = "fail", conclusion.upper() or "FAILED"
-    return {"source":"check_run","name":check.get("name"),"bucket":bucket,"state":state,"details_url":check.get("details_url") or check.get("html_url")}
+    return {"source":"check_run","name":name,"bucket":bucket,"state":state,"reason_code":reason_code,"details_url":check.get("details_url") or check.get("html_url")}
 
 
 def normalize_status_context(status: dict[str, Any], current_run_id: str) -> dict[str, Any] | None:
@@ -127,11 +145,16 @@ def normalize_status_context(status: dict[str, Any], current_run_id: str) -> dic
 
 
 def summarize(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"source":c.get("source"),"name":c.get("name"),"state":c.get("state"),"bucket":c.get("bucket"),"details_url":c.get("details_url")} for c in checks]
+    return [{"source":c.get("source"),"name":c.get("name"),"state":c.get("state"),"bucket":c.get("bucket"),"reason_code":c.get("reason_code"),"details_url":c.get("details_url")} for c in checks]
 
 
-def classify(checks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    return [c for c in checks if c.get("bucket") == "pending"], [c for c in checks if c.get("bucket") == "fail"]
+def classify(checks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Separate running checks, proven failures, and terminal-but-unproven checks."""
+    return (
+        [c for c in checks if c.get("bucket") == "pending"],
+        [c for c in checks if c.get("bucket") == "fail"],
+        [c for c in checks if c.get("bucket") == "unproven"],
+    )
 
 
 def fetch_external_checks(repository: str, head_sha: str, current_run_id: str) -> list[dict[str, Any]]:
@@ -182,27 +205,33 @@ def main() -> int:
         if live_head != args.head_sha:
             raise SystemExit(f"PR HEAD changed during verification: expected {args.head_sha}, got {live_head}")
         checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id)
-        pending, bad = classify(checks)
+        pending, bad, unproven = classify(checks)
         if bad:
-            print(json.dumps({"status":"EXTERNAL_CI_FAILED","failing_checks":summarize(bad)}, indent=2))
+            print(json.dumps({"status":"EXTERNAL_CI_FAILED","result_state":"FAIL","failing_checks":summarize(bad)}, indent=2))
             raise SystemExit("one or more external PR checks failed")
+        if unproven:
+            print(json.dumps({"status":"BLOCKED_EVIDENCE","result_state":"BLOCKED_EVIDENCE","unproven_checks":summarize(unproven)}, indent=2))
+            raise SystemExit(3)  # BLOCKED_EVIDENCE; distinct from a proven CI failure.
         if checks and not pending:
             final_head = current_pr_head(args.repository, args.pr_number)
             if final_head != args.head_sha:
                 raise SystemExit(f"PR HEAD changed during final verification: expected {args.head_sha}, got {final_head}")
             final_checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id)
-            final_pending, final_bad = classify(final_checks)
+            final_pending, final_bad, final_unproven = classify(final_checks)
             if final_bad or final_pending or not final_checks:
                 continue
+            if final_unproven:
+                print(json.dumps({"status":"BLOCKED_EVIDENCE","result_state":"BLOCKED_EVIDENCE","unproven_checks":summarize(final_unproven)}, indent=2))
+                raise SystemExit(3)  # BLOCKED_EVIDENCE; do not certify this SHA.
             print(json.dumps({"status":"ALL_EXTERNAL_CHECKS_PASS","check_count":len(final_checks),"checks":summarize(final_checks)}, indent=2))
             return 0
 
         remaining = max(0, int(deadline - time.monotonic()))
         if remaining <= 0:
-            payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","poll":attempt,"pending_count":len(pending),"pending_checks":summarize(pending),"observed_check_count":len(checks)}
+            payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","result_state":"RESULT_PENDING","reason_code":"WAIT_BUDGET_EXCEEDED","execution_state":"WAITING","poll":attempt,"pending_count":len(pending),"pending_checks":summarize(pending),"observed_check_count":len(checks)}
             print(json.dumps(payload, indent=2))
-            raise SystemExit("external PR checks did not reach a passing terminal state before timeout")
-        payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","poll":attempt,"observed_check_count":len(checks),"pending_count":len(pending),"pending_checks":summarize(pending),"seconds_remaining":remaining}
+            raise SystemExit(2)  # RESULT_PENDING / WAIT_BUDGET_EXCEEDED, not a source-check FAIL.
+        payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","result_state":"RESULT_PENDING","execution_state":"WAITING","poll":attempt,"observed_check_count":len(checks),"pending_count":len(pending),"pending_checks":summarize(pending),"seconds_remaining":remaining}
         signature = json.dumps(payload, sort_keys=True)
         if signature != last_signature:
             print(json.dumps(payload, indent=2))

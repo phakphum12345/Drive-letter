@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Test evidence-driven PR check verifier
+        run: python -m unittest tools.aeos.test_verify_pr_checks -v
+
       - name: Verify exact source identity
         shell: bash
         run: |
