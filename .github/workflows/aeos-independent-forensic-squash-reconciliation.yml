@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - current/AEOS_SQUASH_RECONCILIATIONS.json
+      - current/AEOS_SQUASH_RECONCILIATION_PR12.json
       - tools/aeos/verify_squash_reconciliation_independent.py
       - .github/workflows/aeos-independent-forensic-squash-reconciliation.yml
   workflow_dispatch:
