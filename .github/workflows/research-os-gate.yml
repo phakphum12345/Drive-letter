@@ -250,6 +250,13 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Install Linux desktop build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev mesa-utils
       - name: Recon Linux desktop toolchain
         shell: bash
         run: |
