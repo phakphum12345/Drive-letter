@@ -34,6 +34,11 @@ class VerifyPrChecksTests(unittest.TestCase):
         self.assertEqual(check["bucket"], "unproven")
         self.assertEqual(check["state"], "SKIPPED")
 
+    def test_explicitly_non_applicable_push_image_skip_is_reasoned(self):
+        check = normalize_check_run({"name":"push-image","status":"completed","conclusion":"skipped","details_url":"https://github.com/o/r/actions/runs/999/job/1"}, "123")
+        self.assertEqual(check["bucket"], "not_applicable")
+        self.assertIn("only on push", check["reason_code"])
+
     def test_neutral_check_run_is_unproven_not_passing(self):
         check = normalize_check_run({"name":"non-blocking-note","status":"completed","conclusion":"neutral"}, "123")
         self.assertEqual(check["bucket"], "unproven")
