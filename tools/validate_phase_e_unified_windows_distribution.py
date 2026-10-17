@@ -162,6 +162,13 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "OWNER_SPECIAL_PLATFORM_UI=PASS",
         "Generate canonical Platform installer branding",
         "Canonical Platform installer branding generation failed.",
+        "  pull_request:",
+        "Bundled API import smoke test",
+        "BUNDLED_API_IMPORT=PASS",
+        "Get-WinEvent",
+        "INSTALLED_API_IMPORT_EXIT=",
+        "apiHealth.status -eq 'ok'",
+        "apiHealth.ui -eq $true",
     ):
         if marker not in workflow:
             errors.append(f"Phase E workflow missing required marker: {marker}")

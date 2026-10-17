@@ -71,6 +71,30 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("server.py", source)
         self.assertNotIn("render_server.py", source)
 
+    def test_installer_e2e_runs_for_relevant_pull_requests(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("  pull_request:", workflow)
+        self.assertIn("      - main", workflow)
+        self.assertIn('"tools/**"', workflow)
+
+    def test_bundled_api_import_smoke_is_required(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("Bundled API import smoke test", workflow)
+        self.assertIn("BUNDLED_API_IMPORT=PASS", workflow)
+        self.assertIn("import server; print('BUNDLED_API_IMPORT=PASS')", workflow)
+
+    def test_api_readiness_requires_health_and_packaged_ui(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("/health", workflow)
+        self.assertIn("apiHealth.status -eq 'ok'", workflow)
+        self.assertIn("apiHealth.ui -eq $true", workflow)
+
+    def test_service_start_failure_collects_runtime_and_event_diagnostics(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("Get-WinEvent", workflow)
+        self.assertIn("INSTALLED_API_IMPORT_EXIT=", workflow)
+        self.assertIn("Research OS service did not reach Running state after install.", workflow)
+
     def test_workflow_must_bind_owner_special(self) -> None:
         with patch.object(validator, "_read_phase_e_workflow", return_value=""):
             self.assertIn(

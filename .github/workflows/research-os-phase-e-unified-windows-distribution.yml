@@ -7,6 +7,18 @@ on:
         description: Exact immutable source SHA to build and validate
         required: true
         type: string
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/research-os-phase-e-unified-windows-distribution.yml"
+      - "apps/research_os_flutter/**"
+      - "apps/research_os_web/**"
+      - "owner_special/**"
+      - "tools/**"
+      - "v3/**"
+      - "current/**"
+      - "scripts/**"
   push:
     branches:
       - feat/research-os-phase-e-unified-windows-distribution
@@ -42,7 +54,7 @@ jobs:
       - run: python tools/validate_phase_e_unified_windows_distribution.py
       - env:
           PYTHONPATH: .
-        run: python -m unittest tools.test_phase_e_unified_windows_distribution -v
+        run: python -m unittest tools.test_phase_e_unified_windows_distribution tools.test_windows_service_runtime_diagnostics -v
 
   build:
     needs: validate
@@ -169,6 +181,22 @@ jobs:
           $py = (python -c "import sys; print(sys.base_prefix)").Trim()
           Copy-Item "$py\*" "$p\runtime\python" -Recurse -Force
           if (-not (Test-Path "$p\runtime\python\python.exe")) { throw 'Bundled Python missing.' }
+
+      - name: Bundled API import smoke test
+        shell: pwsh
+        run: |
+          $p = "$env:GITHUB_WORKSPACE\phase-e\package"
+          $python = Join-Path $p 'runtime\python\python.exe'
+          if (-not (Test-Path $python -PathType Leaf)) { throw 'Bundled Python runtime is missing before API import smoke test.' }
+          $apiDir = Join-Path $p 'tools\research_os_api'
+          if (-not (Test-Path (Join-Path $apiDir 'server.py') -PathType Leaf)) { throw 'Canonical API entrypoint is missing from staged package.' }
+          Push-Location $apiDir
+          try {
+            & $python -c "import server; print('BUNDLED_API_IMPORT=PASS')"
+            if ($LASTEXITCODE -ne 0) { throw "Bundled Python could not import the canonical Research OS API (exit=$LASTEXITCODE)." }
+          } finally {
+            Pop-Location
+          }
 
       - name: Manifest and package validation
         shell: pwsh
@@ -408,6 +436,38 @@ jobs:
             $outLog = Join-Path $dataRoot 'logs\service-api.out.log'
             if (Test-Path $errLog) { Write-Host '--- Research OS service stderr ---'; Get-Content $errLog -Tail 100 | Out-Host }
             if (Test-Path $outLog) { Write-Host '--- Research OS service stdout ---'; Get-Content $outLog -Tail 100 | Out-Host }
+
+            # Capture the child runtime's import failure and SCM/.NET crash events.
+            # Never print the complete process environment because it may contain secrets.
+            $bundledPython = Join-Path $installRoot 'runtime\python\python.exe'
+            if (Test-Path $bundledPython -PathType Leaf) {
+              Write-Host "--- Bundled API import diagnostic: $bundledPython ---"
+              $apiDir = Join-Path $installRoot 'tools\research_os_api'
+              Push-Location $apiDir
+              try {
+                & $bundledPython -c "import sys; print('PYTHON_EXE=' + sys.executable); print('PYTHON_VERSION=' + sys.version.split()[0]); import server; print('INSTALLED_API_IMPORT=PASS')" 2>&1 | Out-Host
+                Write-Host "INSTALLED_API_IMPORT_EXIT=$LASTEXITCODE"
+              } catch {
+                Write-Host "INSTALLED_API_IMPORT_EXCEPTION=$($_.Exception.GetType().FullName): $($_.Exception.Message)"
+              } finally {
+                Pop-Location
+              }
+            } else {
+              Write-Host "BUNDLED_PYTHON_MISSING=$bundledPython"
+            }
+
+            $eventStart = (Get-Date).AddMinutes(-15)
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $eventStart } -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.ProviderName -match 'Application Error|\.NET Runtime|Windows Error Reporting' -or
+                $_.Message -match 'ResearchOSService|ResearchOS\.ServiceHost|Research OS API|python\.exe'
+              } |
+              Select-Object -First 30 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-Host
+            Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $eventStart } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -match 'Service Control Manager' -and $_.Message -match 'ResearchOSService|Research OS' } |
+              Select-Object -First 20 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-Host
             throw 'Research OS service did not reach Running state after install.'
           }
 
@@ -433,17 +493,84 @@ jobs:
           $checks['owner_http_ready'] = $true
 
           $apiReady = $false
+          $apiHealth = $null
           for ($i = 0; $i -lt 30; $i++) {
             try {
-              $apiResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8787/' -TimeoutSec 2 -UseBasicParsing
-              if ($apiResponse.StatusCode -ge 200 -and $apiResponse.StatusCode -lt 500) { $apiReady = $true; break }
-            } catch {
-              if ($_.Exception.Response) { $apiReady = $true; break }
-            }
+              $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+              if ($apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) { $apiReady = $true; break }
+            } catch {}
             Start-Sleep -Milliseconds 500
           }
-          if (-not $apiReady) { throw 'Research OS API HTTP readiness check failed.' }
+          if (-not $apiReady) {
+            Write-Host "Research OS API health payload: $($apiHealth | ConvertTo-Json -Depth 5 -Compress)"
+            throw 'Research OS API /health must report status=ok and ui=true.'
+          }
           $checks['research_os_api_ready'] = $true
+          $checks['research_os_api_ui_ready'] = $true
+
+          # Exercise Owner Friend service lifecycle while the main API is live.
+          # This catches regressions where cleanup kills the shared bundled Python
+          # interpreter without distinguishing the API entrypoint from Friend.
+          $apiServiceBefore = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+          if (-not $apiServiceBefore -or $apiServiceBefore.State -ne 'Running' -or $apiServiceBefore.ProcessId -le 0) {
+            throw 'Cannot establish authoritative ResearchOSService PID before Owner Friend lifecycle test.'
+          }
+          $apiPidBefore = [int]$apiServiceBefore.ProcessId
+          $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
+            param([int]$ExpectedApiPid)
+            while ($true) {
+              try {
+                $service = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+                if (-not $service -or $service.State -ne 'Running' -or [int]$service.ProcessId -ne $ExpectedApiPid) {
+                  Write-Output "API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)"
+                }
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+                if ($health.status -ne 'ok' -or $health.ui -ne $true) {
+                  Write-Output "API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)"
+                }
+              } catch {
+                Write-Output "API_HEALTH_PROBE_FAILED $($_.Exception.Message)"
+              }
+              Start-Sleep -Milliseconds 250
+            }
+          }
+          try {
+            $ownerLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
+            if (-not (Test-Path $ownerLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend lifecycle script missing.' }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action uninstall -Root $installRoot -DataDir $ownerDataRoot
+            if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only uninstall failed with exit code $LASTEXITCODE." }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot
+            if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only reinstall failed with exit code $LASTEXITCODE." }
+            $ownerLifecycleReady = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              $ownerLifecycleService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
+              try {
+                $ownerLifecycleHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2
+                if ($ownerLifecycleService -and $ownerLifecycleService.State -eq 'Running' -and $ownerLifecycleHealth.status -eq 'ok') {
+                  $ownerLifecycleReady = $true
+                  break
+                }
+              } catch {}
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
+            Start-Sleep -Seconds 2
+          } finally {
+            Stop-Job -Job $monitor -ErrorAction SilentlyContinue
+          }
+          $monitorFindings = @(Receive-Job -Job $monitor -ErrorAction SilentlyContinue)
+          Remove-Job -Job $monitor -Force -ErrorAction SilentlyContinue
+          if ($monitorFindings.Count -gt 0) {
+            $monitorFindings | ForEach-Object { Write-Host $_ }
+            throw "ResearchOSService PID/health stability failed during Owner Friend-only lifecycle ($($monitorFindings.Count) finding(s))."
+          }
+          $apiServiceAfter = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+          if (-not $apiServiceAfter -or $apiServiceAfter.State -ne 'Running' -or [int]$apiServiceAfter.ProcessId -ne $apiPidBefore) {
+            throw "ResearchOSService PID changed across Owner Friend lifecycle. before=$apiPidBefore after=$($apiServiceAfter.ProcessId) state=$($apiServiceAfter.State)"
+          }
+          $checks['owner_friend_lifecycle_api_pid_stable'] = $true
+          $checks['owner_friend_lifecycle_api_health_continuous'] = $true
+          Write-Host "OWNER_FRIEND_LIFECYCLE_API_STABILITY=PASS api_pid=$apiPidBefore"
 
           $appPath = Join-Path $installRoot 'app\research_os_flutter.exe'
           $app = Start-Process -FilePath $appPath -WorkingDirectory (Split-Path $appPath) -PassThru
