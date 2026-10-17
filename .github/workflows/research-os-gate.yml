@@ -184,11 +184,10 @@ jobs:
           test -d "$sdk_root/platforms"
           echo "RECON_ANDROID_SDK_LAYOUT=PASS"
 
-          echo "=== RECON: PROJECT INPUTS ==="
+          echo "=== RECON: SOURCE INPUTS (PRE-GENERATION) ==="
           test -f v3/flutter_app/pubspec.yaml
-          test -f v3/flutter_app/android/settings.gradle.kts
-          test -f v3/flutter_app/android/gradle/wrapper/gradle-wrapper.properties
-          echo "RECON_PROJECT_INPUTS=PASS"
+          test -f v3/packages/research_os_contracts/pubspec.yaml
+          echo "RECON_SOURCE_INPUTS=PASS"
 
           echo "=== RECON: MAVEN CENTRAL REACHABILITY ==="
           url="https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.pom"
@@ -206,6 +205,14 @@ jobs:
         working-directory: v3/flutter_app
         run: flutter create --platforms=android --project-name=research_os_v3_flutter .
 
+      - name: Recon generated Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f v3/flutter_app/android/settings.gradle.kts
+          test -f v3/flutter_app/android/gradle/wrapper/gradle-wrapper.properties
+          echo "RECON_GENERATED_ANDROID_PROJECT=PASS"
+
       - name: Flutter dependencies
         working-directory: v3/flutter_app
         run: flutter pub get
@@ -222,9 +229,123 @@ jobs:
         working-directory: v3/flutter_app
         run: flutter build apk --debug
 
+  linux-desktop-quality:
+    name: Flutter Linux Desktop Recon Build
+    needs: [python-quality]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact target SHA
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+      - name: Verify checked-out SHA
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+      - name: Download and set up Flutter SDK
+        uses: ./.github/actions/flutter-setup
+        with:
+          channel: stable
+          cache: true
+      - name: Recon Linux desktop toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          dart --version
+          command -v clang
+          command -v cmake
+          command -v ninja
+          command -v pkg-config
+          pkg-config --modversion gtk+-3.0
+          echo "RECON_LINUX_DESKTOP_TOOLCHAIN=PASS"
+      - name: Generate Linux platform
+        working-directory: v3/flutter_app
+        run: flutter create --platforms=linux --project-name=research_os_v3_flutter .
+      - name: Recon generated Linux project
+        run: |
+          set -euo pipefail
+          test -f v3/flutter_app/linux/CMakeLists.txt
+          test -f v3/flutter_app/linux/runner/main.cc
+          echo "RECON_GENERATED_LINUX_PROJECT=PASS"
+      - name: Flutter dependencies
+        working-directory: v3/flutter_app
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: v3/flutter_app
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: v3/flutter_app
+        run: flutter test
+      - name: Flutter Linux desktop build
+        working-directory: v3/flutter_app
+        run: flutter build linux --debug
+
+  apple-quality:
+    name: Flutter macOS and iOS Xcode Recon Build
+    needs: [python-quality]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout exact target SHA
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+      - name: Verify checked-out SHA
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+      - name: Download and set up Flutter SDK
+        uses: ./.github/actions/flutter-setup
+        with:
+          channel: stable
+          cache: true
+      - name: Recon Xcode and Apple SDKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          dart --version
+          sw_vers
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --sdk macosx --show-sdk-version
+          pod --version
+          echo "RECON_XCODE_TOOLCHAIN=PASS"
+      - name: Generate Apple platforms
+        working-directory: v3/flutter_app
+        run: flutter create --platforms=ios,macos --project-name=research_os_v3_flutter .
+      - name: Recon generated Apple projects
+        run: |
+          set -euo pipefail
+          test -f v3/flutter_app/ios/Runner.xcodeproj/project.pbxproj
+          test -f v3/flutter_app/macos/Runner.xcodeproj/project.pbxproj
+          echo "RECON_GENERATED_APPLE_PROJECTS=PASS"
+      - name: Flutter dependencies
+        working-directory: v3/flutter_app
+        run: flutter pub get
+      - name: Flutter analyze
+        working-directory: v3/flutter_app
+        run: flutter analyze
+      - name: Flutter tests
+        working-directory: v3/flutter_app
+        run: flutter test
+      - name: Flutter iOS Simulator build
+        working-directory: v3/flutter_app
+        run: flutter build ios --simulator --debug
+      - name: Flutter macOS desktop build
+        working-directory: v3/flutter_app
+        run: flutter build macos --debug
+
   gate:
     name: Research OS Final Gate
-    needs: [python-quality, research-e2e, flutter-quality]
+    needs: [python-quality, research-e2e, flutter-quality, linux-desktop-quality, apple-quality]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
