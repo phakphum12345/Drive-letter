@@ -23,20 +23,27 @@ class VerifyPrChecksTests(unittest.TestCase):
     def test_self_check_run_is_excluded_by_plain_run_url(self):
         self.assertIsNone(normalize_check_run({"name":"comprehensive-review","status":"completed","conclusion":"success","details_url":"https://github.com/o/r/actions/runs/123"}, "123"))
 
-    def test_skipped_check_run_is_treated_as_passing(self):
+    def test_prior_aggregator_failure_is_not_external_ci_evidence(self):
+        self.assertIsNone(normalize_check_run({"name":"comprehensive-review","status":"completed","conclusion":"failure","details_url":"https://github.com/o/r/actions/runs/999/job/1"}, "123"))
+
+    def test_aggregator_status_context_is_excluded_across_run_ids(self):
+        self.assertIsNone(normalize_status_context({"context":"AEOS One-Shot Comprehensive Review","state":"failure","target_url":"https://github.com/o/r/actions/runs/999"}, "123"))
+
+    def test_skipped_check_run_is_unproven_not_passing(self):
         check = normalize_check_run({"name":"build-ios-unsigned-ipa","status":"completed","conclusion":"skipped","details_url":"https://github.com/o/r/actions/runs/999/job/1"}, "123")
-        self.assertEqual(check["bucket"], "pass")
+        self.assertEqual(check["bucket"], "unproven")
         self.assertEqual(check["state"], "SKIPPED")
 
-    def test_neutral_check_run_is_treated_as_passing(self):
+    def test_neutral_check_run_is_unproven_not_passing(self):
         check = normalize_check_run({"name":"non-blocking-note","status":"completed","conclusion":"neutral"}, "123")
-        self.assertEqual(check["bucket"], "pass")
+        self.assertEqual(check["bucket"], "unproven")
         self.assertEqual(check["state"], "NEUTRAL")
 
     def test_pending_and_failed_checks_are_classified_separately(self):
-        pending, bad = classify([{"source":"check_run","name":"ci","bucket":"pending","state":"IN_PROGRESS"},{"source":"status","name":"lint","bucket":"fail","state":"FAILURE"}])
+        pending, bad, unproven = classify([{"source":"check_run","name":"ci","bucket":"pending","state":"IN_PROGRESS"},{"source":"status","name":"lint","bucket":"fail","state":"FAILURE"},{"source":"check_run","name":"optional?","bucket":"unproven","state":"SKIPPED"}])
         self.assertEqual([item["name"] for item in pending], ["ci"])
         self.assertEqual([item["name"] for item in bad], ["lint"])
+        self.assertEqual([item["name"] for item in unproven], ["optional?"])
 
     def test_status_context_can_be_excluded_by_run_url(self):
         self.assertIsNone(normalize_status_context({"context":"AEOS One-Shot Comprehensive Review","state":"pending","target_url":"https://github.com/o/r/actions/runs/123/job/456"}, "123"))
