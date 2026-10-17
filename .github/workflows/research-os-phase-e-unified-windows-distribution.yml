@@ -508,6 +508,72 @@ jobs:
           $checks['research_os_api_ready'] = $true
           $checks['research_os_api_ui_ready'] = $true
 
+          # Exercise Owner Friend service lifecycle while the main API is live.
+          # This catches regressions where cleanup kills the shared bundled Python
+          # interpreter without distinguishing the API entrypoint from Friend.
+          $apiServiceBefore = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+          if (-not $apiServiceBefore -or $apiServiceBefore.State -ne 'Running' -or $apiServiceBefore.ProcessId -le 0) {
+            throw 'Cannot establish authoritative ResearchOSService PID before Owner Friend lifecycle test.'
+          }
+          $apiPidBefore = [int]$apiServiceBefore.ProcessId
+          $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
+            param([int]$ExpectedApiPid)
+            $findings = [System.Collections.Generic.List[string]]::new()
+            while ($true) {
+              try {
+                $service = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+                if (-not $service -or $service.State -ne 'Running' -or [int]$service.ProcessId -ne $ExpectedApiPid) {
+                  $findings.Add("API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)")
+                }
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+                if ($health.status -ne 'ok' -or $health.ui -ne $true) {
+                  $findings.Add("API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)")
+                }
+              } catch {
+                $findings.Add("API_HEALTH_PROBE_FAILED $($_.Exception.Message)")
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            return @($findings)
+          }
+          try {
+            $ownerLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
+            if (-not (Test-Path $ownerLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend lifecycle script missing.' }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action uninstall -Root $installRoot -DataDir $ownerDataRoot
+            if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only uninstall failed with exit code $LASTEXITCODE." }
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot
+            if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only reinstall failed with exit code $LASTEXITCODE." }
+            $ownerLifecycleReady = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              $ownerLifecycleService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
+              try {
+                $ownerLifecycleHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2
+                if ($ownerLifecycleService -and $ownerLifecycleService.State -eq 'Running' -and $ownerLifecycleHealth.status -eq 'ok') {
+                  $ownerLifecycleReady = $true
+                  break
+                }
+              } catch {}
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
+            Start-Sleep -Seconds 2
+          } finally {
+            Stop-Job -Job $monitor -ErrorAction SilentlyContinue
+          }
+          $monitorFindings = @(Receive-Job -Job $monitor -ErrorAction SilentlyContinue)
+          Remove-Job -Job $monitor -Force -ErrorAction SilentlyContinue
+          if ($monitorFindings.Count -gt 0) {
+            $monitorFindings | ForEach-Object { Write-Host $_ }
+            throw "ResearchOSService PID/health stability failed during Owner Friend-only lifecycle ($($monitorFindings.Count) finding(s))."
+          }
+          $apiServiceAfter = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
+          if (-not $apiServiceAfter -or $apiServiceAfter.State -ne 'Running' -or [int]$apiServiceAfter.ProcessId -ne $apiPidBefore) {
+            throw "ResearchOSService PID changed across Owner Friend lifecycle. before=$apiPidBefore after=$($apiServiceAfter.ProcessId) state=$($apiServiceAfter.State)"
+          }
+          $checks['owner_friend_lifecycle_api_pid_stable'] = $true
+          $checks['owner_friend_lifecycle_api_health_continuous'] = $true
+          Write-Host "OWNER_FRIEND_LIFECYCLE_API_STABILITY=PASS api_pid=$apiPidBefore"
+
           $appPath = Join-Path $installRoot 'app\research_os_flutter.exe'
           $app = Start-Process -FilePath $appPath -WorkingDirectory (Split-Path $appPath) -PassThru
           Start-Sleep -Seconds 5
