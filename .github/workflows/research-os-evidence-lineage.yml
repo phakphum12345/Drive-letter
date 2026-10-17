@@ -221,6 +221,46 @@ jobs:
                   raise SystemExit('PR-head CI remained pending until verifier timeout')
               time.sleep(poll_seconds)
           PY
+      - name: Wait for exact reconciliation-head independent forensic run
+        if: \${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess, time
+          owner=os.environ['OWNER']; repo=os.environ['REPO']
+          expected=os.environ['RECONCILIATION_REVIEW_HEAD_SHA']
+          token=os.environ['GH_TOKEN']
+          for attempt in range(1, 61):
+              payload=json.loads(subprocess.check_output([
+                  'curl','-fsSL',
+                  '-H',f'Authorization: Bearer {token}',
+                  '-H','Accept: application/vnd.github+json',
+                  '-H','X-GitHub-Api-Version: 2022-11-28',
+                  f'https://api.github.com/repos/{owner}/{repo}/actions/runs?head_sha={expected}&per_page=100'
+              ], text=True))
+              matches=[
+                  run for run in payload.get('workflow_runs', [])
+                  if run.get('name') == 'AEOS Independent Forensic — Squash Reconciliation'
+                  and run.get('head_sha') == expected
+              ]
+              if matches:
+                  run=max(matches, key=lambda item: int(item.get('id') or 0))
+                  print(json.dumps({
+                      'attempt':attempt,'head_sha':expected,'run_id':run.get('id'),
+                      'status':run.get('status'),'conclusion':run.get('conclusion')
+                  }, sort_keys=True))
+                  if run.get('status') == 'completed':
+                      if run.get('conclusion') == 'success':
+                          print('INDEPENDENT_FORENSIC=VERIFIED_ON_EXACT_REVIEW_HEAD')
+                          break
+                      raise SystemExit(f"Independent forensic run failed: {run.get('conclusion')}")
+              if attempt == 60:
+                  raise SystemExit('Independent forensic run did not become successful before timeout')
+              time.sleep(10)
+          PY
       - name: Checkout merge target
         if: >-
           ${{
