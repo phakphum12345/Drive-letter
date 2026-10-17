@@ -62,11 +62,11 @@ class VerifyPrChecksTests(unittest.TestCase):
         self.assertEqual(poll_interval(7, 5, 30), 20)
         self.assertEqual(poll_interval(10, 5, 30), 30)
 
-    @patch("verify_pr_checks.request_json", return_value=({"head":{"sha":"abc123"}}, {}))
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({"head":{"sha":"abc123"}}, {}))
     def test_current_pr_head_reads_live_api_identity(self, _request):
         self.assertEqual(current_pr_head("o/r", "390"), "abc123")
 
-    @patch("verify_pr_checks.request_json", return_value=({"head":{"sha":""}}, {}))
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({"head":{"sha":""}}, {}))
     def test_current_pr_head_fails_closed_when_missing(self, _request):
         with self.assertRaises(RuntimeError):
             current_pr_head("o/r", "390")
