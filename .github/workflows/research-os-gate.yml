@@ -354,7 +354,11 @@ jobs:
           echo "python-quality=${{ needs.python-quality.result }}"
           echo "research-e2e=${{ needs.research-e2e.result }}"
           echo "flutter-quality=${{ needs.flutter-quality.result }}"
+          echo "linux-desktop-quality=${{ needs.linux-desktop-quality.result }}"
+          echo "apple-quality=${{ needs.apple-quality.result }}"
           test "${{ needs.python-quality.result }}" = success
           test "${{ needs.research-e2e.result }}" = success
           test "${{ needs.flutter-quality.result }}" = success
+          test "${{ needs.linux-desktop-quality.result }}" = success
+          test "${{ needs.apple-quality.result }}" = success
           echo "RESEARCH_OS_GATE=PASS"
