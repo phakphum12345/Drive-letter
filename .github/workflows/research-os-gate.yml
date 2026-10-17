@@ -190,14 +190,17 @@ jobs:
           echo "RECON_SOURCE_INPUTS=PASS"
 
           echo "=== RECON: MAVEN CENTRAL REACHABILITY ==="
-          url="https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.pom"
-          status="$(curl --silent --show-error --location --output "$RUNNER_TEMP/kotlin-stdlib.pom" --write-out '%{http_code}' --max-time 30 "$url")"
+          # Probe repository metadata, not a pinned artifact version. The actual
+          # Gradle build below is authoritative for resolving project dependencies.
+          url="https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/maven-metadata.xml"
+          status="$(curl --silent --show-error --location --output "$RUNNER_TEMP/kotlin-stdlib-maven-metadata.xml" --write-out '%{http_code}' --max-time 30 "$url")"
           echo "MAVEN_CENTRAL_HTTP_STATUS=$status"
           if [[ "$status" != 2* ]]; then
-            echo "::error::Maven Central dependency probe failed with HTTP $status; SDK setup succeeded but Gradle dependency downloads may not work."
+            echo "::error::Maven Central metadata probe failed with HTTP $status; repository reachability could not be confirmed."
             exit 1
           fi
-          test -s "$RUNNER_TEMP/kotlin-stdlib.pom"
+          test -s "$RUNNER_TEMP/kotlin-stdlib-maven-metadata.xml"
+          grep -q '<metadata>' "$RUNNER_TEMP/kotlin-stdlib-maven-metadata.xml"
           echo "RECON_MAVEN_CENTRAL=PASS"
           echo "FLUTTER_POST_DOWNLOAD_RECON=PASS"
 
