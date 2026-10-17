@@ -36,6 +36,30 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.source)
 
+    def test_owner_friend_cleanup_scopes_processes_to_exact_entrypoint(self) -> None:
+        installer = (
+            ROOT.parent
+            / "owner_special"
+            / "scripts"
+            / "install-owner-service.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("run_friend_service.py", installer)
+        self.assertIn("CommandLine.IndexOf($entrypoint", installer)
+        self.assertIn("[StringComparison]::OrdinalIgnoreCase", installer)
+        self.assertIn(
+            "The bundled interpreter is shared by API and Owner Friend",
+            installer,
+        )
+        # A shared python.exe path must never be the sole process selector.
+        self.assertNotIn(
+            "return @(" + "Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {\n"
+            "        $_.Name -ieq 'python.exe' -and $_.ExecutablePath -and\n"
+            "        ([IO.Path]::GetFullPath($_.ExecutablePath) -ieq $pythonPath)\n"
+            "    })",
+            installer,
+        )
+
     def test_collector_does_not_stop_processes_or_mutate_services(self) -> None:
         forbidden = (
             "Stop-Process",
