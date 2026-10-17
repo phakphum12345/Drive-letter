@@ -172,7 +172,17 @@ jobs:
           echo "=== RECON: ANDROID SDK ==="
           echo "ANDROID_HOME=${ANDROID_HOME:-UNSET}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-UNSET}"
-          flutter doctor -v
+          doctor_status=0
+          flutter doctor -v > "$RUNNER_TEMP/flutter-doctor.log" 2>&1 || doctor_status=$?
+          cat "$RUNNER_TEMP/flutter-doctor.log"
+          echo "FLUTTER_DOCTOR_EXIT_CODE=$doctor_status"
+          # Doctor also checks unrelated desktop toolchains (GTK/CMake/etc.).
+          # Do not fail an Android build merely because Linux desktop support is absent.
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$sdk_root"
+          test -d "$sdk_root/platform-tools"
+          test -d "$sdk_root/platforms"
+          echo "RECON_ANDROID_SDK_LAYOUT=PASS"
 
           echo "=== RECON: PROJECT INPUTS ==="
           test -f v3/flutter_app/pubspec.yaml
