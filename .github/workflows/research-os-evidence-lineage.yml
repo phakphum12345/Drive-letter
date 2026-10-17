@@ -222,9 +222,9 @@ jobs:
               time.sleep(poll_seconds)
           PY
       - name: Wait for exact reconciliation-head independent forensic run
-        if: \${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' }}
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
