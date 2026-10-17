@@ -39,6 +39,40 @@ class ReconciliationValidationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("accepted payload digest does not equal merge commit SHA", result.stderr)
 
+    def test_advanced_base_squash_validates_payload_against_merge_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            (root / "base.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            subprocess.run(["git", "checkout", "-qb", "pr"], cwd=root, check=True)
+            (root / "payload.txt").write_text("payload\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "PR payload"], cwd=root, check=True)
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            subprocess.run(["git", "checkout", "-q", "main"], cwd=root, check=True)
+            (root / "upstream.txt").write_text("already on main\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "advance main"], cwd=root, check=True)
+            merge_parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            (root / "payload.txt").write_text("payload\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "squash PR payload"], cwd=root, check=True)
+            merge = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            payload = dict(VALID, pr_number=999, base_sha=base, head_sha=head, merge_sha=merge,
+                merge_parent_sha=merge_parent, divergent_paths=[], canonical_conflict_evidence={},
+                accepted_payload_paths=["payload.txt"], accepted_payload_digest=merge)
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            result = subprocess.run([sys.executable, str(SCRIPT), str(manifest), "source"],
+                cwd=root, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn('"stage": "source"', result.stdout)
+
     def test_forensic_stage_fails_closed_when_historical_objects_are_missing(self) -> None:
         payload = dict(VALID, independent_forensic_status="VERIFIED")
         result = self.invoke(payload, "forensic")
