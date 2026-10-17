@@ -200,7 +200,7 @@ def main() -> int:
             raise SystemExit("one or more external PR checks failed")
         if unproven:
             print(json.dumps({"status":"BLOCKED_EVIDENCE","result_state":"BLOCKED_EVIDENCE","unproven_checks":summarize(unproven)}, indent=2))
-            raise SystemExit("one or more checks are skipped or neutral and cannot certify PASS without an explicit optional-check contract")
+            raise SystemExit(3)  # BLOCKED_EVIDENCE; distinct from a proven CI failure.
         if checks and not pending:
             final_head = current_pr_head(args.repository, args.pr_number)
             if final_head != args.head_sha:
@@ -211,7 +211,7 @@ def main() -> int:
                 continue
             if final_unproven:
                 print(json.dumps({"status":"BLOCKED_EVIDENCE","result_state":"BLOCKED_EVIDENCE","unproven_checks":summarize(final_unproven)}, indent=2))
-                raise SystemExit("final verification found checks without proven PASS evidence")
+                raise SystemExit(3)  # BLOCKED_EVIDENCE; do not certify this SHA.
             print(json.dumps({"status":"ALL_EXTERNAL_CHECKS_PASS","check_count":len(final_checks),"checks":summarize(final_checks)}, indent=2))
             return 0
 
@@ -219,7 +219,7 @@ def main() -> int:
         if remaining <= 0:
             payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","result_state":"RESULT_PENDING","reason_code":"WAIT_BUDGET_EXCEEDED","execution_state":"WAITING","poll":attempt,"pending_count":len(pending),"pending_checks":summarize(pending),"observed_check_count":len(checks)}
             print(json.dumps(payload, indent=2))
-            raise SystemExit("external PR checks did not reach a passing terminal state before timeout")
+            raise SystemExit(2)  # RESULT_PENDING / WAIT_BUDGET_EXCEEDED, not a source-check FAIL.
         payload = {"status":"WAITING_FOR_EXTERNAL_CI" if pending else "WAITING_FOR_EXTERNAL_CI_REGISTRATION","result_state":"RESULT_PENDING","execution_state":"WAITING","poll":attempt,"observed_check_count":len(checks),"pending_count":len(pending),"pending_checks":summarize(pending),"seconds_remaining":remaining}
         signature = json.dumps(payload, sort_keys=True)
         if signature != last_signature:
