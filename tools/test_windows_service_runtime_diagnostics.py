@@ -60,6 +60,33 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
             installer,
         )
 
+    def test_windows_installer_e2e_proves_api_stability_during_owner_friend_lifecycle(self) -> None:
+        workflow = (
+            ROOT.parent
+            / ".github"
+            / "workflows"
+            / "research-os-phase-e-unified-windows-distribution.yml"
+        ).read_text(encoding="utf-8")
+
+        for marker in (
+            "ResearchOSService",
+            "$apiPidBefore",
+            "Start-Job -ArgumentList $apiPidBefore",
+            "API_SERVICE_PID_OR_STATE_CHANGED",
+            "API_HEALTH_PROBE_FAILED",
+            "install-owner-service.ps1",
+            "-Action uninstall -Root $installRoot",
+            "-Action install -Root $installRoot",
+            "$checks['owner_friend_lifecycle_api_pid_stable'] = $true",
+            "$checks['owner_friend_lifecycle_api_health_continuous'] = $true",
+            "OWNER_FRIEND_LIFECYCLE_API_STABILITY=PASS",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, workflow)
+
+        self.assertIn("Receive-Job -Job $monitor", workflow)
+        self.assertIn("ResearchOSOwnerFriendService", workflow)
+
     def test_collector_does_not_stop_processes_or_mutate_services(self) -> None:
         forbidden = (
             "Stop-Process",
