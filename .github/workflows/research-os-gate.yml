@@ -125,7 +125,7 @@ jobs:
       - name: Checkout exact target SHA
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ env.TARGET_SHA }} 
+          ref: ${{ env.TARGET_SHA }}
           fetch-depth: 0
 
       - name: Verify checked-out SHA
@@ -135,11 +135,62 @@ jobs:
           test "$actual" = "$TARGET_SHA"
           echo "CHECKED_OUT_SHA=$actual"
 
-      - name: Setup Flutter
+      - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
           channel: stable
           cache: true
+
+      # Recon runs immediately after SDK setup and before project generation,
+      # dependency resolution, analysis, tests, or APK compilation.
+      - name: Recon downloaded SDK and Android build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== RECON: SDK IDENTITY ==="
+          flutter --version
+          dart --version
+          flutter --version --machine > "$RUNNER_TEMP/flutter-version.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          p = Path(os.environ["RUNNER_TEMP"]) / "flutter-version.json"
+          data = json.loads(p.read_text(encoding="utf-8"))
+          for key in ("frameworkVersion", "channel", "repositoryUrl", "frameworkRevision", "dartSdkVersion"):
+              print(f"FLUTTER_RECON_{key.upper()}={data.get(key, 'UNKNOWN')}")
+          assert data.get("frameworkRevision"), "Flutter framework revision is missing"
+          assert data.get("dartSdkVersion"), "Dart SDK version is missing"
+          PY
+
+          echo "=== RECON: JAVA ==="
+          java -version
+          command -v java
+          echo "JAVA_HOME=${JAVA_HOME:-UNSET}"
+
+          echo "=== RECON: ANDROID SDK ==="
+          echo "ANDROID_HOME=${ANDROID_HOME:-UNSET}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-UNSET}"
+          flutter doctor -v
+
+          echo "=== RECON: PROJECT INPUTS ==="
+          test -f v3/flutter_app/pubspec.yaml
+          test -f v3/flutter_app/android/settings.gradle.kts
+          test -f v3/flutter_app/android/gradle/wrapper/gradle-wrapper.properties
+          echo "RECON_PROJECT_INPUTS=PASS"
+
+          echo "=== RECON: MAVEN CENTRAL REACHABILITY ==="
+          url="https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21.pom"
+          status="$(curl --silent --show-error --location --output "$RUNNER_TEMP/kotlin-stdlib.pom" --write-out '%{http_code}' --max-time 30 "$url")"
+          echo "MAVEN_CENTRAL_HTTP_STATUS=$status"
+          if [[ "$status" != 2* ]]; then
+            echo "::error::Maven Central dependency probe failed with HTTP $status; SDK setup succeeded but Gradle dependency downloads may not work."
+            exit 1
+          fi
+          test -s "$RUNNER_TEMP/kotlin-stdlib.pom"
+          echo "RECON_MAVEN_CENTRAL=PASS"
+          echo "FLUTTER_POST_DOWNLOAD_RECON=PASS"
 
       - name: Generate Android platform
         working-directory: v3/flutter_app
