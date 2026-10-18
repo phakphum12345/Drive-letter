@@ -17,7 +17,7 @@ from threading import RLock
 
 from budgets import BudgetDecision, BudgetLedger
 from policy import PolicyContext, PolicyEffect, PolicyEngine
-from resource_governance import Decision, QuotaError, ResourceGovernance, Usage
+from resource_governance import Decision, Entitlement, QuotaError, ResourceGovernance, Usage
 
 
 class AdmissionDecision(str, Enum):
@@ -90,7 +90,14 @@ class AdmissionRecord:
 class ResourceAdmissionGate:
     """Single deterministic gate joining policy, quota, and budget."""
 
-    def __init__(self, governance: ResourceGovernance, policy: PolicyEngine, budget: BudgetLedger, *, reservation_ttl: timedelta = timedelta(minutes=5)) -> None:
+    def __init__(
+        self,
+        governance: ResourceGovernance,
+        policy: PolicyEngine,
+        budget: BudgetLedger,
+        *,
+        reservation_ttl: timedelta = timedelta(minutes=5),
+    ) -> None:
         if reservation_ttl <= timedelta(0):
             raise QuotaError("reservation_ttl must be positive")
         self._governance = governance
@@ -116,17 +123,21 @@ class ResourceAdmissionGate:
                     reservation = self._reservations.get(prior_reservation_id)
                     if reservation is not None:
                         if reservation.status is AdmissionStatus.RESERVED:
-                            return self._deny(request, "idempotency_in_flight", now)
+                            return self._allow_from_reservation(reservation, now)
                         return self._deny(request, f"idempotency_replay:{reservation.status.value}", now)
 
             try:
                 entitlement = self._governance.entitlement(request.principal_id)
             except QuotaError:
                 return self._deny(request, "unknown_principal", now)
+
             if not request.scopes.issubset(entitlement.scopes):
                 return self._deny(request, "scope_not_entitled", now)
 
-            policy_decision = self._policy.evaluate(PolicyContext(request.principal_id, request.scopes, request.principal_type), request.usage)
+            policy_decision = self._policy.evaluate(
+                PolicyContext(request.principal_id, request.scopes, request.principal_type),
+                request.usage,
+            )
             if policy_decision.effect is PolicyEffect.DENY:
                 return self._deny(request, f"policy_denied:{policy_decision.rule_id}", now)
             if policy_decision.effect is PolicyEffect.THROTTLE:
@@ -137,7 +148,12 @@ class ResourceAdmissionGate:
                 decision = AdmissionDecision.THROTTLE if quota.decision is Decision.THROTTLE else AdmissionDecision.DENY
                 return AdmissionRecord(decision, request.request_id, request.principal_id, f"quota:{quota.reason}", evaluated_at=now)
 
-            budget = self._budget.reserve(request.principal_id, request.estimated_cost, currency=request.currency, now=now)
+            budget = self._budget.reserve(
+                request.principal_id,
+                request.estimated_cost,
+                currency=request.currency,
+                now=now,
+            )
             if budget.decision is not BudgetDecision.ALLOW or budget.reservation_id is None:
                 self._governance.release(quota.reservation_id)
                 return self._deny(request, f"budget:{budget.reason}", now)
@@ -145,16 +161,40 @@ class ResourceAdmissionGate:
             self._sequence += 1
             reservation_id = f"ares_{self._sequence:08d}"
             reservation = AdmissionReservation(
-                reservation_id, request.request_id, request.principal_id, request.usage,
-                request.estimated_cost, request.currency.strip().upper(), quota.reservation_id,
-                budget.reservation_id, now, now + self._reservation_ttl, fingerprint=fingerprint,
+                reservation_id,
+                request.request_id,
+                request.principal_id,
+                request.usage,
+                request.estimated_cost,
+                request.currency.strip().upper(),
+                quota.reservation_id,
+                budget.reservation_id,
+                now,
+                now + self._reservation_ttl,
+                fingerprint=fingerprint,
             )
             self._reservations[reservation_id] = reservation
             if request.idempotency_key:
                 self._idempotency[request.idempotency_key] = (fingerprint, reservation_id)
-            return AdmissionRecord(AdmissionDecision.ALLOW, request.request_id, request.principal_id, "reserved", reservation_id, quota.reservation_id, budget.reservation_id, now)
+            return AdmissionRecord(
+                AdmissionDecision.ALLOW,
+                request.request_id,
+                request.principal_id,
+                "reserved",
+                reservation_id,
+                quota.reservation_id,
+                budget.reservation_id,
+                now,
+            )
 
-    def commit(self, reservation_id: str, *, actual_usage: Usage | None = None, actual_cost: Decimal | None = None, now: datetime | None = None) -> AdmissionReservation:
+    def commit(
+        self,
+        reservation_id: str,
+        *,
+        actual_usage: Usage | None = None,
+        actual_cost: Decimal | None = None,
+        now: datetime | None = None,
+    ) -> AdmissionReservation:
         now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         with self._lock:
             reservation = self._reservations.get(reservation_id)
@@ -165,11 +205,42 @@ class ResourceAdmissionGate:
             if reservation.expires_at <= now:
                 self._release_locked(reservation, expired=True)
                 raise QuotaError("admission reservation expired")
-            usage = actual_usage or reservation.usage
-            cost = reservation.estimated_cost if actual_cost is None else actual_cost
+            if actual_usage is None or actual_cost is None:
+                raise QuotaError("authoritative actual_usage and actual_cost are required")
+            usage = actual_usage
+            cost = actual_cost
             self._validate_actual(reservation, usage, cost)
-            self._governance.commit(reservation.quota_reservation_id, actual=usage, now=now)
-            self._budget.commit(reservation.budget_reservation_id, actual=cost)
+
+            # Keep both in-memory accounting ledgers locked for the transaction.
+            # Snapshot their mutable accounting state so an unexpected failure
+            # in either commit restores both ledgers before the exception escapes.
+            with self._governance._lock, self._budget._lock:
+                governance_snapshot = {
+                    principal_id: (state, dict(state.usage), dict(state.reservations))
+                    for principal_id, state in self._governance._principals.items()
+                }
+                budget_reservations_snapshot = dict(self._budget._reservations)
+                budget_committed_snapshot = dict(self._budget._committed)
+                try:
+                    self._governance.commit(
+                        reservation.quota_reservation_id,
+                        actual=usage,
+                        now=now,
+                    )
+                    self._budget.commit(reservation.budget_reservation_id, actual=cost)
+                except BaseException:
+                    self._governance._principals.clear()
+                    for principal_id, (state, usage_state, reservation_state) in governance_snapshot.items():
+                        state.usage.clear()
+                        state.usage.update(usage_state)
+                        state.reservations.clear()
+                        state.reservations.update(reservation_state)
+                        self._governance._principals[principal_id] = state
+                    self._budget._reservations.clear()
+                    self._budget._reservations.update(budget_reservations_snapshot)
+                    self._budget._committed.clear()
+                    self._budget._committed.update(budget_committed_snapshot)
+                    raise
             updated = AdmissionReservation(**{**reservation.__dict__, "status": AdmissionStatus.COMMITTED})
             self._reservations[reservation_id] = updated
             return updated
@@ -204,7 +275,9 @@ class ResourceAdmissionGate:
 
     @staticmethod
     def _validate_actual(reservation: AdmissionReservation, usage: Usage, cost: Decimal) -> None:
-        for dimension in type(usage).__dataclass_fields__:
+        if not isinstance(usage, Usage):
+            raise QuotaError("actual_usage must be a Usage instance")
+        for dimension in Usage.__dataclass_fields__:
             if getattr(usage, dimension) > getattr(reservation.usage, dimension):
                 raise QuotaError(f"actual usage exceeds reservation: {dimension}")
         if not isinstance(cost, Decimal) or cost.is_nan() or cost.is_infinite() or cost < Decimal("0"):
@@ -227,3 +300,16 @@ class ResourceAdmissionGate:
     @staticmethod
     def _deny(request: AdmissionRequest, reason: str, now: datetime) -> AdmissionRecord:
         return AdmissionRecord(AdmissionDecision.DENY, request.request_id, request.principal_id, reason, evaluated_at=now)
+
+    @staticmethod
+    def _allow_from_reservation(reservation: AdmissionReservation, now: datetime) -> AdmissionRecord:
+        return AdmissionRecord(
+            AdmissionDecision.ALLOW,
+            reservation.request_id,
+            reservation.principal_id,
+            reservation.status.value,
+            reservation.reservation_id,
+            reservation.quota_reservation_id,
+            reservation.budget_reservation_id,
+            now,
+        )
