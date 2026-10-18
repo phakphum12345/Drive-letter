@@ -18,6 +18,7 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
 
   bool _loading = true;
   bool _loadingAccounts = true;
+  bool _showRunnerTarget = true;
   String? _error;
   Map<String, dynamic>? _dashboard;
   List<Map<String, dynamic>> _accounts = <Map<String, dynamic>>[];
@@ -164,7 +165,20 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
             ),
           ),
           const SizedBox(height: 20),
-          Card(
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text('Runner target', style: Theme.of(context).textTheme.titleLarge),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _showRunnerTarget = !_showRunnerTarget),
+                icon: const Icon(Icons.terminal),
+                label: Text(_showRunnerTarget ? 'ซ่อน Runner' : 'Runner'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_showRunnerTarget) Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(

@@ -278,6 +278,18 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             return {"connected": False, "account": None}
         return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": session["role"]}}
 
+    def _authorize_github_account_control(self) -> bool:
+        """Protect account/repository enumeration with the existing owner authority."""
+        try:
+            principal = require_session(self.headers)
+        except ValueError:
+            self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
+            return False
+        if str(principal.get("role") or "").strip().upper() != "OWNER":
+            self._send(HTTPStatus.FORBIDDEN, {"error": "owner_required"})
+            return False
+        return True
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlsplit(self.path)
         path = parsed.path
@@ -452,9 +464,13 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 )
                 return
             if path == "/v1/github/accounts":
+                if not self._authorize_github_account_control():
+                    return
                 self._send(HTTPStatus.OK, github_accounts())
                 return
             if path == "/v1/github/repositories":
+                if not self._authorize_github_account_control():
+                    return
                 params = parse_qs(parsed.query)
                 account_id = str(params.get("account_id", [""])[0]).strip()
                 page = int(params.get("page", ["1"])[0])
@@ -464,6 +480,8 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 params = parse_qs(parsed.query)
                 repository = str(params.get("repository", [os.getenv("RESEARCH_OS_GITHUB_REPOSITORY", DEFAULT_GITHUB_REPOSITORY)])[0]).strip()
                 account_id = str(params.get("account_id", [""])[0]).strip() or None
+                if account_id and not self._authorize_github_account_control():
+                    return
                 self._send(HTTPStatus.OK, github_dashboard(repository, account_id=account_id))
                 return
             self._send(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path})
