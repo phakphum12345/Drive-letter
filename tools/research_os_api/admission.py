@@ -123,7 +123,9 @@ class ResourceAdmissionGate:
                     reservation = self._reservations.get(prior_reservation_id)
                     if reservation is not None:
                         if reservation.status is AdmissionStatus.RESERVED:
-                            return self._allow_from_reservation(reservation, now)
+                            # A duplicate request must not obtain a second executable
+                            # route while the original reservation is still in flight.
+                            return self._deny(request, "idempotency_in_flight", now)
                         return self._deny(request, f"idempotency_replay:{reservation.status.value}", now)
 
             try:
