@@ -11,12 +11,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-try:
-    from .resource_governance import Usage
-except ImportError:
-    # Existing resource-control modules historically use flat imports when
-    # tools/research_os_api is placed directly on sys.path.
-    from resource_governance import Usage
+from resource_governance import Usage
 
 
 @dataclass(frozen=True)
@@ -29,11 +24,18 @@ class MeasuredExecution:
     currency: str
 
     def __post_init__(self) -> None:
+        if not isinstance(self.usage, Usage):
+            raise ValueError("execution usage must be a Usage instance")
+        if not isinstance(self.cost, Decimal) or self.cost.is_nan() or self.cost.is_infinite():
+            raise ValueError("execution cost must be a finite Decimal")
         if self.cost < 0:
             raise ValueError("execution cost cannot be negative")
-        if not self.currency.strip():
-            raise ValueError("execution currency is required")
-        object.__setattr__(self, "currency", self.currency.strip().upper())
+        if not isinstance(self.currency, str):
+            raise ValueError("execution currency must be a three-letter code")
+        currency = self.currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("execution currency must be a three-letter code")
+        object.__setattr__(self, "currency", currency)
 
 
 @dataclass(frozen=True)
