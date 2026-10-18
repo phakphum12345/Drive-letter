@@ -189,7 +189,7 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
                   else if (_accounts.isNotEmpty) ...<Widget>[
                     DropdownButtonFormField<String>(
                       key: ValueKey<String?>(_selectedAccountId),
-                      value: _selectedAccountId,
+                      initialValue: _selectedAccountId,
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: 'บัญชี GitHub', prefixIcon: Icon(Icons.person_outline)),
                       items: _accounts.map((account) {
@@ -212,7 +212,7 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
                         child: _repositories.isNotEmpty
                             ? DropdownButtonFormField<String>(
                                 key: ValueKey<String?>(_selectedRepository),
-                                value: _selectedRepository,
+                                initialValue: _selectedRepository,
                                 isExpanded: true,
                                 decoration: const InputDecoration(labelText: 'Repository', prefixIcon: Icon(Icons.account_tree_outlined)),
                                 items: _repositories.map((repository) {
