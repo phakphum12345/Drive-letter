@@ -17,13 +17,91 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
   );
 
   bool _loading = true;
+  bool _loadingAccounts = true;
   String? _error;
   Map<String, dynamic>? _dashboard;
+  List<Map<String, dynamic>> _accounts = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _repositories = <Map<String, dynamic>>[];
+  String? _selectedAccountId;
+  String? _selectedRepository;
 
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _loadAccounts();
+  }
+
+  List<Map<String, dynamic>> _mapItems(dynamic value) {
+    if (value is! List) return <Map<String, dynamic>>[];
+    return value.whereType<Map>().map((item) =>
+        item.map((key, value) => MapEntry(key.toString(), value))).toList(growable: false);
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final result = await widget.apiClient.getGitHubAccounts();
+      final accounts = _mapItems(result['accounts']);
+      if (!mounted) return;
+      setState(() {
+        _accounts = accounts;
+        _selectedAccountId = accounts.isEmpty ? null : accounts.first['id']?.toString();
+        _loadingAccounts = false;
+      });
+      if (_selectedAccountId != null) {
+        await _loadRepositories(_selectedAccountId!, refreshDashboard: true);
+      } else {
+        await _refresh();
+      }
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingAccounts = false;
+        _error = 'โหลดบัญชี GitHub ไม่สำเร็จ: $error';
+      });
+    }
+  }
+
+  Future<void> _loadRepositories(String accountId, {bool refreshDashboard = false}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _dashboard = null;
+      _repositories = <Map<String, dynamic>>[];
+    });
+    try {
+      final repositories = <Map<String, dynamic>>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore && page <= 100) {
+        final result = await widget.apiClient.getGitHubRepositories(accountId: accountId, page: page);
+        repositories.addAll(_mapItems(result['repositories']));
+        hasMore = result['has_more'] == true;
+        page++;
+      }
+      if (!mounted) return;
+      final selected = repositories.any((item) => item['full_name'] == _selectedRepository)
+          ? _selectedRepository
+          : (repositories.isEmpty ? null : repositories.first['full_name']?.toString());
+      setState(() {
+        _repositories = repositories;
+        _selectedRepository = selected;
+        if (selected != null) _repositoryController.text = selected;
+        _loading = false;
+      });
+      if (refreshDashboard && selected != null) await _refresh();
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'โหลด Repository ของบัญชีที่เลือกไม่สำเร็จ: $error';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _selectAccount(String? accountId) async {
+    if (accountId == null || accountId == _selectedAccountId) return;
+    setState(() => _selectedAccountId = accountId);
+    await _loadRepositories(accountId, refreshDashboard: true);
   }
 
   @override
@@ -40,6 +118,7 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
     try {
       final result = await widget.apiClient.getGitHubDashboard(
         repository: _repositoryController.text,
+        accountId: _selectedAccountId,
       );
       if (!mounted) return;
       setState(() {
@@ -88,27 +167,68 @@ class _GitHubDashboardPageState extends State<GitHubDashboardPage> {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Expanded(
-                    child: TextField(
-                      controller: _repositoryController,
-                      enabled: !_loading,
-                      decoration: const InputDecoration(
-                        labelText: 'Repository',
-                        hintText: 'owner/name',
-                        prefixIcon: Icon(Icons.account_tree_outlined),
-                      ),
-                      onSubmitted: (_) => _refresh(),
+                  if (_loadingAccounts)
+                    const LinearProgressIndicator()
+                  else if (_accounts.isNotEmpty) ...<Widget>[
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String?>(_selectedAccountId),
+                      value: _selectedAccountId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'บัญชี GitHub', prefixIcon: Icon(Icons.person_outline)),
+                      items: _accounts.map((account) {
+                        final id = account['id']?.toString() ?? '';
+                        final login = account['login']?.toString() ?? '';
+                        final label = account['label']?.toString() ?? login;
+                        return DropdownMenuItem<String>(
+                          value: id,
+                          child: Text(login.isEmpty ? label : '$label (@$login)', overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(growable: false),
+                      onChanged: _loading ? null : _selectAccount,
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: _repositories.isNotEmpty
+                            ? DropdownButtonFormField<String>(
+                                key: ValueKey<String?>(_selectedRepository),
+                                value: _selectedRepository,
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: 'Repository', prefixIcon: Icon(Icons.account_tree_outlined)),
+                                items: _repositories.map((repository) {
+                                  final name = repository['full_name']?.toString() ?? '';
+                                  return DropdownMenuItem<String>(value: name, child: Text(name, overflow: TextOverflow.ellipsis));
+                                }).toList(growable: false),
+                                onChanged: _loading ? null : (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    _selectedRepository = value;
+                                    _repositoryController.text = value;
+                                  });
+                                  _refresh();
+                                },
+                              )
+                            : TextField(
+                                controller: _repositoryController,
+                                enabled: !_loading,
+                                decoration: const InputDecoration(labelText: 'Repository', hintText: 'owner/name', prefixIcon: Icon(Icons.account_tree_outlined)),
+                                onSubmitted: (_) => _refresh(),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(onPressed: _loading ? null : _refresh, icon: const Icon(Icons.search), label: const Text('โหลด')),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: _loading ? null : _refresh,
-                    icon: const Icon(Icons.search),
-                    label: const Text('โหลด'),
-                  ),
+                  if (_accounts.isEmpty && !_loadingAccounts) ...<Widget>[
+                    const SizedBox(height: 8),
+                    const Text('ยังไม่มีบัญชี GitHub ที่กำหนดไว้บน API: ตั้งค่า RESEARCH_OS_GITHUB_ACCOUNTS_JSON เพื่อเลือกหลายบัญชี'),
+                  ],
                 ],
               ),
             ),

@@ -85,7 +85,24 @@ class FakeResearchOSApiClient extends ResearchOSApiClient {
       };
 
   @override
-  Future<Map<String, dynamic>> getGitHubDashboard({String? repository}) async =>
+  Future<Map<String, dynamic>> getGitHubAccounts() async => <String, dynamic>{
+        'accounts': <Map<String, dynamic>>[
+          <String, dynamic>{'id': 'primary', 'label': 'Primary', 'login': 'primary-user'},
+          <String, dynamic>{'id': 'legacy', 'label': 'Legacy', 'login': 'legacy-user'},
+        ],
+      };
+
+  @override
+  Future<Map<String, dynamic>> getGitHubRepositories({required String accountId, int page = 1}) async =>
+      <String, dynamic>{
+        'repositories': <Map<String, dynamic>>[
+          <String, dynamic>{'full_name': accountId == 'primary' ? 'primary-user/research-os' : 'legacy-user/research-os'},
+        ],
+        'has_more': false,
+      };
+
+  @override
+  Future<Map<String, dynamic>> getGitHubDashboard({String? repository, String? accountId}) async =>
       <String, dynamic>{
         'repository': repository,
         'default_branch': 'main',
@@ -285,6 +302,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
 
     expect(find.text('GitHub Control Center'), findsOneWidget);
+    expect(find.text('Primary (@primary-user)'), findsOneWidget);
+    expect(find.text('primary-user/research-os'), findsOneWidget);
     expect(find.text('Research OS Flutter'), findsOneWidget);
     expect(find.text('Add GitHub dashboard'), findsOneWidget);
     expect(tester.takeException(), isNull);
