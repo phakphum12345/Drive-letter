@@ -40,8 +40,10 @@ class DesktopShellApiClient extends ResearchOSApiClient {
   @override
   Future<Map<String, dynamic>> getGitHubDashboard({
     String? repository,
+    String? accountId,
   }) async =>
       <String, dynamic>{
+        'account_id': accountId,
         'repository': repository,
         'workflow_runs': <Map<String, dynamic>>[],
         'commits': <Map<String, dynamic>>[],
