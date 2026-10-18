@@ -20,22 +20,22 @@ class GitHubStatusError(RuntimeError):
     pass
 
 
-def _headers() -> dict[str, str]:
+def _headers(token: str | None = None) -> dict[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "research-os-api",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    token = os.getenv("RESEARCH_OS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    credential = token or os.getenv("RESEARCH_OS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+    if credential:
+        headers["Authorization"] = f"Bearer {credential}"
     return headers
 
 
-def _get_json(path: str) -> Any:
+def _get_json(path: str, *, token: str | None = None) -> Any:
     request = urllib.request.Request(
         f"https://api.github.com{path}",
-        headers=_headers(),
+        headers=_headers(token),
         method="GET",
     )
     try:
@@ -46,6 +46,81 @@ def _get_json(path: str) -> Any:
         raise GitHubStatusError(f"GitHub HTTP {exc.code}: {body[:300]}") from exc
     except (urllib.error.URLError, json.JSONDecodeError) as exc:
         raise GitHubStatusError(f"GitHub request failed: {exc}") from exc
+
+
+
+def _configured_accounts() -> list[dict[str, str]]:
+    raw = os.getenv("RESEARCH_OS_GITHUB_ACCOUNTS_JSON", "").strip()
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise GitHubStatusError("RESEARCH_OS_GITHUB_ACCOUNTS_JSON must be valid JSON") from exc
+        if not isinstance(payload, list):
+            raise GitHubStatusError("RESEARCH_OS_GITHUB_ACCOUNTS_JSON must be an array")
+        result, seen = [], set()
+        for item in payload:
+            if not isinstance(item, dict):
+                raise GitHubStatusError("each GitHub account entry must be an object")
+            account_id, token = str(item.get("id") or "").strip(), str(item.get("token") or "").strip()
+            label = str(item.get("label") or account_id).strip()
+            if not account_id or not token or not label or account_id in seen:
+                raise GitHubStatusError("GitHub account entries need unique IDs, labels, and tokens")
+            seen.add(account_id)
+            result.append({"id": account_id, "label": label, "token": token})
+        return result
+    token = os.getenv("RESEARCH_OS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+    return [{"id": "default", "label": "Default GitHub token", "token": token}] if token else []
+
+
+def _account_token(account_id: str | None) -> str | None:
+    configured = _configured_accounts()
+    if not configured:
+        if account_id:
+            raise ValueError("no GitHub account credentials are configured")
+        return None
+    if not account_id:
+        if len(configured) == 1:
+            return configured[0]["token"]
+        raise ValueError("account_id is required when multiple GitHub accounts are configured")
+    for account in configured:
+        if account["id"] == account_id:
+            return account["token"]
+    raise ValueError("unknown GitHub account_id")
+
+
+def accounts() -> dict[str, Any]:
+    result = []
+    for account in _configured_accounts():
+        user = _get_json("/user", token=account["token"])
+        result.append({"id": account["id"], "label": account["label"],
+                       "login": str(user.get("login") or ""),
+                       "name": str(user.get("name") or user.get("login") or account["label"]),
+                       "credential_configured": True})
+    return {"accounts": result, "read_only": True}
+
+
+def repositories(account_id: str, *, page: int = 1, per_page: int = 100) -> dict[str, Any]:
+    page, per_page = max(1, min(int(page), 100)), max(1, min(int(per_page), 100))
+    token = _account_token(str(account_id or "").strip())
+    if not token:
+        raise ValueError("a configured GitHub account is required to list repositories")
+    payload = _get_json(f"/user/repos?per_page={per_page}&page={page}&sort=updated&affiliation=owner,collaborator,organization_member", token=token)
+    if not isinstance(payload, list):
+        raise GitHubStatusError("GitHub repositories response has an invalid shape")
+    items = []
+    for item in payload:
+        if not isinstance(item, dict) or not item.get("full_name"):
+            continue
+        permissions = item.get("permissions") if isinstance(item.get("permissions"), dict) else {}
+        owner = item.get("owner") if isinstance(item.get("owner"), dict) else {}
+        items.append({"full_name": str(item["full_name"]), "name": str(item.get("name") or ""),
+                      "owner": str(owner.get("login") or ""), "default_branch": str(item.get("default_branch") or ""),
+                      "private": bool(item.get("private")), "archived": bool(item.get("archived")),
+                      "can_push": bool(permissions.get("push")), "admin": bool(permissions.get("admin")),
+                      "url": str(item.get("html_url") or "")})
+    return {"account_id": account_id, "repositories": items, "page": page,
+            "per_page": per_page, "has_more": len(payload) == per_page, "read_only": True}
 
 
 def _repo_path(repository: str, suffix: str = "") -> str:
@@ -94,19 +169,18 @@ def artifacts(repository: str, *, name: str | None = None, per_page: int = 30) -
         "repository": repository,
         "artifacts": _artifact_items(payload),
         "total_count": payload.get("total_count", 0) if isinstance(payload, dict) else 0,
-        "credential_configured": bool(
-            os.getenv("RESEARCH_OS_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
-        ),
+        "credential_configured": bool(_configured_accounts()),
         "read_only": True,
     }
 
 
-def dashboard(repository: str) -> dict[str, Any]:
-    repo = _get_json(_repo_path(repository))
-    commits = _get_json(_repo_path(repository, "/commits?per_page=5"))
-    pulls = _get_json(_repo_path(repository, "/pulls?state=open&per_page=5"))
-    runs = _get_json(_repo_path(repository, "/actions/runs?per_page=5"))
-    repo_artifacts = _get_json(_repo_path(repository, "/actions/artifacts?per_page=30"))
+def dashboard(repository: str, *, account_id: str | None = None) -> dict[str, Any]:
+    token = _account_token(account_id)
+    repo = _get_json(_repo_path(repository), token=token)
+    commits = _get_json(_repo_path(repository, "/commits?per_page=5"), token=token)
+    pulls = _get_json(_repo_path(repository, "/pulls?state=open&per_page=5"), token=token)
+    runs = _get_json(_repo_path(repository, "/actions/runs?per_page=5"), token=token)
+    repo_artifacts = _get_json(_repo_path(repository, "/actions/artifacts?per_page=30"), token=token)
 
     if not isinstance(repo, dict):
         raise GitHubStatusError("GitHub repository response has an invalid shape")
@@ -154,6 +228,7 @@ def dashboard(repository: str) -> dict[str, Any]:
 
     return {
         "repository": repository,
+        "account_id": account_id,
         "default_branch": repo.get("default_branch"),
         "visibility": repo.get("visibility", "private" if repo.get("private") else "public"),
         "open_issues_count": repo.get("open_issues_count", 0),

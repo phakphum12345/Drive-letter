@@ -29,7 +29,7 @@ from conversation_store import (
     sync_configured,
     upsert_session as upsert_cloud_session,
 )
-from github_status import GitHubStatusError, dashboard as github_dashboard
+from github_status import (GitHubStatusError, accounts as github_accounts, dashboard as github_dashboard, repositories as github_repositories)
 from google_identity import GoogleIdentityBroker
 from google_oauth import GoogleOAuthBroker, GoogleOAuthError
 from google_workspace import GoogleWorkspaceConfig, get_google_workspace_dashboard
@@ -451,10 +451,20 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                     ),
                 )
                 return
+            if path == "/v1/github/accounts":
+                self._send(HTTPStatus.OK, github_accounts())
+                return
+            if path == "/v1/github/repositories":
+                params = parse_qs(parsed.query)
+                account_id = str(params.get("account_id", [""])[0]).strip()
+                page = int(params.get("page", ["1"])[0])
+                self._send(HTTPStatus.OK, github_repositories(account_id, page=page))
+                return
             if path == "/v1/github/dashboard":
                 params = parse_qs(parsed.query)
                 repository = str(params.get("repository", [os.getenv("RESEARCH_OS_GITHUB_REPOSITORY", DEFAULT_GITHUB_REPOSITORY)])[0]).strip()
-                self._send(HTTPStatus.OK, github_dashboard(repository))
+                account_id = str(params.get("account_id", [""])[0]).strip() or None
+                self._send(HTTPStatus.OK, github_dashboard(repository, account_id=account_id))
                 return
             self._send(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path})
         except (ValueError, KeyError, GoogleOAuthError, MultiLoginError, MultiLoginRuntimeError, QRPairingError) as exc:
