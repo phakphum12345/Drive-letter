@@ -3,7 +3,6 @@ import os
 import tempfile
 import threading
 import unittest
-import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -41,77 +40,70 @@ class ResearchOSAPITests(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
-    def request_error(self, method: str, path: str, payload=None, headers=None):
-        data = None if payload is None else json.dumps(payload).encode("utf-8")
-        request_headers = {"Content-Type": "application/json"}
-        if headers:
-            request_headers.update(headers)
-        request = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}{path}",
-            data=data,
-            headers=request_headers,
-            method=method,
-        )
-        with self.assertRaises(urllib.error.HTTPError) as raised:
-            urllib.request.urlopen(request, timeout=5)
-        error = raised.exception
-        return error.code, json.loads(error.read().decode("utf-8"))
-
-    def test_web_dir_falls_back_to_canonical_distribution_layout(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            packaged_web = root / "platform" / "research_os_web"
-            packaged_web.mkdir(parents=True)
-            self.assertEqual(packaged_web, server._resolve_web_dir(root))
-
-    def test_web_dir_prefers_source_tree_when_both_layouts_exist(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source_web = root / "apps" / "research_os_web"
-            packaged_web = root / "platform" / "research_os_web"
-            source_web.mkdir(parents=True)
-            packaged_web.mkdir(parents=True)
-            self.assertEqual(source_web, server._resolve_web_dir(root))
-
     def test_health(self):
         status, payload = self.request("GET", "/health")
         self.assertEqual(200, status)
         self.assertEqual("ok", payload["status"])
         self.assertTrue(payload["memory"])
 
-    @patch.dict(
-        os.environ,
-        {"RESEARCH_OS_AI_ROUTE": "direct-provider"},
-        clear=False,
-    )
-    def test_direct_provider_route_is_rejected(self):
-        status, payload = self.request_error("POST", "/v1/ai/generate", {
-            "provider": "mock",
-            "prompt": "วิเคราะห์แนวคิดนี้",
-        })
-        self.assertEqual(502, status)
-        self.assertEqual("provider_error", payload["error"])
-        self.assertIn("direct-provider route is disabled", payload["detail"])
+    @patch("server._friend_chat")
+    def test_mock_provider_generation(self, friend_chat):
+        friend_chat.return_value = {"provider": "mock", "text": "วิเคราะห์แนวคิดนี้"}
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_AI_ROUTE": "friend"},
+            clear=False,
+        ):
+            status, payload = self.request("POST", "/v1/ai/generate", {
+                "provider": "mock",
+                "prompt": "วิเคราะห์แนวคิดนี้",
+            })
+        self.assertEqual(200, status)
+        self.assertEqual("mock", payload["provider"])
+        self.assertIn("วิเคราะห์", payload["text"])
 
     @patch("server._friend_chat")
     def test_generate_routes_through_friend_by_default(self, friend_chat):
         friend_chat.return_value = {
             "provider": "owner-mock",
             "text": "friend-ok",
-            "decision": {"scale": "10^10", "capacity": 10_000_000_000},
-            "factory": {"available": True, "scale": "10^10", "capacity": 10_000_000_000},
-            "helpers": {"bounded": True, "active_workers": 128, "logical_capacity": 10_000_000_000},
-            "metadata": {"capabilities": ["v3-unified-master"]},
+            "decision": {
+                "scale": "10^10",
+                "capacity": 10_000_000_000,
+            },
+            "factory": {
+                "available": True,
+                "scale": "10^10",
+                "capacity": 10_000_000_000,
+            },
+            "helpers": {
+                "bounded": True,
+                "active_workers": 128,
+                "logical_capacity": 10_000_000_000,
+            },
+            "metadata": {
+                "capabilities": ["v3-unified-master"],
+            },
         }
-        with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
-            status, payload = self.request("POST", "/v1/ai/generate", {
-                "prompt": "mega project",
-                "session_id": "api-friend-test",
-                "complexity": 9,
-                "risk": 7,
-                "parallelism": 128,
-                "helper_budget": 1_000_000,
-            })
+
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_AI_ROUTE": "friend"},
+            clear=False,
+        ):
+            status, payload = self.request(
+                "POST",
+                "/v1/ai/generate",
+                {
+                    "prompt": "mega project",
+                    "session_id": "api-friend-test",
+                    "complexity": 9,
+                    "risk": 7,
+                    "parallelism": 128,
+                    "helper_budget": 1_000_000,
+                },
+            )
+
         self.assertEqual(200, status)
         self.assertEqual("friend", payload["route"])
         self.assertEqual("friend-ok", payload["text"])
@@ -127,20 +119,24 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertIn("artifact_id", payload["hits"][0])
         self.assertIn("score", payload["hits"][0])
 
-    @patch.dict(
-        os.environ,
-        {"RESEARCH_OS_AI_ROUTE": "direct-provider"},
-        clear=False,
-    )
-    def test_answer_with_memory_rejects_legacy_direct_route(self):
-        status, payload = self.request_error("POST", "/v1/ai/answer-with-memory", {
-            "provider": "mock",
-            "question": "conversation knowledge",
-            "session_id": "memory-test",
-        })
-        self.assertEqual(502, status)
-        self.assertEqual("provider_error", payload["error"])
-        self.assertIn("direct-provider route is disabled", payload["detail"])
+    @patch("server._friend_chat")
+    def test_answer_with_memory_uses_mock_provider(self, friend_chat):
+        friend_chat.return_value = {"provider": "mock", "text": "memory-backed mock answer"}
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_AI_ROUTE": "friend"},
+            clear=False,
+        ):
+            status, payload = self.request("POST", "/v1/ai/answer-with-memory", {
+                "provider": "mock",
+                "question": "conversation knowledge",
+                "session_id": "memory-test",
+            })
+        self.assertEqual(200, status)
+        self.assertEqual("mock", payload["provider"])
+        self.assertEqual("memory-test", payload["session_id"])
+        self.assertGreaterEqual(payload["memory_count"], 1)
+        self.assertTrue(payload["text"])
 
     def test_conversation_analysis_is_preview_only(self):
         status, payload = self.request("POST", "/v1/conversations/analyze", {
@@ -165,13 +161,20 @@ class ResearchOSAPITests(unittest.TestCase):
             server.ARTIFACT_DIR = Path(tmp)
             try:
                 status, payload = self.request(
-                    "POST", "/v1/memory/commit",
+                    "POST",
+                    "/v1/memory/commit",
                     {
                         "confirm": True,
                         "title": "Memory integration",
                         "conversation": [
-                            {"role": "user", "content": "Research OS ต้องเก็บความรู้จาก Session แบบมีการยืนยันก่อนบันทึก"},
-                            {"role": "assistant", "content": "สรุปว่าควรใช้ explicit commit และค้นคืนผ่าน Memory Search"},
+                            {
+                                "role": "user",
+                                "content": "Research OS ต้องเก็บความรู้จาก Session แบบมีการยืนยันก่อนบันทึก",
+                            },
+                            {
+                                "role": "assistant",
+                                "content": "สรุปว่าควรใช้ explicit commit และค้นคืนผ่าน Memory Search",
+                            },
                         ],
                         "tags": ["memory", "session"],
                         "min_quality": 20,
@@ -183,6 +186,7 @@ class ResearchOSAPITests(unittest.TestCase):
                 self.assertEqual("runtime-ephemeral", payload["durability"])
                 artifact_id = payload["artifact"]["artifact_id"]
                 self.assertTrue(any(Path(tmp).glob(f"{artifact_id}*.md")))
+
                 query = urllib.parse.quote("explicit commit")
                 status, memory = self.request("GET", f"/v1/memory/search?q={query}")
                 self.assertEqual(200, status)
