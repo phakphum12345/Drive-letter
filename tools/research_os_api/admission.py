@@ -307,7 +307,7 @@ class ResourceAdmissionGate:
             AdmissionDecision.ALLOW,
             reservation.request_id,
             reservation.principal_id,
-            reservation.status.value,
+            "idempotency_in_flight" if reservation.status is AdmissionStatus.RESERVED else reservation.status.value,
             reservation.reservation_id,
             reservation.quota_reservation_id,
             reservation.budget_reservation_id,
