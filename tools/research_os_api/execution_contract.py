@@ -11,7 +11,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from resource_governance import Usage
+try:
+    from .resource_governance import Usage
+except ImportError:  # Support the legacy flat-module execution surface.
+    from resource_governance import Usage
 
 
 @dataclass(frozen=True)
