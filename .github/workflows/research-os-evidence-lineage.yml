@@ -125,7 +125,7 @@ jobs:
                   'Evidence Lineage is not applicable to this main push.'
               )
               with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-                  fh.write('applicable=false\\n')
+                  fh.write('applicable=false\n')
               raise SystemExit(0)
 
           base = pr.get('base', {}).get('sha', '')
