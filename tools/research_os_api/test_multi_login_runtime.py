@@ -15,6 +15,39 @@ class MultiLoginRuntimeTests(unittest.TestCase):
         self.assertIn("accounts.google.com", url)
         self.assertNotIn("secret", url)
 
+    def test_non_google_providers_do_not_require_google_credentials(self):
+        providers = (
+            (
+                "github",
+                {
+                    "RESEARCH_OS_GITHUB_CLIENT_ID": "github-client",
+                    "RESEARCH_OS_GITHUB_CLIENT_SECRET": "github-secret",
+                },
+                "github.com/login/oauth/authorize",
+            ),
+            (
+                "microsoft",
+                {
+                    "RESEARCH_OS_MICROSOFT_CLIENT_ID": "microsoft-client",
+                    "RESEARCH_OS_MICROSOFT_CLIENT_SECRET": "microsoft-secret",
+                },
+                "login.microsoftonline.com",
+            ),
+        )
+        for provider, environment, expected_url in providers:
+            with self.subTest(provider=provider):
+                with patch.dict(os.environ, environment, clear=True):
+                    callback = f"http://127.0.0.1:8787/v1/auth/{provider}/callback"
+                    state, url = multi_login_runtime.begin_runtime_login(provider, callback)
+                    self.assertTrue(state)
+                    self.assertIn(expected_url, url)
+                    self.assertNotIn("RESEARCH_OS_GOOGLE_CLIENT_ID", os.environ)
+                    self.assertNotIn("RESEARCH_OS_GOOGLE_CLIENT_SECRET", os.environ)
+                    pending = multi_login_runtime._PENDING.pop(state)
+                    self.assertEqual(pending.provider, provider)
+                    self.assertEqual(pending.redirect_uri, callback)
+                    self.assertNotIn(environment[f"RESEARCH_OS_{provider.upper()}_CLIENT_SECRET"], url)
+
     def test_github_email_selection_prefers_verified_primary(self):
         payload = [
             {"email": "other@example.com", "verified": True, "primary": False},
