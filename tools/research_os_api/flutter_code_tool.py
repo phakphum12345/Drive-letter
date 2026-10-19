@@ -164,9 +164,17 @@ def validate(project_name: str) -> dict[str, Any]:
     return {"ok": test["exit_code"] == 0, "steps": [analyze, test]}
 
 def apply(project_name: str, relative: str, original_sha256: str, content: str, principal: str) -> dict[str, Any]:
+    # Both settings are supported identities, not mutually exclusive aliases.
+    # Selecting one with "or" silently ignored the email allowlist whenever an
+    # ID list was configured, potentially denying a legitimate Owner with 403.
+    configured_owners = (
+        os.environ.get("RESEARCH_OS_CODE_OWNER_IDS", ""),
+        os.environ.get("RESEARCH_OS_OWNER_EMAILS", ""),
+    )
     allowed = {
-        item.strip().lower()
-        for item in (os.environ.get("RESEARCH_OS_CODE_OWNER_IDS") or os.environ.get("RESEARCH_OS_OWNER_EMAILS") or "").split(",")
+        item.strip().casefold()
+        for setting in configured_owners
+        for item in setting.split(",")
         if item.strip()
     }
     if not allowed or principal.strip().lower() not in allowed:

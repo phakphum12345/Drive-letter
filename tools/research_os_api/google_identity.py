@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import os
 import threading
+from urllib.parse import urlparse
 from http.server import BaseHTTPRequestHandler
 
 from google_oauth import GoogleOAuthBroker, IDENTITY_SCOPES
@@ -112,7 +113,10 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
         handler = _current_http_handler()
         if handler is not None:
             _install_signout_cookie_hook()
-            _SIGNOUT_STATE.cookie = cookie_header(session, secure=True)
+            _SIGNOUT_STATE.cookie = cookie_header(
+                session,
+                secure=urlparse(redirect_uri).scheme.lower() == "https",
+            )
         return result
 
     def status(self) -> dict[str, object]:

@@ -77,6 +77,23 @@ void main() {
       expect(find.byKey(const Key('desktop-content-pane')), findsOneWidget);
       expect(find.byType(Drawer), findsNothing);
       expect(find.byKey(const Key('desktop-status-bar')), findsOneWidget);
+
+      // Open every registered destination at a narrow device width so each
+      // page is exercised under the same responsive constraints.
+      for (final item in researchNavigationItems) {
+        debugPrint('UI_AUDIT_PROGRESS narrow: destination ${item.index} ${item.label}');
+        final destination = find.byKey(Key('v2-nav-${item.index}'));
+        await tester.ensureVisible(destination);
+        await tester.tap(destination);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'Mobile destination ${item.index} (${item.label}) must render without a Flutter exception.',
+        );
+      }
     },
   );
 
@@ -232,6 +249,7 @@ void main() {
 
       // Every registry destination must resolve to a real page slot.
       for (final item in researchNavigationItems) {
+        debugPrint('UI_AUDIT_PROGRESS desktop: destination ${item.index} ${item.label}');
         await tester.tap(
           find.byKey(Key('v2-nav-${item.index}')),
         );

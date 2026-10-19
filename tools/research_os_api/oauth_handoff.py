@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import time
 from pathlib import Path
@@ -10,6 +11,20 @@ from typing import Any
 
 TTL_SECONDS = 120
 _LOCK = Lock()
+
+
+def handoff_root() -> Path:
+    """Use the configured Research OS data root, never the source-code directory."""
+    configured = (os.getenv("RESEARCH_OS_DATA_DIR") or "").strip()
+    if configured:
+        return Path(configured).expanduser() / "google_workspace"
+    if os.name == "nt":
+        return Path(os.getenv("PROGRAMDATA") or r"C:\ProgramData") / "ResearchOS" / "google_workspace"
+    xdg = (os.getenv("XDG_DATA_HOME") or "").strip()
+    if xdg:
+        return Path(xdg).expanduser() / "research-os" / "google_workspace"
+    return Path.home() / ".local" / "share" / "research-os" / "google_workspace"
+
 
 
 def create_handoff(root: Path, session: str, redirect_uri: str, *, code: str | None = None) -> str:

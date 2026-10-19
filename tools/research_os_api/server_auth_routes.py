@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from http.cookies import CookieError, SimpleCookie
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from auth_session import SESSION_COOKIE, clear_cookie_header, cookie_header, revoke_session, verify_session
 from google_identity import GoogleIdentityBroker
 from multi_login_runtime import MultiLoginRuntimeError, begin_runtime_login, complete_runtime_login
-from oauth_handoff import consume_handoff, create_handoff
-from qr_pairing import QRPairingError, bind_oauth_state, complete_pairing, consume_oauth_binding
+from oauth_handoff import consume_handoff, create_handoff, handoff_root
+from qr_pairing import QRPairingError, bind_oauth_state, consume_oauth_binding
 
 
 def _session_token(cookie_header_value: str | None) -> str:
@@ -37,9 +36,13 @@ def _pairing_completion(state: str, result: dict) -> dict | None:
         raise MultiLoginRuntimeError("pairing authentication did not produce a Research OS session")
     provider = str(result.get("provider") or binding.get("provider") or "").strip().lower()
     account = result.get("principal") if isinstance(result.get("principal"), dict) else result.get("account") if isinstance(result.get("account"), dict) else {}
-    create_handoff(Path(__file__).resolve().parents[2], session, "", code=binding["pairing_secret"])
-    complete_pairing(binding["pairing_id"], provider=provider, account=account)
-    return {"pairing_id": binding["pairing_id"], "paired": True, "provider": provider}
+    return {
+        "pairing_id": binding["pairing_id"],
+        "pairing_secret": binding["pairing_secret"],
+        "paired": False,
+        "provider": provider,
+        "account": account,
+    }
 
 
 def auth_callback(provider: str, query: str) -> tuple[dict, str]:
@@ -57,7 +60,7 @@ def auth_callback(provider: str, query: str) -> tuple[dict, str]:
         raise MultiLoginRuntimeError("identity provider login did not produce a Research OS session")
     pairing = _pairing_completion(state, result)
     if pairing is None:
-        create_handoff(Path(__file__).resolve().parents[2], session, "", code=state)
+        create_handoff(handoff_root(), session, "", code=state)
     else:
         result["pairing"] = pairing
     return result, result["set_cookie"]
@@ -72,7 +75,8 @@ def google_auth_callback(query: str) -> tuple[dict, str]:
     state = str(values.get("state", [""])[0]).strip()
     if not code or not state:
         raise MultiLoginRuntimeError("Google OAuth callback requires code and state")
-    result = GoogleIdentityBroker().complete(code=code, state=state)
+    broker = GoogleIdentityBroker()
+    result = broker.complete(code=code, state=state)
     session = str(result.get("session") or "").strip()
     if not session:
         raise MultiLoginRuntimeError("Google OAuth completion did not produce a Research OS session")
@@ -80,8 +84,13 @@ def google_auth_callback(query: str) -> tuple[dict, str]:
     pairing = _pairing_completion(state, {"session": session, "provider": "google", "account": account})
     payload = {"provider": "google", "account": account, "session": session}
     if pairing is not None:
+        # GoogleIdentityBroker also creates a state-keyed native handoff.
+        # Pairing uses explicit approval and the pairing-secret handoff instead.
+        consume_handoff(handoff_root(), state)
         payload["pairing"] = pairing
-    return payload, cookie_header(session, secure=True)
+    redirect_uri = str(result.get("redirect_uri") or broker.redirect_uri()).strip()
+    secure_cookie = urlparse(redirect_uri).scheme.lower() == "https"
+    return payload, cookie_header(session, secure=secure_cookie)
 
 
 def auth_status(cookie_header_value: str | None) -> dict:
@@ -109,7 +118,7 @@ def auth_provider_handoff(state: str) -> dict:
     handoff = str(state or "").strip()
     if not handoff:
         raise MultiLoginRuntimeError("OAuth handoff state is required")
-    session = consume_handoff(Path(__file__).resolve().parents[2], handoff)
+    session = consume_handoff(handoff_root(), handoff)
     if not session:
         raise MultiLoginRuntimeError("OAuth handoff is missing, expired, or already consumed")
     principal = verify_session(session)

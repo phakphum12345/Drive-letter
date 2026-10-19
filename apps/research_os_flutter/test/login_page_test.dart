@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,7 +9,145 @@ import 'package:http/testing.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/features/auth/login_page.dart';
 
+
 void main() {
+  testWidgets(
+    'refresh cancels the previous pairing and ignores its late status',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final firstStatus = Completer<http.Response>();
+      var starts = 0;
+      var statusRequests = 0;
+      var cancelCalls = 0;
+      final handoffSecrets = <String>[];
+      var authenticated = 0;
+      final client = ResearchOSApiClient(
+        baseUrl: 'http://research-os.test',
+        client: MockClient((request) async {
+          switch (request.url.path) {
+            case '/v1/auth/pairing/start':
+              starts++;
+              final id = 'pair-$starts';
+              final secret = 'secret-$starts';
+              return http.Response(
+                jsonEncode({
+                  'pairing_id': id,
+                  'pairing_secret': secret,
+                  'expires_at': 9999999999,
+                  'status': 'PENDING',
+                  'qr_payload':
+                      'https://research-os.test/v1/auth/pairing/open?pairing_id=$id&secret=$secret',
+                }),
+                201,
+                headers: {'content-type': 'application/json'},
+              );
+            case '/v1/auth/pairing/status':
+              statusRequests++;
+              final id = request.url.queryParameters['pairing_id'];
+              if (id == 'pair-1') return firstStatus.future;
+              return http.Response(
+                jsonEncode({
+                  'pairing_id': 'pair-2',
+                  'status': 'CONNECTED',
+                  'connected': true,
+                  'handoff_ready': true,
+                }),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            case '/v1/auth/pairing/cancel':
+              cancelCalls++;
+              return http.Response(
+                jsonEncode({'cancelled': true}),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            case '/v1/auth/providers/handoff':
+              final secret = request.headers['x-research-os-oauth-state']!;
+              handoffSecrets.add(secret);
+              return http.Response(
+                jsonEncode({
+                  'connected': true,
+                  'session': 'session-$secret',
+                }),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
+            default:
+              fail('Unexpected request: ${request.method} ${request.url}');
+          }
+        }),
+      );
+      addTearDown(client.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LoginPage(
+            apiClient: client,
+            connectionProfile: 'research_os',
+            onConnectionChanged: (_) async {},
+            onAuthenticated: () => authenticated++,
+          ),
+        ),
+      );
+      // The pairing poller intentionally remains active while the first status
+      // response is pending, so pumpAndSettle would wait forever. Pump bounded
+      // frames until the request is observed instead.
+      for (var frame = 0; frame < 20 && statusRequests == 0; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(starts, 1);
+      expect(statusRequests, 1);
+
+      final refreshButton = find.byKey(const ValueKey('refresh-qr-button'));
+      // The status request can begin before Flutter has rendered the enabled
+      // refresh state. Wait for the actual UI state, not an arbitrary delay.
+      for (var frame = 0;
+          frame < 20 ||
+              tester.widget<OutlinedButton>(refreshButton).onPressed == null;
+          frame++) {
+        if (frame >= 20) break;
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        tester.widget<OutlinedButton>(refreshButton).onPressed,
+        isNotNull,
+        reason: 'Refresh must be enabled once the first pairing has started.',
+      );
+      await tester.ensureVisible(refreshButton);
+      await tester.pump();
+      // The first pairing status request is deliberately unresolved; do not
+      // use pumpAndSettle while that asynchronous poll is pending.
+      await tester.tap(refreshButton);
+      await tester.pump();
+      for (var frame = 0; frame < 20 && authenticated == 0; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(starts, 2);
+      expect(cancelCalls, 1);
+      expect(authenticated, 1);
+
+      firstStatus.complete(
+        http.Response(
+          jsonEncode({
+            'pairing_id': 'pair-1',
+            'status': 'CONNECTED',
+            'connected': true,
+            'handoff_ready': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(handoffSecrets, <String>['secret-2']);
+      expect(authenticated, 1);
+    },
+  );
+
   testWidgets('shared auth surface uses QR pairing instead of login choices', (tester) async {
     var authenticated = 0;
     final client = ResearchOSApiClient(
@@ -63,7 +202,16 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // Pump a bounded number of frames instead of waiting for all animations
+    // to settle; the page intentionally includes a QR status poller.
+    for (var frame = 0; frame < 20 && authenticated == 0; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    // onAuthenticated is called immediately after setState; pump once so the
+    // rebuilt connected-state widget tree is observable to finders.
+    await tester.pump();
+    expect(authenticated, 1);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('Research OS'), findsOneWidget);
     expect(find.text('Scan to Connect'), findsOneWidget);
     expect(find.text('PORT'), findsOneWidget);

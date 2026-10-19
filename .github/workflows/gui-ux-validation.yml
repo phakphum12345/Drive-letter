@@ -43,6 +43,12 @@ jobs:
         working-directory: apps/research_os_flutter
         run: flutter analyze
 
-      - name: Run Flutter widget tests
+      - name: Record runner memory before widget tests
+        shell: bash
+        run: |
+          awk '/MemTotal|MemAvailable/ { print "RUNNER_" $1 "=" $2 " kB" }' /proc/meminfo
+
+      - name: Run Flutter widget tests with bounded worker concurrency
         working-directory: apps/research_os_flutter
-        run: flutter test
+        run: flutter test --concurrency=1
+

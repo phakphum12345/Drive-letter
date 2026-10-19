@@ -27,6 +27,12 @@ class _GoogleLoginPageState extends State<GoogleLoginPage> {
 
     try {
       final response = await widget.apiClient.startGoogleIdentitySignIn();
+      final state = response['state']?.toString().trim() ?? '';
+      if (state.isEmpty) {
+        throw const ResearchOSApiException(
+          'Research OS ไม่ได้รับ Google OAuth state',
+        );
+      }
       final rawUrl = response['authorization_url']?.toString().trim();
       if (rawUrl == null || rawUrl.isEmpty) {
         throw const ResearchOSApiException(
@@ -34,8 +40,12 @@ class _GoogleLoginPageState extends State<GoogleLoginPage> {
         );
       }
       final uri = Uri.tryParse(rawUrl);
-      if (uri == null || !uri.hasScheme) {
-        throw const ResearchOSApiException('Google authorization URL ไม่ถูกต้อง');
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.host != 'accounts.google.com') {
+        throw const ResearchOSApiException(
+          'Google authorization URL ต้องเป็น HTTPS จาก accounts.google.com',
+        );
       }
       final opened = await launchUrl(
         uri,
@@ -47,7 +57,26 @@ class _GoogleLoginPageState extends State<GoogleLoginPage> {
       if (!mounted) return;
       setState(() {
         _message =
-            'เปิด Google Sign-In แล้ว กรุณาทำรายการในเบราว์เซอร์ให้เสร็จ จากนั้นกลับมาที่ Research OS';
+            'กำลังรอการยืนยันจาก Google… กรุณาทำรายการในเบราว์เซอร์ให้เสร็จ';
+      });
+
+      final handoff = await _waitForGoogleHandoff(state);
+      if (!mounted) return;
+      final session = handoff['session']?.toString().trim() ?? '';
+      if (handoff['connected'] != true || session.isEmpty) {
+        throw const ResearchOSApiException(
+          'Google Sign-In ไม่ได้ส่ง Research OS session กลับมา',
+        );
+      }
+      widget.apiClient.setSession(session);
+      final account = handoff['account'] is Map
+          ? handoff['account'] as Map
+          : const <String, Object?>{};
+      final email = account['email']?.toString().trim() ?? '';
+      setState(() {
+        _message = email.isEmpty
+            ? 'Google Sign-In สำเร็จ'
+            : 'Google Sign-In สำเร็จ: $email';
       });
     } on Object catch (error) {
       if (!mounted) return;
@@ -58,6 +87,30 @@ class _GoogleLoginPageState extends State<GoogleLoginPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<Map<String, dynamic>> _waitForGoogleHandoff(String state) async {
+    for (var attempt = 0; attempt < 120; attempt++) {
+      if (!mounted) {
+        throw const ResearchOSApiException(
+          'Google Sign-In was interrupted before completion.',
+        );
+      }
+      try {
+        return await widget.apiClient.exchangeGoogleIdentityHandoff(state);
+      } on ResearchOSApiException catch (error) {
+        final statusCode = error.statusCode;
+        final retryable = statusCode == 401 ||
+            statusCode == 408 ||
+            statusCode == 429 ||
+            (statusCode != null && statusCode >= 500);
+        if (!retryable) rethrow;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+    throw const ResearchOSApiException(
+      'Google Sign-In timed out. Start again and complete Google consent promptly.',
+    );
   }
 
   @override

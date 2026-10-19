@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ResearchOSApiException implements Exception {
-  const ResearchOSApiException(this.message);
+  const ResearchOSApiException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
 
   @override
   String toString() => message;
@@ -108,6 +109,20 @@ class ResearchOSApiClient {
       _getJson('/v1/auth/google/status');
   Future<Map<String, dynamic>> startGoogleIdentitySignIn() =>
       _postJson('/v1/auth/google/start', const <String, Object?>{});
+  Future<Map<String, dynamic>> exchangeGoogleIdentityHandoff(
+    String state,
+  ) async {
+    final response = await _client.post(
+      _uri('/v1/auth/google/handoff'),
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'X-Research-OS-OAuth-State': state,
+      },
+      body: '{}',
+    );
+    return _decode(response);
+  }
+
   Future<Map<String, dynamic>> signOutGoogleIdentity() =>
       _postJson('/v1/auth/google/signout', const <String, Object?>{});
 
@@ -419,6 +434,7 @@ class ResearchOSApiClient {
           : decoded['detail'] ?? rawError ?? 'Unknown error';
       throw ResearchOSApiException(
         'Research OS API error ${response.statusCode}: $detail',
+        statusCode: response.statusCode,
       );
     }
     return decoded;

@@ -180,8 +180,9 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
   @override
   Widget build(BuildContext context) {
     final approvals = _runs.where((run) => run['status'] == 'awaiting_confirmation').toList();
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 32),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 24, compact ? 12 : 22, compact ? 12 : 24, compact ? 16 : 32),
       children: [
         const EnterprisePageHeader(
           icon: Icons.smart_toy_outlined,
@@ -217,31 +218,57 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
               ),
             ]),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('knowledge-search-query'),
-                  controller: _knowledgeQuery,
-                  enabled: _workspace != null,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    labelText: 'Search workspace knowledge',
+            if (compact) ...<Widget>[
+              TextField(
+                key: const Key('knowledge-search-query'),
+                controller: _knowledgeQuery,
+                enabled: _workspace != null,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  labelText: 'Search workspace knowledge',
+                ),
+                onSubmitted: (_) => _searchKnowledge(),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  label: 'Search workspace knowledge',
+                  child: FilledButton.icon(
+                    key: const Key('knowledge-search-button'),
+                    onPressed: _workspace == null || _searchingKnowledge ? null : _searchKnowledge,
+                    icon: const Icon(Icons.manage_search),
+                    label: const Text('Search'),
                   ),
-                  onSubmitted: (_) => _searchKnowledge(),
                 ),
               ),
-              const SizedBox(width: 10),
-              Semantics(
-                button: true,
-                label: 'Search workspace knowledge',
-                child: FilledButton.icon(
-                  key: const Key('knowledge-search-button'),
-                  onPressed: _workspace == null || _searchingKnowledge ? null : _searchKnowledge,
-                  icon: const Icon(Icons.manage_search),
-                  label: const Text('Search'),
+            ] else
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('knowledge-search-query'),
+                    controller: _knowledgeQuery,
+                    enabled: _workspace != null,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'Search workspace knowledge',
+                    ),
+                    onSubmitted: (_) => _searchKnowledge(),
+                  ),
                 ),
-              ),
-            ]),
+                const SizedBox(width: 10),
+                Semantics(
+                  button: true,
+                  label: 'Search workspace knowledge',
+                  child: FilledButton.icon(
+                    key: const Key('knowledge-search-button'),
+                    onPressed: _workspace == null || _searchingKnowledge ? null : _searchKnowledge,
+                    icon: const Icon(Icons.manage_search),
+                    label: const Text('Search'),
+                  ),
+                ),
+              ]),
             if (_searchingKnowledge) const LinearProgressIndicator(),
             if (_knowledge.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -288,20 +315,45 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
           title: 'Multi-Agent orchestration',
           subtitle: 'Visual dependency graph, status และ run controls',
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(child: Text(_loading ? 'กำลังโหลด orchestration...' : '${_runs.length} orchestration run(s)')),
-              Semantics(
-                button: true,
-                label: 'Create orchestration',
-                child: FilledButton.icon(
-                  key: const Key('create-orchestration-button'),
-                  onPressed: _creating ? null : _create,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create orchestration'),
-                ),
+            if (compact) ...<Widget>[
+              Text(_loading ? 'กำลังโหลด orchestration...' : '${_runs.length} orchestration run(s)'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.start,
+                children: <Widget>[
+                  Semantics(
+                    button: true,
+                    label: 'Create orchestration',
+                    child: FilledButton.icon(
+                      key: const Key('create-orchestration-button'),
+                      onPressed: _creating ? null : _create,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create orchestration'),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _loading ? null : _loadRuns,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
               ),
-              IconButton(onPressed: _loading ? null : _loadRuns, icon: const Icon(Icons.refresh)),
-            ]),
+            ] else
+              Row(children: [
+                Expanded(child: Text(_loading ? 'กำลังโหลด orchestration...' : '${_runs.length} orchestration run(s)')),
+                Semantics(
+                  button: true,
+                  label: 'Create orchestration',
+                  child: FilledButton.icon(
+                    key: const Key('create-orchestration-button'),
+                    onPressed: _creating ? null : _create,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create orchestration'),
+                  ),
+                ),
+                IconButton(onPressed: _loading ? null : _loadRuns, icon: const Icon(Icons.refresh)),
+              ]),
             if (_loading) const LinearProgressIndicator(),
             if (_error != null) ListTile(leading: const Icon(Icons.error_outline), title: const Text('Agent Center API warning'), subtitle: Text(_error!)),
             if (!_loading && _runs.isEmpty)
