@@ -122,6 +122,7 @@ class QRPairingTests(unittest.TestCase):
     def test_connected_pairing_cannot_be_cancelled(self):
         created = qr_pairing.create_pairing()
         qr_pairing.bind_oauth_state(created["pairing_id"], created["pairing_secret"], "oauth-state", "github")
+        qr_pairing.claim_pairing_approval(created["pairing_id"], created["pairing_secret"])
         qr_pairing.complete_pairing(created["pairing_id"], provider="github", account={"user_id": "u1"})
         with self.assertRaisesRegex(qr_pairing.QRPairingError, "cannot be cancelled"):
             qr_pairing.cancel_pairing(created["pairing_id"], created["pairing_secret"])
