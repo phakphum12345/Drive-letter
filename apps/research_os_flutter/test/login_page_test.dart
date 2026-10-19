@@ -9,7 +9,6 @@ import 'package:http/testing.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/features/auth/login_page.dart';
 
-import 'helpers/ui_audit_screenshot.dart';
 
 void main() {
   testWidgets(
@@ -85,15 +84,12 @@ void main() {
       );
       addTearDown(client.close);
       await tester.pumpWidget(
-        RepaintBoundary(
-          key: const Key('ui-audit-capture'),
-          child: MaterialApp(
-            home: LoginPage(
-              apiClient: client,
-              connectionProfile: 'research_os',
-              onConnectionChanged: (_) async {},
-              onAuthenticated: () => authenticated++,
-            ),
+        MaterialApp(
+          home: LoginPage(
+            apiClient: client,
+            connectionProfile: 'research_os',
+            onConnectionChanged: (_) async {},
+            onAuthenticated: () => authenticated++,
           ),
         ),
       );
@@ -105,7 +101,6 @@ void main() {
       }
       expect(starts, 1);
       expect(statusRequests, 1);
-      await captureUiAuditScreenshot(tester, 'login-qr-pending');
 
       final refreshButton = find.byKey(const ValueKey('refresh-qr-button'));
       // The first pairing status request is deliberately unresolved; do not
@@ -182,15 +177,12 @@ void main() {
     );
     addTearDown(client.close);
     await tester.pumpWidget(
-      RepaintBoundary(
-        key: const Key('ui-audit-capture'),
-        child: MaterialApp(
-          home: LoginPage(
-            apiClient: client,
-            connectionProfile: 'research_os',
-            onConnectionChanged: (_) async {},
-            onAuthenticated: () => authenticated++,
-          ),
+      MaterialApp(
+        home: LoginPage(
+          apiClient: client,
+          connectionProfile: 'research_os',
+          onConnectionChanged: (_) async {},
+          onAuthenticated: () => authenticated++,
         ),
       ),
     );
@@ -204,7 +196,6 @@ void main() {
     await tester.pump();
     expect(authenticated, 1);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    await captureUiAuditScreenshot(tester, 'login-qr-connected');
     expect(find.text('Research OS'), findsOneWidget);
     expect(find.text('Scan to Connect'), findsOneWidget);
     expect(find.text('PORT'), findsOneWidget);
