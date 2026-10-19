@@ -103,6 +103,22 @@ void main() {
       expect(statusRequests, 1);
 
       final refreshButton = find.byKey(const ValueKey('refresh-qr-button'));
+      // The status request can begin before Flutter has rendered the enabled
+      // refresh state. Wait for the actual UI state, not an arbitrary delay.
+      for (var frame = 0;
+          frame < 20 ||
+              tester.widget<OutlinedButton>(refreshButton).onPressed == null;
+          frame++) {
+        if (frame >= 20) break;
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        tester.widget<OutlinedButton>(refreshButton).onPressed,
+        isNotNull,
+        reason: 'Refresh must be enabled once the first pairing has started.',
+      );
+      await tester.ensureVisible(refreshButton);
+      await tester.pump();
       // The first pairing status request is deliberately unresolved; do not
       // use pumpAndSettle while that asynchronous poll is pending.
       await tester.tap(refreshButton);
