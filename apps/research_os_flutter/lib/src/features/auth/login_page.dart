@@ -33,6 +33,7 @@ class _LoginPageState extends State<LoginPage> {
   String? _qrPayload;
   int _pollingGeneration = 0;
   bool _refreshing = false;
+  bool _connected = false;
   String _selectedPort = ApiEndpointStore.port1Label;
 
   @override
@@ -94,6 +95,7 @@ class _LoginPageState extends State<LoginPage> {
         _loading = true;
         _refreshing = true;
         _error = false;
+        _connected = false;
         _message = null;
         _pairingId = null;
         _pairingSecret = null;
@@ -155,6 +157,7 @@ class _LoginPageState extends State<LoginPage> {
             _qrPayload = null;
             setState(() {
               _error = false;
+              _connected = true;
               _message = 'Connected';
             });
             widget.onAuthenticated();
@@ -254,7 +257,11 @@ class _LoginPageState extends State<LoginPage> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        if (_qrPayload != null)
+                        if (_connected)
+                          const Center(
+                            child: Icon(Icons.check_circle, size: 64, color: Colors.green),
+                          )
+                        else if (_qrPayload != null)
                           Center(
                             child: Semantics(
                               label: 'Research OS QR pairing code',

@@ -22,6 +22,7 @@ void main() {
 
       final firstStatus = Completer<http.Response>();
       var starts = 0;
+      var statusRequests = 0;
       var cancelCalls = 0;
       final handoffSecrets = <String>[];
       var authenticated = 0;
@@ -46,6 +47,7 @@ void main() {
                 headers: {'content-type': 'application/json'},
               );
             case '/v1/auth/pairing/status':
+              statusRequests++;
               final id = request.url.queryParameters['pairing_id'];
               if (id == 'pair-1') return firstStatus.future;
               return http.Response(
@@ -95,8 +97,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      // The pairing poller intentionally remains active while the first status
+      // response is pending, so pumpAndSettle would wait forever. Pump bounded
+      // frames until the request is observed instead.
+      for (var frame = 0; frame < 20 && statusRequests == 0; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
       expect(starts, 1);
+      expect(statusRequests, 1);
       await captureUiAuditScreenshot(tester, 'login-qr-pending');
 
       final refreshButton = find.byKey(const ValueKey('refresh-qr-button'));
