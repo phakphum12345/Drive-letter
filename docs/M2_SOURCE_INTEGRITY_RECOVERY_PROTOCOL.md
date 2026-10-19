@@ -227,3 +227,14 @@ Each run records source repository and commit, target repository/branch and test
 
 These rules do not authorize stripping a BOM from a BOM-only file, synthesizing missing implementation, weakening a failed Gate, treating expected authorization denials as success, or interpreting a green subset of workflows as an overall PASS. Existing incident entries remain evidence snapshots and must be refreshed by new runs before any Final Gate decision.
 
+## 16. Exact-path authoritative history audit — 2026-10-19
+
+A read-only, path-specific commit-history query was run for each of the 14 BOM-affected Python helper paths against both authoritative repositories:
+
+- `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`
+- `phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`
+
+All 28 repository/path queries returned zero commits touching the exact path. This is stronger than a default-branch listing: the queried commit history did not provide a canonical blob at any of those exact paths. It still does **not** prove that an equivalent implementation never existed under a different filename, directory, repository, or unqueried external source.
+
+**Decision remains `HOLD`.** Do not synthesize implementations, treat the in-repository BOM-only change-queue replacement as canonical, or remove/restore helper files without independently verifying the intended tree and reference graph. Search for trusted alternate-path implementations and compare exact commit, tree, path, mode, and blob SHA before any recovery decision.
+
