@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import auth_session
 import oauth_handoff
 import qr_pairing
 import server_auth_routes
@@ -23,8 +24,12 @@ class ServerAuthRouteTests(unittest.TestCase):
 
     def test_non_google_qr_callback_completes_pairing_and_one_time_handoff(self):
         previous_data_dir = os.environ.get("RESEARCH_OS_DATA_DIR")
+        previous_v3_data_dir = os.environ.get("RESEARCH_OS_V3_DATA_DIR")
+        previous_session_secret = os.environ.get("RESEARCH_OS_SESSION_SECRET")
         with tempfile.TemporaryDirectory() as temp_dir:
             os.environ["RESEARCH_OS_DATA_DIR"] = temp_dir
+            os.environ["RESEARCH_OS_V3_DATA_DIR"] = str(Path(temp_dir) / "v3-data")
+            os.environ["RESEARCH_OS_SESSION_SECRET"] = "isolated-non-google-auth-test-secret"
             try:
                 for provider in ("github", "microsoft"):
                     with self.subTest(provider=provider):
@@ -36,12 +41,15 @@ class ServerAuthRouteTests(unittest.TestCase):
                             oauth_state,
                             provider,
                         )
-                        session = f"session-{provider}"
                         principal = {
                             "user_id": f"{provider}:123",
                             "email": f"{provider}@example.com",
                             "role": "USER",
                         }
+                        # Exercise the real Research OS session signer and verifier.
+                        # Only the external provider's token/profile exchange is mocked.
+                        session = auth_session.issue_session(principal)
+                        cookie = auth_session.cookie_header(session, secure=False)
 
                         def store_handoff(_root, session_value, redirect_uri, *, code=None):
                             return oauth_handoff.create_handoff(
@@ -56,7 +64,7 @@ class ServerAuthRouteTests(unittest.TestCase):
                                     "provider": provider,
                                     "principal": principal,
                                     "session": session,
-                                    "set_cookie": "research_os_session=test; HttpOnly",
+                                    "set_cookie": cookie,
                                 },
                             ),
                             patch.object(server_auth_routes, "create_handoff", side_effect=store_handoff),
@@ -67,19 +75,24 @@ class ServerAuthRouteTests(unittest.TestCase):
                                     Path(temp_dir), code
                                 ),
                             ),
-                            patch.object(server_auth_routes, "verify_session", return_value=principal),
                         ):
-                            result, cookie = server_auth_routes.auth_callback(
+                            result, response_cookie = server_auth_routes.auth_callback(
                                 provider, f"code=authorization-code&state={oauth_state}"
                             )
-                            self.assertIn("research_os_session", cookie)
+                            self.assertIn("research_os_session", response_cookie)
                             self.assertEqual(result["pairing"]["provider"], provider)
                             self.assertTrue(result["pairing"]["paired"])
+
                             status = qr_pairing.get_status(
                                 pairing["pairing_id"], pairing["pairing_secret"]
                             )
                             self.assertTrue(status["connected"])
                             self.assertEqual(status["account"]["user_id"], principal["user_id"])
+
+                            # The returned cookie must authenticate through the real session verifier.
+                            auth_status = server_auth_routes.auth_status(response_cookie)
+                            self.assertTrue(auth_status["connected"])
+                            self.assertEqual(auth_status["account"]["user_id"], principal["user_id"])
 
                             handoff = server_auth_routes.auth_provider_handoff(
                                 pairing["pairing_secret"]
@@ -88,14 +101,20 @@ class ServerAuthRouteTests(unittest.TestCase):
                             self.assertEqual(handoff["session"], session)
                             self.assertEqual(handoff["account"]["user_id"], principal["user_id"])
                             with self.assertRaisesRegex(
-                                server_auth_routes.MultiLoginRuntimeError, "missing, expired, or already consumed"
+                                server_auth_routes.MultiLoginRuntimeError,
+                                "missing, expired, or already consumed",
                             ):
                                 server_auth_routes.auth_provider_handoff(pairing["pairing_secret"])
             finally:
-                if previous_data_dir is None:
-                    os.environ.pop("RESEARCH_OS_DATA_DIR", None)
-                else:
-                    os.environ["RESEARCH_OS_DATA_DIR"] = previous_data_dir
+                for key, previous in (
+                    ("RESEARCH_OS_DATA_DIR", previous_data_dir),
+                    ("RESEARCH_OS_V3_DATA_DIR", previous_v3_data_dir),
+                    ("RESEARCH_OS_SESSION_SECRET", previous_session_secret),
+                ):
+                    if previous is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = previous
 
 
 if __name__ == "__main__":
