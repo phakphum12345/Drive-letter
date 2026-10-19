@@ -65,10 +65,10 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-            home: ResearchOSAppShell(
-              apiClient: DesktopShellApiClient(),
-            ),
+          home: ResearchOSAppShell(
+            apiClient: DesktopShellApiClient(),
           ),
+        ),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
@@ -108,10 +108,10 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-            home: ResearchOSAppShell(
-              apiClient: DesktopShellApiClient(),
-            ),
+          home: ResearchOSAppShell(
+            apiClient: DesktopShellApiClient(),
           ),
+        ),
       );
 
       await tester.pump();
