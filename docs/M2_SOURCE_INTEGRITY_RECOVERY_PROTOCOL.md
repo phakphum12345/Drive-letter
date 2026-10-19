@@ -196,3 +196,46 @@ Two older observations are retained as historical findings and must not be misla
 - In the same source-snapshot review, `tools/copilot_chat/__init__.py` and its related test appeared binary/corrupted in the snapshot renderer. That is a **suspicion**, not proof. Recheck raw bytes, file mode, Git blob SHA, history, and authoritative source before restoring or rewriting either file.
 
 This distinction is mandatory in M.2: byte corruption, source-transfer omission, SHA/provenance drift, path shadowing, and contract/implementation disagreement are separate finding classes and require different repairs.
+
+## 15. Canonical recovery decision contract
+
+**Standard ID:** `M2-SOURCE-INTEGRITY-RECOVERY-001`, version `1.0.0`  
+**Authority:** M.2 is diagnostic only. The existing Final Gate remains the release/merge authority.  
+**Unknown provenance:** `HOLD`.
+
+The machine-readable `protocol_standard` object in `current/M2_SOURCE_INTEGRITY_RECOVERY_PROTOCOL.json` is the canonical decision contract for this protocol. It supplements the incident history above; it does not overwrite or certify historical findings.
+
+### Required invariants
+
+- Immutable source identity and one exact tested SHA across each evidence bundle.
+- Full-path inventory plus byte length and SHA-256 for every tracked file.
+- Detection of NUL, BOM, empty, truncated, and invalid-text files.
+- Restoration only from a trusted source revision or independently verified recovery artifact.
+- UI, API contract, generated asset, and packaged artifact source/version alignment.
+- Workflow trigger/path-filter coverage and explicit checkout-SHA verification.
+- Fail-closed handling for missing, stale, or ambiguous evidence.
+- Full applicable regression and Gate reruns on the new recovery SHA.
+
+### Required evidence
+
+Each run records source repository and commit, target repository/branch and tested commit, parent SHA, path/hash inventories, missing and unexpected paths, case-fold collisions, duplicate-basename review, byte-integrity findings, UI/API/artifact alignment, workflow coverage, restoration provenance, gate results, decision, and decision reasons.
+
+### Decision rules
+
+- **PASS** only when all required evidence is complete and consistent for the exact tested SHA.
+- **FAIL** when a verified integrity or consistency invariant is violated.
+- **HOLD** when source provenance or required evidence is missing, ambiguous, stale, or independently unverifiable.
+
+These rules do not authorize stripping a BOM from a BOM-only file, synthesizing missing implementation, weakening a failed Gate, treating expected authorization denials as success, or interpreting a green subset of workflows as an overall PASS. Existing incident entries remain evidence snapshots and must be refreshed by new runs before any Final Gate decision.
+
+## 16. Exact-path authoritative history audit — 2026-10-19
+
+A read-only, path-specific commit-history query was run for each of the 14 BOM-affected Python helper paths against both authoritative repositories:
+
+- `phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`
+- `phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH`
+
+All 28 repository/path queries returned zero commits touching the exact path. This is stronger than a default-branch listing: the queried commit history did not provide a canonical blob at any of those exact paths. It still does **not** prove that an equivalent implementation never existed under a different filename, directory, repository, or unqueried external source.
+
+**Decision remains `HOLD`.** Do not synthesize implementations, treat the in-repository BOM-only change-queue replacement as canonical, or remove/restore helper files without independently verifying the intended tree and reference graph. Search for trusted alternate-path implementations and compare exact commit, tree, path, mode, and blob SHA before any recovery decision.
+
