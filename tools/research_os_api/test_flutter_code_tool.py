@@ -54,6 +54,23 @@ class FlutterCodeToolTests(unittest.TestCase):
         self.assertTrue(result["applied"])
         validate.assert_called_once()
 
+    @patch("flutter_code_tool.validate", return_value={"ok": True, "steps": []})
+    def test_email_allowlist_is_not_ignored_when_owner_ids_are_configured(self, validate) -> None:
+        current = tool.read_file("research_os_flutter", "lib/main.dart")
+        with patch.dict(os.environ, {
+            "RESEARCH_OS_CODE_OWNER_IDS": "owner-id-123",
+            "RESEARCH_OS_OWNER_EMAILS": "owner@example.com,second-owner@example.com",
+        }):
+            result = tool.apply(
+                "research_os_flutter",
+                "lib/main.dart",
+                current["sha256"],
+                "void main() { print(2); }\\n",
+                "second-owner@example.com",
+            )
+        self.assertTrue(result["applied"])
+        validate.assert_called_once()
+
     def test_non_owner_cannot_apply(self) -> None:
         current = tool.read_file("research_os_flutter", "lib/main.dart")
         with self.assertRaises(PermissionError):
