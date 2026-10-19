@@ -65,7 +65,7 @@ class FlutterCodeToolTests(unittest.TestCase):
                 "research_os_flutter",
                 "lib/main.dart",
                 current["sha256"],
-                "void main() { print(2); }\\n",
+                "void main() { print(2); }\n",
                 "second-owner@example.com",
             )
         self.assertTrue(result["applied"])
