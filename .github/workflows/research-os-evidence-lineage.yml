@@ -255,7 +255,7 @@ jobs:
               time.sleep(poll_seconds)
           PY
       - name: Wait for exact reconciliation-head independent forensic run
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && steps.resolve.outputs.applicable == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
