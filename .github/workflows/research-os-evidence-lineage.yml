@@ -80,7 +80,7 @@ jobs:
                       'target-specific Evidence Lineage is not applicable to this pull request.'
                   )
                   with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
-                      fh.write('applicable=false\\n')
+                      fh.write('applicable=false\n')
                   raise SystemExit(0)
               if review_pr.get('head', {}).get('sha') != review_head:
                   raise SystemExit('Reconciliation review PR HEAD changed during manifest resolution')
