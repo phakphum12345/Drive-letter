@@ -116,6 +116,7 @@ class _GoogleWorkspacePageState extends State<GoogleWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
     final connected = _dashboard['connected'] == true;
     final oauthConfigured = _dashboard['oauth_configured'] == true;
     final services = _dashboard['services'] is List
@@ -124,7 +125,7 @@ class _GoogleWorkspacePageState extends State<GoogleWorkspacePage> {
     final enabledCount = services.where((item) => item is Map && item['enabled'] == true).length;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 24, compact ? 12 : 24, compact ? 12 : 24, compact ? 16 : 40),
       children: <Widget>[
         _Heading(
           icon: Icons.apps_outlined,
@@ -153,30 +154,55 @@ class _GoogleWorkspacePageState extends State<GoogleWorkspacePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined, size: 32),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            connected ? 'Google account connected' : 'Google account not connected',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            oauthConfigured
-                                ? 'OAuth credentials พร้อมใช้งานบน Research OS Backend'
-                                : 'ตั้ง Google OAuth Client ID และ Client Secret ที่ Local API ก่อน',
-                          ),
-                        ],
+                if (compact) ...<Widget>[
+                  Row(
+                    children: <Widget>[
+                      Icon(connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          connected ? 'Google account connected' : 'Google account not connected',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
-                    ),
-                    Chip(label: Text(connected ? 'Connected' : oauthConfigured ? 'Ready' : 'Not configured')),
-                  ],
-                ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    oauthConfigured
+                        ? 'OAuth credentials พร้อมใช้งานบน Research OS Backend'
+                        : 'ตั้ง Google OAuth Client ID และ Client Secret ที่ Local API ก่อน',
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Chip(label: Text(connected ? 'Connected' : oauthConfigured ? 'Ready' : 'Not configured')),
+                  ),
+                ] else
+                  Row(
+                    children: <Widget>[
+                      Icon(connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined, size: 32),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              connected ? 'Google account connected' : 'Google account not connected',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              oauthConfigured
+                                  ? 'OAuth credentials พร้อมใช้งานบน Research OS Backend'
+                                  : 'ตั้ง Google OAuth Client ID และ Client Secret ที่ Local API ก่อน',
+                            ),
+                          ],
+                        ),
+                      ),
+                      Chip(label: Text(connected ? 'Connected' : oauthConfigured ? 'Ready' : 'Not configured')),
+                    ],
+                  ),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 8,
@@ -248,14 +274,44 @@ class _GoogleWorkspacePageState extends State<GoogleWorkspacePage> {
           },
         ),
         const SizedBox(height: 24),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.security_outlined),
-            title: Text('Backend-only credentials'),
-            subtitle: Text('Flutter ไม่ได้รับ Google Client Secret, access token หรือ refresh token และ OAuth callback กลับเข้า Local API โดยตรง'),
-            trailing: Chip(label: Text('Local-first')),
+        if (compact)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      const Icon(Icons.security_outlined),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Backend-only credentials',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Flutter ไม่ได้รับ Google Client Secret, access token หรือ refresh token และ OAuth callback กลับเข้า Local API โดยตรง'),
+                  const Align(
+                    alignment: Alignment.centerRight,
+                    child: Chip(label: Text('Local-first')),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.security_outlined),
+              title: Text('Backend-only credentials'),
+              subtitle: Text('Flutter ไม่ได้รับ Google Client Secret, access token หรือ refresh token และ OAuth callback กลับเข้า Local API โดยตรง'),
+              trailing: Chip(label: Text('Local-first')),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -315,6 +371,38 @@ class _Heading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              action,
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
