@@ -187,8 +187,11 @@ def audit(
     elif head != expected:
         findings.append({"severity": "error", "code": "CHECKOUT_SHA_MISMATCH", "path": ".", "message": f"expected {expected}, checked out {head}"})
 
+    tree_sha = run_git(root, "rev-parse", "HEAD^{tree}")
+    working_tree_clean = False
     try:
-        if not working_tree_matches_head(root):
+        working_tree_clean = working_tree_matches_head(root)
+        if not working_tree_clean:
             findings.append({"severity": "error", "code": "WORKTREE_CONTENT_MISMATCH", "path": ".", "message": "tracked working-tree or index content differs from the checked-out commit; audit result is not commit-pure"})
     except RuntimeError as exc:
         findings.append({"severity": "error", "code": "WORKTREE_COMPARISON_FAILED", "path": ".", "message": str(exc)})
@@ -255,7 +258,9 @@ def audit(
         "repository_root": str(root),
         "target_sha": expected,
         "checked_out_sha": head,
+        "tree_sha": tree_sha,
         "exact_sha_match": head == expected,
+        "working_tree_clean": working_tree_clean,
         "authoritative_truth_ref": truth_ref,
         "baseline_history_status": baseline_history_status,
         "baseline_anchors_verified": baseline_anchors_verified,
@@ -268,7 +273,7 @@ def audit(
         "raw_sha256_by_path": raw_sha256,
         "git_blob_sha_by_path": git_blob_sha_by_path,
         "limitations": [
-            "This implementation checks tracked-file bytes, exact checkout SHA, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
+            "This implementation checks tracked-file bytes, exact checkout SHA and tree SHA, tracked/index cleanliness against HEAD, case-fold path collisions, duplicate source basenames, external action SHA pins, and baseline-anchor ancestry when an authoritative truth ref is supplied.",
             "It does not yet independently prove workflow path-filter coverage, UI/build/artifact SHA lineage, or authoritative recovery. Those remain open protocol checks.",
             "A clean byte scan does not certify semantic correctness or authorize release."
         ],
