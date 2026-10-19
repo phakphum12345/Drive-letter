@@ -4,8 +4,6 @@ import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/app_shell.dart';
 import 'package:research_os_flutter/src/ui/enterprise_navigation.dart';
 
-import 'helpers/ui_audit_screenshot.dart';
-
 class DesktopShellApiClient extends ResearchOSApiClient {
   DesktopShellApiClient()
       : super(
@@ -66,14 +64,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        RepaintBoundary(
-          key: const Key('ui-audit-capture'),
-          child: MaterialApp(
+        MaterialApp(
             home: ResearchOSAppShell(
               apiClient: DesktopShellApiClient(),
             ),
           ),
-        ),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
@@ -98,12 +93,6 @@ void main() {
           reason:
               'Mobile destination ${item.index} (${item.label}) must render without a Flutter exception.',
         );
-        debugPrint('UI_AUDIT_PROGRESS narrow: capture start ${item.index} ${item.destinationId}');
-        await captureUiAuditScreenshot(
-          tester,
-          'mobile-${item.index}-${item.destinationId}',
-        );
-        debugPrint('UI_AUDIT_PROGRESS narrow: capture done ${item.index} ${item.destinationId}');
       }
     },
   );
@@ -118,14 +107,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        RepaintBoundary(
-          key: const Key('ui-audit-capture'),
-          child: MaterialApp(
+        MaterialApp(
             home: ResearchOSAppShell(
               apiClient: DesktopShellApiClient(),
             ),
           ),
-        ),
       );
 
       await tester.pump();
@@ -274,12 +260,6 @@ void main() {
           isNull,
           reason: 'Navigation index ${item.index} (${item.label}) must map to a page.',
         );
-        debugPrint('UI_AUDIT_PROGRESS desktop: capture start ${item.index} ${item.destinationId}');
-        await captureUiAuditScreenshot(
-          tester,
-          'desktop-${item.index}-${item.destinationId}',
-        );
-        debugPrint('UI_AUDIT_PROGRESS desktop: capture done ${item.index} ${item.destinationId}');
       }
       // No Flutter exception.
       expect(
