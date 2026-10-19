@@ -4,6 +4,8 @@ import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/app_shell.dart';
 import 'package:research_os_flutter/src/ui/enterprise_navigation.dart';
 
+import 'helpers/ui_audit_screenshot.dart';
+
 class DesktopShellApiClient extends ResearchOSApiClient {
   DesktopShellApiClient()
       : super(
@@ -64,9 +66,12 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ResearchOSAppShell(
-            apiClient: DesktopShellApiClient(),
+        RepaintBoundary(
+          key: const Key('ui-audit-capture'),
+          child: MaterialApp(
+            home: ResearchOSAppShell(
+              apiClient: DesktopShellApiClient(),
+            ),
           ),
         ),
       );
@@ -77,6 +82,26 @@ void main() {
       expect(find.byKey(const Key('desktop-content-pane')), findsOneWidget);
       expect(find.byType(Drawer), findsNothing);
       expect(find.byKey(const Key('desktop-status-bar')), findsOneWidget);
+
+      // Open every registered destination at a narrow device width so each
+      // page is exercised under the same responsive constraints.
+      for (final item in researchNavigationItems) {
+        final destination = find.byKey(Key('v2-nav-${item.index}'));
+        await tester.ensureVisible(destination);
+        await tester.tap(destination);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'Mobile destination ${item.index} (${item.label}) must render without a Flutter exception.',
+        );
+        await captureUiAuditScreenshot(
+          tester,
+          'mobile-${item.index}-${item.destinationId}',
+        );
+      }
     },
   );
 
@@ -90,9 +115,12 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: ResearchOSAppShell(
-            apiClient: DesktopShellApiClient(),
+        RepaintBoundary(
+          key: const Key('ui-audit-capture'),
+          child: MaterialApp(
+            home: ResearchOSAppShell(
+              apiClient: DesktopShellApiClient(),
+            ),
           ),
         ),
       );
@@ -241,6 +269,10 @@ void main() {
           tester.takeException(),
           isNull,
           reason: 'Navigation index ${item.index} (${item.label}) must map to a page.',
+        );
+        await captureUiAuditScreenshot(
+          tester,
+          'desktop-${item.index}-${item.destinationId}',
         );
       }
       // No Flutter exception.

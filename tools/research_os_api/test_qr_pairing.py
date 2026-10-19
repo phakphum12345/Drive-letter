@@ -85,6 +85,7 @@ class QRPairingTests(unittest.TestCase):
     def test_expired_pairing_is_denied_even_if_record_was_connected(self):
         created = qr_pairing.create_pairing()
         qr_pairing.bind_oauth_state(created["pairing_id"], created["pairing_secret"], "oauth-state", "github")
+        qr_pairing.claim_pairing_approval(created["pairing_id"], created["pairing_secret"])
         qr_pairing.complete_pairing(created["pairing_id"], provider="github", account={"user_id": "u1"})
         path = Path(self.data.name, "qr_pairings.json")
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -95,6 +96,28 @@ class QRPairingTests(unittest.TestCase):
                 qr_pairing.get_status(created["pairing_id"], created["pairing_secret"])
         data = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(data["pairings"][created["pairing_id"]]["status"], "EXPIRED")
+
+    def test_authenticated_approval_claim_is_single_use(self):
+        pairing = qr_pairing.create_pairing()
+        scanned = qr_pairing.claim_pairing_approval(
+            pairing["pairing_id"],
+            pairing["pairing_secret"],
+        )
+        self.assertEqual(scanned["status"], "SCANNED")
+        with self.assertRaisesRegex(qr_pairing.QRPairingError, "already claimed"):
+            qr_pairing.claim_pairing_approval(
+                pairing["pairing_id"],
+                pairing["pairing_secret"],
+            )
+        qr_pairing.release_pairing_approval(
+            pairing["pairing_id"],
+            pairing["pairing_secret"],
+        )
+        claimed_again = qr_pairing.claim_pairing_approval(
+            pairing["pairing_id"],
+            pairing["pairing_secret"],
+        )
+        self.assertEqual(claimed_again["status"], "SCANNED")
 
     def test_connected_pairing_cannot_be_cancelled(self):
         created = qr_pairing.create_pairing()
@@ -107,6 +130,7 @@ class QRPairingTests(unittest.TestCase):
     def test_completed_pairing_never_persists_session(self):
         created = qr_pairing.create_pairing()
         qr_pairing.bind_oauth_state(created["pairing_id"], created["pairing_secret"], "oauth-state", "github")
+        qr_pairing.claim_pairing_approval(created["pairing_id"], created["pairing_secret"])
         qr_pairing.complete_pairing(
             created["pairing_id"],
             provider="github",

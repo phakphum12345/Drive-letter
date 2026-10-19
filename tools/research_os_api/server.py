@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from api_auth import extract_session_token, require_session
 from developer_identity import IdentityAssertionError
@@ -39,8 +39,8 @@ from identity_context import resolve_identity_context
 from memory import build_context, search_memory
 from multi_login import MultiLoginError, begin_login
 from multi_login_runtime import MultiLoginRuntimeError, begin_runtime_login, complete_runtime_login
-from oauth_handoff import consume_handoff
-from qr_pairing import QRPairingError, cancel_pairing, create_pairing, get_status
+from oauth_handoff import consume_handoff, create_handoff, handoff_root
+from qr_pairing import QRPairingError, cancel_pairing, create_pairing, get_status, claim_pairing_approval, release_pairing_approval, complete_pairing
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # The API supports both repository-root module execution and direct execution
 # from tools/research_os_api (the latter is used by the Windows/local launcher).
@@ -174,9 +174,16 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_html(self, status: int, html: str) -> None:
+    def _send_html(
+        self,
+        status: int,
+        html: str,
+        cookie: str | None = None,
+    ) -> None:
         body = html.encode("utf-8")
         self.send_response(status)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -261,10 +268,26 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             or os.getenv("RENDER_EXTERNAL_URL")
         )
         if explicit and explicit.strip():
-            return explicit.strip().rstrip("/")
+            base_url = explicit.strip().rstrip("/")
+            parsed = urlsplit(base_url)
+            hostname = (parsed.hostname or "").lower()
+            is_loopback = hostname in {"127.0.0.1", "localhost", "::1"}
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("Research OS pairing base URL must be an absolute HTTP(S) URL")
+            if parsed.scheme != "https" and not is_loopback:
+                raise ValueError("Public Research OS pairing URLs must use HTTPS")
+            return base_url
+
         host = str(self.headers.get("Host") or "").strip()
         if host:
-            return f"http://{host.rstrip('/')}"
+            parsed_host = urlsplit(f"//{host}")
+            hostname = (parsed_host.hostname or "").lower()
+            if hostname in {"127.0.0.1", "localhost", "::1"}:
+                return f"http://{host.rstrip('/')}"
+            raise ValueError(
+                "Configure RESEARCH_OS_PAIRING_BASE_URL or RESEARCH_OS_PUBLIC_BASE_URL "
+                "to an HTTPS URL before creating a public QR pairing code"
+            )
         port = int(os.getenv("RESEARCH_OS_API_PORT", "8787"))
         return f"http://127.0.0.1:{port}"
 
@@ -334,24 +357,52 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 params = parse_qs(parsed.query)
                 pairing_id = str(params.get("pairing_id", [""])[0]).strip()
                 secret = str(params.get("secret", [""])[0]).strip()
-                get_status(pairing_id, secret)
-                buttons = []
-                for item in provider_catalog():
-                    if not isinstance(item, dict) or item.get("available") is not True:
-                        continue
-                    provider = html.escape(str(item.get("id") or "").strip(), quote=True)
-                    name = html.escape(str(item.get("name") or provider), quote=True)
-                    pid = html.escape(pairing_id, quote=True)
-                    sec = html.escape(secret, quote=True)
-                    href = f"/v1/auth/pairing/authorize?provider={provider}&pairing_id={pid}&secret={sec}"
-                    buttons.append(f'<p><a href="{href}" style="display:inline-block;padding:12px 18px;border:1px solid #888;border-radius:8px;text-decoration:none">{name}</a></p>')
-                body = (
-                    '<html><head><meta name="viewport" content="width=device-width,initial-scale=1">'
-                    '<title>Research OS Connect</title></head><body style="font-family:system-ui;max-width:520px;margin:48px auto;padding:20px">'
-                    '<h2>Research OS</h2><p>Choose the identity provider for this pairing.</p>'
-                    + "".join(buttons)
-                    + '<p>This pairing is single-use and expires automatically.</p></body></html>'
-                )
+                pairing_status = get_status(pairing_id, secret)
+                token = extract_session_token(self.headers)
+                try:
+                    principal = verify_session(token)
+                except ValueError:
+                    principal = None
+                pid = html.escape(pairing_id, quote=True)
+                sec = html.escape(secret, quote=True)
+                if principal is not None:
+                    email = html.escape(str(principal.get("email") or "signed-in account"), quote=True)
+                    body = (
+                        '<html><head><meta name="viewport" content="width=device-width,initial-scale=1">'
+                        '<title>Approve Research OS device</title></head>'
+                        '<body style="font-family:system-ui;max-width:520px;margin:48px auto;padding:20px">'
+                        '<h2>Approve this device</h2>'
+                        f'<p>Signed in as <strong>{email}</strong>.</p>'
+                        '<p>Approve sharing this existing Research OS session with the device showing this QR code?</p>'
+                        '<button id="approve" style="padding:12px 18px;border:1px solid #888;border-radius:8px">Approve device</button>'
+                        '<p id="status" role="status"></p>'
+                        '<script>'
+                        'document.getElementById("approve").addEventListener("click", async () => {'
+                        'const button=document.getElementById("approve");button.disabled=true;'
+                        'try { const response=await fetch("/v1/auth/pairing/approve",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({pairing_id:"'
+                        + pid + '",pairing_secret:"' + sec + '"})});'
+                        'const result=await response.json();'
+                        'if(!response.ok) throw new Error(result.detail||result.error||"Approval failed");'
+                        'document.getElementById("status").textContent="Device connected. Return to Research OS.";'
+                        '} catch(error) { document.getElementById("status").textContent=String(error);button.disabled=false; }'
+                        '});</script></body></html>'
+                    )
+                else:
+                    buttons = []
+                    for item in provider_catalog():
+                        if not isinstance(item, dict) or item.get("available") is not True:
+                            continue
+                        provider = html.escape(str(item.get("id") or "").strip(), quote=True)
+                        name = html.escape(str(item.get("name") or provider), quote=True)
+                        href = f"/v1/auth/pairing/authorize?provider={provider}&pairing_id={pid}&secret={sec}"
+                        buttons.append(f'<p><a href="{href}" style="display:inline-block;padding:12px 18px;border:1px solid #888;border-radius:8px;text-decoration:none">{name}</a></p>')
+                    body = (
+                        '<html><head><meta name="viewport" content="width=device-width,initial-scale=1">'
+                        '<title>Research OS Connect</title></head><body style="font-family:system-ui;max-width:520px;margin:48px auto;padding:20px">'
+                        '<h2>Research OS</h2><p>Sign in on this device first, then approve sharing that existing session with the device showing the QR code.</p>'
+                        + "".join(buttons)
+                        + '<p>This pairing is single-use and expires automatically.</p></body></html>'
+                    )
                 self._send_html(HTTPStatus.OK, body)
                 return
             if path == "/v1/auth/pairing/authorize":
@@ -374,7 +425,11 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 account = result.get("account") if isinstance(result.get("account"), dict) else {}
                 email = html.escape(str(account.get("email") or "account"), quote=True)
                 if pairing:
-                    self._send_html(HTTPStatus.OK, f"<html><body><h2>Research OS pairing complete</h2><p>{email}</p><p>You can close this window and return to Research OS.</p></body></html>")
+                    location = "/v1/auth/pairing/open?" + urlencode({
+                        "pairing_id": pairing["pairing_id"],
+                        "secret": pairing["pairing_secret"],
+                    })
+                    self._redirect(location, cookie)
                 else:
                     self._send_html(HTTPStatus.OK, f"<html><body><h2>Signed in to Research OS</h2><p>{email}</p><p>You can close this window.</p></body></html>")
                 return
@@ -383,9 +438,11 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                     result, cookie = __import__("server_auth_routes").auth_callback(provider, parsed.query)
                     pairing = result.get("pairing") if isinstance(result, dict) else None
                     if pairing:
-                        account = result.get("principal") if isinstance(result.get("principal"), dict) else {}
-                        email = html.escape(str(account.get("email") or "account"), quote=True)
-                        self._send_html(HTTPStatus.OK, f"<html><body><h2>Research OS pairing complete</h2><p>{email}</p><p>You can close this window and return to Research OS.</p></body></html>")
+                        location = "/v1/auth/pairing/open?" + urlencode({
+                            "pairing_id": pairing["pairing_id"],
+                            "secret": pairing["pairing_secret"],
+                        })
+                        self._redirect(location, cookie)
                     else:
                         self._redirect("/", cookie)
                     return
@@ -551,6 +608,48 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 pairing = create_pairing()
                 pairing_url = f"{self._pairing_base_url()}/v1/auth/pairing/open?pairing_id={pairing['pairing_id']}&secret={pairing['pairing_secret']}"
                 self._send(HTTPStatus.CREATED, {**pairing, "qr_payload": pairing_url, "pairing_url": pairing_url, "qr_type": "research_os_pairing", "session_in_qr": False})
+                return
+            if path == "/v1/auth/pairing/approve":
+                token = extract_session_token(self.headers)
+                try:
+                    principal = verify_session(token)
+                except ValueError as exc:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required", "detail": str(exc)})
+                    return
+                pairing_id = str(body.get("pairing_id") or "").strip()
+                pairing_secret = str(body.get("pairing_secret") or "").strip()
+                claimed = False
+                try:
+                    claim_pairing_approval(pairing_id, pairing_secret)
+                    claimed = True
+                    user_id = str(principal.get("user_id") or "")
+                    provider = user_id.split(":", 1)[0].lower() if ":" in user_id else "existing_session"
+                    create_handoff(handoff_root(), token, "", code=pairing_secret)
+                    complete_pairing(
+                        pairing_id,
+                        provider=provider,
+                        account=principal,
+                    )
+                    claimed = False
+                except (QRPairingError, ValueError, OSError) as exc:
+                    if claimed:
+                        try:
+                            release_pairing_approval(pairing_id, pairing_secret)
+                        except (QRPairingError, ValueError):
+                            pass
+                    self._send(HTTPStatus.BAD_REQUEST, {"error": "pairing_approval_failed", "detail": str(exc)})
+                    return
+                self._send(HTTPStatus.OK, {
+                    "pairing_id": pairing_id,
+                    "status": "CONNECTED",
+                    "connected": True,
+                    "handoff_ready": True,
+                    "account": {
+                        "user_id": principal.get("user_id"),
+                        "email": principal.get("email"),
+                        "role": principal.get("role"),
+                    },
+                })
                 return
             if path == "/v1/auth/pairing/cancel":
                 self._send(HTTPStatus.OK, cancel_pairing(str(body.get("pairing_id") or "").strip(), str(body.get("pairing_secret") or "").strip()))

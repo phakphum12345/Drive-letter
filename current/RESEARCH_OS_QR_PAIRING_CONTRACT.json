@@ -18,7 +18,8 @@
     "states": ["PENDING", "SCANNED", "CONNECTED", "EXPIRED", "CANCELLED"],
     "ttl_seconds": 180,
     "single_use": true,
-    "qr_payload": "one-time HTTPS pairing URL",
+    "qr_payload": "one-time HTTPS pairing URL for public deployments; loopback HTTP is allowed only for local development",
+    "approval": "an authenticated Research OS session and explicit user approval are required before pairing completes",
     "must_not_contain": ["password", "research_os_session", "provider access token", "refresh token", "role grant", "permission grant"]
   },
   "runtime_rules": {

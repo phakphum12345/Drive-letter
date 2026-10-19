@@ -201,6 +201,41 @@ def consume_oauth_binding(oauth_state: str) -> dict[str, str] | None:
     return None
 
 
+def claim_pairing_approval(pairing_id: str, secret: str) -> dict[str, Any]:
+    """Atomically claim approval so two authenticated scanners cannot race."""
+    with _LOCK:
+        state = _read()
+        now = int(time.time())
+        _prune(state["pairings"], now)
+        record = _validated_locked(state, pairing_id, secret, now)
+        if record.get("status") == "PENDING":
+            record["status"] = "SCANNED"
+            record["scanned_at"] = now
+        if record.get("status") != "SCANNED" or record.get("approval_claimed"):
+            _write(state)
+            raise QRPairingError("pairing approval is already claimed or unavailable")
+        record["approval_claimed"] = True
+        _write(state)
+        return {
+            "pairing_id": record["pairing_id"],
+            "status": record["status"],
+            "expires_at": record["expires_at"],
+        }
+
+
+def release_pairing_approval(pairing_id: str, secret: str) -> None:
+    """Release a claim only while the pairing remains uncompleted."""
+    with _LOCK:
+        state = _read()
+        now = int(time.time())
+        _prune(state["pairings"], now)
+        record = _validated_locked(state, pairing_id, secret, now)
+        if record.get("status") == "SCANNED":
+            record.pop("approval_claimed", None)
+            _write(state)
+
+
+
 def complete_pairing(pairing_id: str, *, provider: str, account: dict[str, Any] | None) -> None:
     pid = str(pairing_id or "").strip()
     with _LOCK:
@@ -217,9 +252,9 @@ def complete_pairing(pairing_id: str, *, provider: str, account: dict[str, Any] 
             record.pop("_pending_secret", None)
             _write(state)
             raise QRPairingError("pairing expired before completion")
-        if record.get("status") != "SCANNED":
+        if record.get("status") != "SCANNED" or not record.get("approval_claimed"):
             _write(state)
-            raise QRPairingError("pairing is not awaiting authentication")
+            raise QRPairingError("pairing approval has not been claimed")
         record["status"] = "CONNECTED"
         record["connected_at"] = now
         record["provider"] = str(provider or "").strip().lower()
@@ -231,6 +266,7 @@ def complete_pairing(pairing_id: str, *, provider: str, account: dict[str, Any] 
             }
         record.pop("oauth_state", None)
         record.pop("_pending_secret", None)
+        record.pop("approval_claimed", None)
         _write(state)
 
 
@@ -240,7 +276,7 @@ def cancel_pairing(pairing_id: str, secret: str) -> dict[str, Any]:
         now = int(time.time())
         _prune(state["pairings"], now)
         record = _validated_locked(state, pairing_id, secret, now)
-        if record.get("status") not in {"PENDING", "SCANNED"}:
+        if record.get("status") not in {"PENDING", "SCANNED"} or record.get("approval_claimed"):
             _write(state)
             raise QRPairingError("pairing cannot be cancelled in its current state")
         record["status"] = "CANCELLED"

@@ -203,6 +203,7 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
     final scheme = Theme.of(context).colorScheme;
     final active =
         _state == _VoiceState.listening || _state == _VoiceState.speaking;
+    final compact = MediaQuery.sizeOf(context).width < 760;
 
     return Scaffold(
       body: SafeArea(
@@ -234,6 +235,39 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (compact) ...<Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          _stateLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                      IconButton.filled(
+                        key: const Key('voice-conversation-mic-button'),
+                        tooltip: _state == _VoiceState.listening
+                            ? 'หยุดฟัง'
+                            : _state == _VoiceState.speaking
+                                ? 'หยุดพูด'
+                                : 'เริ่มสนทนาด้วยเสียง',
+                        onPressed: _toggleListening,
+                        icon: Icon(
+                          _state == _VoiceState.listening
+                              ? Icons.stop
+                              : _state == _VoiceState.speaking
+                                  ? Icons.stop_circle_outlined
+                                  : Icons.mic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -367,10 +401,11 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    SizedBox(
-                      width: 300,
-                      child: Card(
+                    if (!compact) ...<Widget>[
+                      const SizedBox(width: 14),
+                      SizedBox(
+                        width: 300,
+                        child: Card(
                         child: Padding(
                           padding: const EdgeInsets.all(22),
                           child: Column(
@@ -426,6 +461,7 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                         ),
                       ),
                     ),
+                    ],
                   ],
                 ),
               ),

@@ -31,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
   String? _pairingId;
   String? _pairingSecret;
   String? _qrPayload;
-  Timer? _pollTimer;
+  int _pollingGeneration = 0;
   bool _refreshing = false;
   String _selectedPort = ApiEndpointStore.port1Label;
 
@@ -47,8 +47,21 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _pollingGeneration++;
+    final pairingId = _pairingId;
+    final pairingSecret = _pairingSecret;
+    if (pairingId != null && pairingSecret != null) {
+      unawaited(_cancelPairingQuietly(pairingId, pairingSecret));
+    }
     super.dispose();
+  }
+
+  Future<void> _cancelPairingQuietly(String pairingId, String pairingSecret) async {
+    try {
+      await widget.apiClient.cancelPairing(pairingId, pairingSecret);
+    } on Object {
+      // Best-effort cleanup: expiry remains the server-side safety boundary.
+    }
   }
 
   Future<void> _selectPort(String label) async {
@@ -70,7 +83,12 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _startPairing() async {
-    _pollTimer?.cancel();
+    final previousPairingId = _pairingId;
+    final previousPairingSecret = _pairingSecret;
+    final generation = ++_pollingGeneration;
+    if (previousPairingId != null && previousPairingSecret != null) {
+      unawaited(_cancelPairingQuietly(previousPairingId, previousPairingSecret));
+    }
     if (mounted) {
       setState(() {
         _loading = true;
@@ -88,9 +106,14 @@ class _LoginPageState extends State<LoginPage> {
       final secret = result['pairing_secret']?.toString().trim() ?? '';
       final payload = result['qr_payload']?.toString().trim() ?? '';
       if (id.isEmpty || secret.isEmpty || payload.isEmpty) {
-        throw const ResearchOSApiException('Research OS did not return a valid QR pairing payload.');
+        throw const ResearchOSApiException(
+          'Research OS did not return a valid QR pairing payload.',
+        );
       }
-      if (!mounted) return;
+      if (!mounted || generation != _pollingGeneration) {
+        unawaited(_cancelPairingQuietly(id, secret));
+        return;
+      }
       setState(() {
         _loading = false;
         _refreshing = false;
@@ -99,9 +122,9 @@ class _LoginPageState extends State<LoginPage> {
         _qrPayload = payload;
         _message = 'Scan this QR code with a trusted device.';
       });
-      unawaited(_pollPairing());
+      unawaited(_pollPairing(generation));
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _pollingGeneration) return;
       setState(() {
         _loading = false;
         _refreshing = false;
@@ -111,21 +134,25 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _pollPairing() async {
+  Future<void> _pollPairing(int generation) async {
     final pairingId = _pairingId;
     final secret = _pairingSecret;
     if (pairingId == null || secret == null) return;
 
     for (var attempt = 0; attempt < 180; attempt++) {
-      if (!mounted) return;
+      if (!mounted || generation != _pollingGeneration) return;
       try {
         final status = await widget.apiClient.getPairingStatus(pairingId, secret);
+        if (!mounted || generation != _pollingGeneration) return;
         if (status['connected'] == true && status['handoff_ready'] == true) {
           final result = await widget.apiClient.exchangeProviderHandoff(secret);
+          if (!mounted || generation != _pollingGeneration) return;
           final session = result['session']?.toString().trim() ?? '';
           if (result['connected'] == true && session.isNotEmpty) {
             widget.apiClient.setSession(session);
-            if (!mounted) return;
+            _pairingId = null;
+            _pairingSecret = null;
+            _qrPayload = null;
             setState(() {
               _error = false;
               _message = 'Connected';
@@ -137,17 +164,31 @@ class _LoginPageState extends State<LoginPage> {
         }
         final statusName = status['status']?.toString() ?? 'PENDING';
         if (statusName == 'EXPIRED' || statusName == 'CANCELLED') {
-          if (!mounted) return;
           setState(() {
             _error = true;
             _message = 'QR pairing $statusName. Refresh the QR code and try again.';
           });
           return;
         }
-      } on ResearchOSApiException {
-        // The pairing remains pending or a one-time handoff race is still settling.
+      } on ResearchOSApiException catch (error) {
+        if (!mounted || generation != _pollingGeneration) return;
+        final statusCode = error.statusCode;
+        final retryable = statusCode == 408 ||
+            statusCode == 429 ||
+            (statusCode != null && statusCode >= 500);
+        if (!retryable) {
+          setState(() {
+            _error = true;
+            _message = error.toString();
+          });
+          return;
+        }
+        setState(() {
+          _error = false;
+          _message = 'Temporary connection issue. Retrying QR status…';
+        });
       } on Object catch (error) {
-        if (!mounted) return;
+        if (!mounted || generation != _pollingGeneration) return;
         setState(() {
           _error = true;
           _message = error.toString();
@@ -157,7 +198,7 @@ class _LoginPageState extends State<LoginPage> {
       await Future<void>.delayed(const Duration(seconds: 1));
     }
 
-    if (mounted) {
+    if (mounted && generation == _pollingGeneration) {
       setState(() {
         _error = true;
         _message = 'QR pairing expired. Refresh the QR code and try again.';
