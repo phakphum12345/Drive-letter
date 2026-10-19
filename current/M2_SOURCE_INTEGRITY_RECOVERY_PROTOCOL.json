@@ -291,5 +291,23 @@
       "Do not infer a file's identity from basename alone.",
       "Do not treat a green subset of workflows as overall PASS."
     ]
+  },
+  "latest_source_history_audit": {
+    "observed_at": "2026-10-19",
+    "status": "NO_AUTHORITATIVE_EXACT_PATH_HISTORY_FOUND",
+    "source_repositories": [
+      "phakphum12345/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH",
+      "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH"
+    ],
+    "paths_checked": 14,
+    "method": "GitHub path-specific commit-history queries for each known BOM-affected Python helper path in both authoritative repositories",
+    "result": "zero path-history commits returned for all 14 exact paths in both repositories",
+    "interpretation": "No authoritative blob is available at these exact paths in the queried commit histories. This does not prove an equivalent implementation never existed under a different path or repository.",
+    "decision": "HOLD",
+    "prohibited_actions": [
+      "Do not synthesize helper implementations",
+      "Do not treat the in-repository BOM-only replacement as canonical source",
+      "Do not remove or restore files without an independently verified intended-tree decision"
+    ]
   }
 }
