@@ -105,6 +105,29 @@ jobs:
               raise SystemExit(0)
 
           pr = gh(f"/repos/{owner}/{repo}/pulls/{candidates[0]['number']}")
+
+          # This workflow reconciles the PR recorded in the canonical manifest only.
+          # A normal unrelated main merge must not be interpreted as PR #12 lineage.
+          manifest_response = gh(
+              f'/repos/{owner}/{repo}/contents/current/AEOS_SQUASH_RECONCILIATION_PR12.json?ref={merge}'
+          )
+          manifest = json.loads(
+              base64.b64decode(manifest_response.get('content', '')).decode('utf-8')
+          )
+          if manifest.get('schema') != 'aeos.squash-reconciliation.v1':
+              raise SystemExit('Canonical squash-reconciliation manifest schema is invalid')
+          target_number = str(manifest.get('pr_number', ''))
+          if not target_number:
+              raise SystemExit('Canonical squash-reconciliation manifest has no target PR number')
+          if str(pr.get('number', '')) != target_number:
+              print(
+                  f"PR #{pr.get('number')} is not the manifest target PR #{target_number}; "
+                  'Evidence Lineage is not applicable to this main push.'
+              )
+              with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+                  fh.write('applicable=false\\n')
+              raise SystemExit(0)
+
           base = pr.get('base', {}).get('sha', '')
           head = pr.get('head', {}).get('sha', '')
           merge_from_pr = pr.get('merge_commit_sha', '')
