@@ -23,6 +23,10 @@
 3. Pairing-status/handoff HTTP errors were all swallowed as retryable errors, so terminal 4xx failures could remain hidden until the polling loop timed out.
 4. A public Host fallback could generate an HTTP QR URL. Public deployments now require an explicitly configured HTTPS base URL; HTTP is allowed only for loopback local development.
 
+### Developer API code-apply 403
+
+The source audit found an allowlist configuration defect in `flutter_code_tool.apply()`: `RESEARCH_OS_CODE_OWNER_IDS or RESEARCH_OS_OWNER_EMAILS` treated the two supported Owner identity lists as mutually exclusive, so a configured ID list could shadow the email list. The implementation now combines both allowlists and compares normalized identities, with a regression test for an email-listed Owner when the ID list is also set. The observed 403 is still not proof that this was the only live cause: runtime principal and environment values were not present in the supplied log. The 403 emitted by the non-owner authorization regression test is expected security behavior and must remain.
+
 ## Device lifecycle gap — not yet complete
 
 The QR route now requires an authenticated browser session and explicit approval before handing that same session to the QR device. The source audit did **not** find a complete device registry with stable device IDs, per-device status/history, or per-device revocation. The repository's `device_id` references in platform evidence schemas are not proof of an authentication device registry. Do not claim device lifecycle is complete until a device contract, authorized register/list/revoke routes, session binding rules, and tests exist.
