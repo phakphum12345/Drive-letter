@@ -61,7 +61,8 @@ Missing evidence is `UNKNOWN`, not `PASS`. If the source of truth cannot be reac
 
 ## 5. Required invariants
 
-- `TARGET_SHA == checked_out_SHA == tested_source_SHA`.
+- `TARGET_SHA == checked_out_SHA == tested_source_SHA`, and `tree_sha` must be the Git tree object for that exact commit.
+- The audit must fail closed when tracked/index content differs from `HEAD`; record `working_tree_clean` and never present dirty-tree bytes as proof of committed-source identity.
 - A release artifact must identify the same source SHA and have a verified artifact hash.
 - A path/name match alone never establishes file identity; use Git blob SHA and raw-byte SHA-256.
 - Missing historical Git objects cannot be “repaired” by changing a contract to point at an unrelated commit.
