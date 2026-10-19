@@ -12,6 +12,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      skip_legacy_flutter_windows:
+        description: "Skip the legacy V3 Flutter Windows compatibility job for this manual run"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -22,6 +28,64 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-flutter-scope:
+    name: Decide whether legacy Flutter Windows validation is relevant
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_flutter: ${{ steps.scope.outputs.run_flutter }}
+    steps:
+      - name: Checkout history for exact change comparison
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Detect V3 Flutter compatibility changes
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          TARGET_SHA: ${{ github.sha }}
+          SKIP_LEGACY_FLUTTER: ${{ inputs.skip_legacy_flutter_windows }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$SKIP_LEGACY_FLUTTER" == "true" ]]; then
+              echo "run_flutter=false" >> "$GITHUB_OUTPUT"
+              echo "LEGACY_FLUTTER_WINDOWS=SKIPPED_BY_MANUAL_INPUT"
+            else
+              echo "run_flutter=true" >> "$GITHUB_OUTPUT"
+              echo "LEGACY_FLUTTER_WINDOWS=RUN_MANUAL_VALIDATION"
+            fi
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+            head="$TARGET_SHA"
+          fi
+
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            echo "run_flutter=true" >> "$GITHUB_OUTPUT"
+            echo "LEGACY_FLUTTER_WINDOWS=RUN_NO_COMPARABLE_BASELINE"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$base" "$head")"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/research-os-final-gate\.yml$)'; then
+            echo "run_flutter=true" >> "$GITHUB_OUTPUT"
+            echo "LEGACY_FLUTTER_WINDOWS=RUN_RELEVANT_CHANGES"
+          else
+            echo "run_flutter=false" >> "$GITHUB_OUTPUT"
+            echo "LEGACY_FLUTTER_WINDOWS=SKIP_UNRELATED_CHANGES"
+          fi
+
   python-gate:
     name: Python build test analyze e2e
     runs-on: ubuntu-latest
@@ -55,6 +119,8 @@ jobs:
 
   flutter-gate:
     name: Flutter Windows build analyze test
+    needs: detect-flutter-scope
+    if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
