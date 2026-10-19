@@ -36,6 +36,23 @@ class WorkingTreePurityTests(unittest.TestCase):
             (root / "sample.py").write_text("print('changed')\\n", encoding="utf-8")
             self.assertFalse(AUDIT.working_tree_matches_head(root))
 
+    def test_staged_change_does_not_match_head(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._repository(root)
+            (root / "sample.py").write_text("print('staged')\\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "sample.py"], check=True)
+            self.assertFalse(AUDIT.working_tree_matches_head(root))
+
+    def test_audit_records_tree_sha_and_cleanliness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._repository(root)
+            head = AUDIT.run_git(root, "rev-parse", "HEAD")
+            result = AUDIT.audit(root, expected_sha=head)
+            self.assertEqual(result["tree_sha"], AUDIT.run_git(root, "rev-parse", "HEAD^{tree}"))
+            self.assertTrue(result["working_tree_clean"])
+
 
 class SourceIntegrityByteClassificationTests(unittest.TestCase):
     def test_detects_bom_only_file_as_corruption(self) -> None:
