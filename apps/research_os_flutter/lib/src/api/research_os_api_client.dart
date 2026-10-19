@@ -230,16 +230,30 @@ class ResearchOSApiClient {
         const <String, Object?>{},
       );
 
-  Future<Map<String, dynamic>> getGitHubDashboard({String? repository}) async {
-    final query = repository?.trim();
-    if (query == null || query.isEmpty) {
-      return _getJson('/v1/github/dashboard');
-    }
-    final uri = _uri('/v1/github/dashboard').replace(
-      queryParameters: <String, String>{'repository': query},
+  Future<Map<String, dynamic>> getGitHubAccounts() =>
+      _getJson('/v1/github/accounts');
+
+  Future<Map<String, dynamic>> getGitHubRepositories({
+    required String accountId,
+    int page = 1,
+  }) async {
+    final uri = _uri('/v1/github/repositories').replace(
+      queryParameters: <String, String>{'account_id': accountId, 'page': '$page'},
     );
-    final response = await _client.get(uri);
-    return _decode(response);
+    return _decode(await _client.get(uri));
+  }
+
+  Future<Map<String, dynamic>> getGitHubDashboard({
+    String? repository,
+    String? accountId,
+  }) async {
+    final query = repository?.trim();
+    final params = <String, String>{
+      if (query != null && query.isNotEmpty) 'repository': query,
+      if (accountId != null && accountId.trim().isNotEmpty) 'account_id': accountId.trim(),
+    };
+    final uri = _uri('/v1/github/dashboard').replace(queryParameters: params.isEmpty ? null : params);
+    return _decode(await _client.get(uri));
   }
 
   Future<Map<String, dynamic>> searchMemory(String query) async {

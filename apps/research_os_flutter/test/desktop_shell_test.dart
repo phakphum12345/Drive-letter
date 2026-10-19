@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/app_shell.dart';
@@ -40,8 +40,10 @@ class DesktopShellApiClient extends ResearchOSApiClient {
   @override
   Future<Map<String, dynamic>> getGitHubDashboard({
     String? repository,
+    String? accountId,
   }) async =>
       <String, dynamic>{
+        'account_id': accountId,
         'repository': repository,
         'workflow_runs': <Map<String, dynamic>>[],
         'commits': <Map<String, dynamic>>[],

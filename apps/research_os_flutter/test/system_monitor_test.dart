@@ -20,7 +20,7 @@ class FakeSystemMonitorApiClient extends ResearchOSApiClient {
       };
 
   @override
-  Future<Map<String, dynamic>> getGitHubDashboard({String? repository}) async =>
+  Future<Map<String, dynamic>> getGitHubDashboard({String? repository, String? accountId}) async =>
       <String, dynamic>{
         'workflow_runs': <Map<String, dynamic>>[
           <String, dynamic>{
