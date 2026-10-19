@@ -208,7 +208,7 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          padding: EdgeInsets.fromLTRB(compact ? 8 : 20, compact ? 8 : 20, compact ? 8 : 20, compact ? 8 : 16),
           child: Column(
             children: <Widget>[
               Row(
@@ -218,9 +218,13 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text('สนทนา AI',
-                            style: Theme.of(context).textTheme.headlineSmall),
-                        const SizedBox(height: 4),
-                        const Text('Friend AI • Text + Voice • Local-first'),
+                            style: compact
+                                ? Theme.of(context).textTheme.titleLarge
+                                : Theme.of(context).textTheme.headlineSmall),
+                        if (!compact) ...<Widget>[
+                          const SizedBox(height: 4),
+                          const Text('Friend AI • Text + Voice • Local-first'),
+                        ],
                       ],
                     ),
                   ),
@@ -234,10 +238,10 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: compact ? 8 : 16),
               if (compact) ...<Widget>[
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: <Widget>[
                       Expanded(
@@ -276,7 +280,7 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                       flex: 3,
                       child: Card(
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: EdgeInsets.all(compact ? 10 : 24),
                           child: Column(
                             children: <Widget>[
                               Expanded(
@@ -289,23 +293,24 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: <Widget>[
                                               Icon(Icons.auto_awesome,
-                                                  size: 72,
+                                                  size: compact ? 48 : 72,
                                                   color: scheme.primary),
-                                              const SizedBox(height: 20),
+                                              SizedBox(height: compact ? 8 : 20),
                                               Text(
                                                 key: Key(
                                                     'voice-conversation-empty-state-title'),
                                                 'คุยกับ Research OS Friend ได้เลย',
                                                 textAlign: TextAlign.center,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .headlineMedium,
+                                                style: compact
+                                                    ? Theme.of(context).textTheme.titleLarge
+                                                    : Theme.of(context).textTheme.headlineMedium,
                                               ),
                                               const SizedBox(height: 10),
-                                              const Text(
-                                                key: Key(
+                                              Text(
+                                                key: const Key(
                                                     'voice-conversation-empty-state-description'),
                                                 'พิมพ์ข้อความหรือกดไมโครโฟนเพื่อคุยด้วยเสียง ระบบจะส่งให้ Friend AI และแสดงคำตอบในห้องสนทนา',
+                                                style: compact ? Theme.of(context).textTheme.bodySmall : null,
                                                 textAlign: TextAlign.center,
                                               ),
                                             ],
@@ -389,7 +394,7 @@ class _VoiceConversationPageState extends State<VoiceConversationPage> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 12),
+                              SizedBox(height: compact ? 8 : 12),
                               _TextComposer(
                                 controller: _textController,
                                 enabled: _state != _VoiceState.thinking &&
