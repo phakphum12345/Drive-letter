@@ -86,6 +86,7 @@ void main() {
       // Open every registered destination at a narrow device width so each
       // page is exercised under the same responsive constraints.
       for (final item in researchNavigationItems) {
+        debugPrint('UI_AUDIT_PROGRESS narrow: destination ${item.index} ${item.label}');
         final destination = find.byKey(Key('v2-nav-${item.index}'));
         await tester.ensureVisible(destination);
         await tester.tap(destination);
@@ -97,10 +98,12 @@ void main() {
           reason:
               'Mobile destination ${item.index} (${item.label}) must render without a Flutter exception.',
         );
+        debugPrint('UI_AUDIT_PROGRESS narrow: capture start ${item.index} ${item.destinationId}');
         await captureUiAuditScreenshot(
           tester,
           'mobile-${item.index}-${item.destinationId}',
         );
+        debugPrint('UI_AUDIT_PROGRESS narrow: capture done ${item.index} ${item.destinationId}');
       }
     },
   );
@@ -260,6 +263,7 @@ void main() {
 
       // Every registry destination must resolve to a real page slot.
       for (final item in researchNavigationItems) {
+        debugPrint('UI_AUDIT_PROGRESS desktop: destination ${item.index} ${item.label}');
         await tester.tap(
           find.byKey(Key('v2-nav-${item.index}')),
         );
@@ -270,10 +274,12 @@ void main() {
           isNull,
           reason: 'Navigation index ${item.index} (${item.label}) must map to a page.',
         );
+        debugPrint('UI_AUDIT_PROGRESS desktop: capture start ${item.index} ${item.destinationId}');
         await captureUiAuditScreenshot(
           tester,
           'desktop-${item.index}-${item.destinationId}',
         );
+        debugPrint('UI_AUDIT_PROGRESS desktop: capture done ${item.index} ${item.destinationId}');
       }
       // No Flutter exception.
       expect(

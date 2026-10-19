@@ -108,9 +108,10 @@ void main() {
       await captureUiAuditScreenshot(tester, 'login-qr-pending');
 
       final refreshButton = find.byKey(const ValueKey('refresh-qr-button'));
-      await tester.ensureVisible(refreshButton);
-      await tester.pumpAndSettle();
+      // The first pairing status request is deliberately unresolved; do not
+      // use pumpAndSettle while that asynchronous poll is pending.
       await tester.tap(refreshButton);
+      await tester.pump();
       for (var frame = 0; frame < 20 && authenticated == 0; frame++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
@@ -198,6 +199,10 @@ void main() {
     for (var frame = 0; frame < 20 && authenticated == 0; frame++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
+    // onAuthenticated is called immediately after setState; pump once so the
+    // rebuilt connected-state widget tree is observable to finders.
+    await tester.pump();
+    expect(authenticated, 1);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     await captureUiAuditScreenshot(tester, 'login-qr-connected');
     expect(find.text('Research OS'), findsOneWidget);
