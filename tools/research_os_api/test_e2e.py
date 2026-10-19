@@ -78,8 +78,8 @@ class ResearchOSEndToEndTests(unittest.TestCase):
             opener = urllib.request.build_opener(NoRedirect)
             try:
                 response = opener.open(request, timeout=5)
-            except urllib.error.HTTPError as response:
-                pass
+            except urllib.error.HTTPError as exc:
+                response = exc
             self.assertEqual(response.code, 303)
             self.assertIn(cookie, response.headers.get_all("Set-Cookie") or [])
             self.assertIn("/v1/auth/pairing/open?", response.headers["Location"])
@@ -114,8 +114,8 @@ class ResearchOSEndToEndTests(unittest.TestCase):
             opener = urllib.request.build_opener(NoRedirect)
             try:
                 response = opener.open(request, timeout=5)
-            except urllib.error.HTTPError as response:
-                pass
+            except urllib.error.HTTPError as exc:
+                response = exc
             self.assertEqual(response.code, 303)
             self.assertIn(cookie, response.headers.get_all("Set-Cookie") or [])
             self.assertIn("/v1/auth/pairing/open?", response.headers["Location"])
