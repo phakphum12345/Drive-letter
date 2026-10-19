@@ -85,6 +85,42 @@ class ResearchOSEndToEndTests(unittest.TestCase):
             self.assertIn("/v1/auth/pairing/open?", response.headers["Location"])
             self.assertIn("pairing-secret", response.headers["Location"])
 
+    def test_google_pairing_callback_redirects_to_approval_with_cookie(self):
+        cookie = "research_os_session=google-signed-session; Path=/; HttpOnly; Secure; SameSite=Lax"
+        payload = {
+            "provider": "google",
+            "account": {"email": "google-user@example.com"},
+            "pairing": {
+                "pairing_id": "google-pair-123",
+                "pairing_secret": "google-pairing-secret",
+                "paired": False,
+                "provider": "google",
+            },
+        }
+        with patch.object(
+            server_auth_routes,
+            "google_auth_callback",
+            return_value=(payload, cookie),
+        ):
+            request = urllib.request.Request(
+                self.base_url + "/v1/auth/google/callback?code=test-code&state=test-state",
+                method="GET",
+            )
+
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+
+            opener = urllib.request.build_opener(NoRedirect)
+            try:
+                response = opener.open(request, timeout=5)
+            except urllib.error.HTTPError as response:
+                pass
+            self.assertEqual(response.code, 303)
+            self.assertIn(cookie, response.headers.get_all("Set-Cookie") or [])
+            self.assertIn("/v1/auth/pairing/open?", response.headers["Location"])
+            self.assertIn("google-pairing-secret", response.headers["Location"])
+
     def test_pairing_approval_reuses_existing_session_and_handoff_once(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(
