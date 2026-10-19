@@ -61,6 +61,19 @@ class GovernedAgentRouter:
                 idempotency_key=idempotency_key,
             )
         )
+        if admission.reason == "idempotency_in_flight":
+            # The admission layer returns the original reservation for safe
+            # idempotent replay; routing must not execute that reservation twice.
+            return GovernedRoute(
+                admission=AdmissionRecord(
+                    AdmissionDecision.DENY,
+                    request_id,
+                    principal_id,
+                    "idempotency_in_flight",
+                    evaluated_at=admission.evaluated_at,
+                ),
+                route=None,
+            )
         if admission.decision is not AdmissionDecision.ALLOW:
             return GovernedRoute(admission=admission, route=None)
 

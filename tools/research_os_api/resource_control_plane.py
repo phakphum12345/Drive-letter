@@ -144,9 +144,9 @@ class ResourceControlPlane:
             if actual_cost is not None and actual_cost != value.cost:
                 raise ValueError("explicit actual_cost conflicts with measured execution")
             return value, value.value
-        resolved_usage = actual_usage or estimated_usage
-        resolved_cost = estimated_cost if actual_cost is None else actual_cost
-        return MeasuredExecution(value, resolved_usage, resolved_cost, admission_currency), value
+        if actual_usage is None or actual_cost is None:
+            raise TypeError("authoritative execution measurement is required")
+        return MeasuredExecution(value, actual_usage, actual_cost, admission_currency), value
 
     def release(self, reservation_id: str):
         return self.router.release(reservation_id)

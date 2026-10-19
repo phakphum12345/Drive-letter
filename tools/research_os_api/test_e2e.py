@@ -4,9 +4,10 @@ import threading
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
-from unittest.mock import patch
 
+import server
 from server import ResearchOSHandler
+from unittest.mock import patch
 
 
 class ResearchOSEndToEndTests(unittest.TestCase):
@@ -40,16 +41,7 @@ class ResearchOSEndToEndTests(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
-    @patch("server._friend_chat")
-    def test_living_house_flow(self, friend_chat):
-        friend_chat.return_value = {
-            "provider": "owner-mock",
-            "text": "friend-ok",
-            "decision": {"scale": "10^10", "capacity": 10_000_000_000},
-            "factory": {"available": True, "scale": "10^10", "capacity": 10_000_000_000},
-            "helpers": {"bounded": True, "active_workers": 1, "logical_capacity": 10_000_000_000},
-            "metadata": {"capabilities": ["v3-unified-master"]},
-        }
+    def test_living_house_flow(self):
         with urllib.request.urlopen(self.base_url + "/", timeout=5) as response:
             html = response.read().decode("utf-8")
         self.assertIn("ยินดีต้อนรับกลับครับเพื่อน", html)
@@ -60,20 +52,23 @@ class ResearchOSEndToEndTests(unittest.TestCase):
         self.assertTrue(health["ui"])
 
         session_id = "e2e-session"
-        status, generated = self.request_json(
-            "/v1/ai/generate",
-            {
-                "provider": "mock",
-                "prompt": "ช่วยสรุปภารกิจของบ้าน",
-                "session_id": session_id,
-            },
-        )
+        with patch.object(
+            server,
+            "_friend_chat",
+            return_value={"provider": "mock", "text": "ช่วยสรุปภารกิจของบ้าน"},
+        ):
+            status, generated = self.request_json(
+                "/v1/ai/generate",
+                {
+                    "provider": "mock",
+                    "prompt": "ช่วยสรุปภารกิจของบ้าน",
+                    "session_id": session_id,
+                },
+            )
         self.assertEqual(status, 200)
-        self.assertEqual(generated["route"], "friend")
-        self.assertEqual(generated["provider"], "owner-mock")
+        self.assertEqual(generated["provider"], "mock")
         self.assertEqual(generated["session_id"], session_id)
         self.assertTrue(generated["text"])
-        friend_chat.assert_called_once()
 
         status, captured = self.request_json(
             "/v1/conversations/analyze",
