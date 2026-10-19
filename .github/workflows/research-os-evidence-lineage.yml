@@ -72,6 +72,16 @@ jobs:
               review_pr_number = os.environ['RECONCILIATION_PR_NUMBER']
               review_head = os.environ['RECONCILIATION_REVIEW_HEAD_SHA']
               review_pr = gh(f'/repos/{owner}/{repo}/pulls/{review_pr_number}')
+              changed_files = gh(f'/repos/{owner}/{repo}/pulls/{review_pr_number}/files?per_page=100')
+              manifest_path = 'current/AEOS_SQUASH_RECONCILIATION_PR12.json'
+              if not any(item.get('filename') == manifest_path for item in changed_files):
+                  print(
+                      f'PR #{review_pr_number} does not change {manifest_path}; '
+                      'target-specific Evidence Lineage is not applicable to this pull request.'
+                  )
+                  with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+                      fh.write('applicable=false\\n')
+                  raise SystemExit(0)
               if review_pr.get('head', {}).get('sha') != review_head:
                   raise SystemExit('Reconciliation review PR HEAD changed during manifest resolution')
               contents = gh(f'/repos/{owner}/{repo}/contents/current/AEOS_SQUASH_RECONCILIATION_PR12.json?ref={review_head}')
