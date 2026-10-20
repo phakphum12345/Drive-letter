@@ -157,6 +157,69 @@ def classify(checks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[d
     )
 
 
+def reconcile_pending_job_check(
+    check: dict[str, Any],
+    normalized: dict[str, Any],
+    repository: str,
+    expected_head_sha: str,
+    current_run_id: str,
+) -> dict[str, Any]:
+    """Reconcile a stale pending check-run using its exact GitHub Actions job.
+
+    Only trust the job endpoint when the URL belongs to this repository and
+    both the job's run ID and HEAD SHA match the identity encoded by the check.
+    If any identity field is absent or mismatched, retain the original pending
+    verdict; never infer success from a similarly named or unrelated job.
+    """
+    if normalized.get("bucket") != "pending":
+        return normalized
+    details_url = str(check.get("details_url") or check.get("html_url") or "")
+    match = re.fullmatch(
+        rf"/{re.escape(repository)}/actions/runs/([0-9]+)/job/([0-9]+)/?",
+        urllib.parse.urlparse(details_url).path,
+    )
+    parsed = urllib.parse.urlparse(details_url)
+    if parsed.scheme != "https" or parsed.netloc.casefold() != "github.com" or not match:
+        return normalized
+
+    run_id, job_id = match.groups()
+    check_sha = check.get("head_sha")
+    if not isinstance(check_sha, str) or check_sha != expected_head_sha:
+        return normalized
+
+    repo_path = urllib.parse.quote(repository, safe="/")
+    job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
+    if not isinstance(job, dict):
+        raise RuntimeError("GitHub returned invalid Actions job payload")
+    if str(job.get("run_id") or "") != run_id:
+        return normalized
+    if job.get("head_sha") != expected_head_sha:
+        return normalized
+    if str(job.get("name") or "").strip() != str(check.get("name") or "").strip():
+        return normalized
+
+    job_status = str(job.get("status") or "").lower()
+    if job_status != "completed":
+        return normalized
+    reconciled = normalize_check_run(
+        {
+            "name": check.get("name"),
+            "status": job_status,
+            "conclusion": job.get("conclusion"),
+            "details_url": details_url,
+            "head_sha": job.get("head_sha"),
+        },
+        current_run_id,
+    )
+    # The original check was already established as external. A job endpoint
+    # result for this exact run/job/SHA is authoritative for its terminal state.
+    if reconciled is None:
+        return normalized
+    reconciled["source"] = "check_run+actions_job"
+    reconciled["reason_code"] = "RECONCILED_EXACT_ACTIONS_JOB"
+    return reconciled
+
+
 def fetch_external_checks(repository: str, head_sha: str, current_run_id: str) -> list[dict[str, Any]]:
     repo_path = urllib.parse.quote(repository, safe="/")
     ref = urllib.parse.quote(head_sha, safe="")
@@ -166,6 +229,9 @@ def fetch_external_checks(repository: str, head_sha: str, current_run_id: str) -
     for item in check_runs:
         normalized = normalize_check_run(item, current_run_id)
         if normalized:
+            normalized = reconcile_pending_job_check(
+                item, normalized, repository, head_sha, current_run_id
+            )
             external.append(normalized)
     for item in statuses:
         normalized = normalize_status_context(item, current_run_id)
