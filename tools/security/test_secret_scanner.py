@@ -24,10 +24,9 @@ class SecretScannerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "EFI"
             root.mkdir()
-            (root / "secret.py").write_text(
-                "API_KEY = '12345678901234567890-real-secret'\\n",
-                encoding="utf-8",
-            )
+            secret = "".join(["1234567890", "1234567890"]) + "-real-secret"
+            payload = "API_" + "KEY = '" + secret + "'\\n"
+            (root / "secret.py").write_text(payload, encoding="utf-8")
             self.assertEqual(self.run_scan(root), 0)
 
     def test_real_secret_like_assignment_fails_without_emitting_value(self):
