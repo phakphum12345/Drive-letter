@@ -61,6 +61,12 @@ jobs:
           export RESEARCH_OS_CONVERSATION_STORE="$RUNNER_TEMP/ResearchOSData/sessions/conversations.json"
           python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
 
+      - name: Run platform assurance regression tests
+        run: |
+          python -m unittest tools.security.test_secret_scanner -v
+          python -m unittest tools.test_external_validation -v
+          python -m unittest tools.test_validate_generate_orchestrator -v
+
       - name: Set up Flutter
         if: ${{ inputs.include_flutter == true }}
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
