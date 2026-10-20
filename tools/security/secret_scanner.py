@@ -22,15 +22,18 @@ PATTERNS = (
 def is_efi_path(path: Path) -> bool:
     return any(part.casefold() == "efi" for part in path.parts)
 
-def excluded(path: Path) -> bool:
-    return any(part in EXCLUDED_DIRS for part in path.parts) or is_efi_path(path)
+def excluded(root: Path, path: Path) -> bool:
+    # Exclusions are relative to the scanned repository. Absolute ancestors such
+    # as /tmp on hosted runners must never suppress the entire scan.
+    relative = path.relative_to(root)
+    return any(part.casefold() in EXCLUDED_DIRS for part in relative.parts) or is_efi_path(relative)
 
 def relative_path(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 def candidate_files(root: Path):
     for path in root.rglob("*"):
-        if not path.is_file() or excluded(path):
+        if not path.is_file() or excluded(root, path):
             continue
         if path.suffix.casefold() in DEFAULT_EXTENSIONS or path.name.startswith(".env"):
             yield path
