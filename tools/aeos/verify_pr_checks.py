@@ -175,7 +175,7 @@ def reconcile_pending_job_check(
         return normalized
     details_url = str(check.get("details_url") or check.get("html_url") or "")
     match = re.fullmatch(
-        rf"/{re.escape(repository)}/actions/runs/(\\d+)/job/(\\d+)/?",
+        rf"/{re.escape(repository)}/actions/runs/([0-9]+)/job/([0-9]+)/?",
         urllib.parse.urlparse(details_url).path,
     )
     parsed = urllib.parse.urlparse(details_url)
