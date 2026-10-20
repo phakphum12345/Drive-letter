@@ -241,7 +241,7 @@ jobs:
                       if not candidate_run_id:
                           raise RuntimeError("RELEASE_DEPENDENCY_FAILURE: no successful v3-candidate.yml run ID is available")
                       inputs[name] = candidate_run_id
-                  elif isinstance(spec, dict) and "default" in spec:
+                  elif isinstance(spec, dict) and spec.get("required") is True and "default" in spec:
                       inputs[name] = spec["default"]
                   elif isinstance(spec, dict) and spec.get("required") is True:
                       raise RuntimeError(f"unsupported required inputs for {workflow}: {name}")
