@@ -23,6 +23,17 @@ def workflow_dispatch_inputs(path: Path) -> dict:
     return dispatch.get("inputs") or {}
 
 
+def unsupported_required_inputs(inputs: dict) -> list[str]:
+    """Return required dispatch inputs the orchestrator cannot derive or default."""
+    return [
+        name for name, spec in inputs.items()
+        if isinstance(spec, dict)
+        and spec.get("required") is True
+        and "default" not in spec
+        and name not in SUPPORTED_REQUIRED_INPUTS
+    ]
+
+
 def main() -> None:
     registry = load_yaml(REGISTRY)
     stages = registry.get("stages") or []
@@ -50,11 +61,7 @@ def main() -> None:
             document = load_yaml(path)
             events = document.get("on") or document.get(True) or {}
             assert "workflow_dispatch" in events, f"{workflow} is dispatchable but has no workflow_dispatch trigger"
-            unsupported = [
-                name for name, spec in inputs.items()
-                if isinstance(spec, dict) and spec.get("required") is True
-                and name not in SUPPORTED_REQUIRED_INPUTS
-            ]
+            unsupported = unsupported_required_inputs(inputs)
             assert not unsupported, f"{workflow} has required inputs the orchestrator cannot supply: {unsupported}"
 
     assert ordered == sorted(ordered), "registry stages must be ordered"
