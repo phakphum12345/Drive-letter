@@ -27,7 +27,7 @@ class GenerateOrchestratorInputTests(unittest.TestCase):
         self.assertEqual(schema["deployment_mode"]["default"], "local")
         self.assertEqual(unsupported_required_inputs(schema), [])
         source = (WORKFLOWS / "generate-orchestrator.yml").read_text(encoding="utf-8")
-        self.assertIn('elif isinstance(spec, dict) and "default" in spec:', source)
+        self.assertIn('elif isinstance(spec, dict) and spec.get("required") is True and "default" in spec:', source)
         self.assertIn('inputs[name] = spec["default"]', source)
 
     def test_required_unknown_input_without_default_stays_blocking(self):
