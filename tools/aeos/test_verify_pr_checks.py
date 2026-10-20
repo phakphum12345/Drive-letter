@@ -152,5 +152,69 @@ class VerifyPrChecksTests(unittest.TestCase):
         request.assert_not_called()
 
 
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 999,
+        "head_sha": "abc123",
+        "name": "build",
+        "status": "completed",
+        "conclusion": "success",
+    }, {}))
+    def test_stale_pending_check_does_not_accept_different_run_id(self, _request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "1000")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "1000"
+        )
+        self.assertEqual(result["bucket"], "pending")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 456,
+        "head_sha": "abc123",
+        "name": "build",
+        "status": "in_progress",
+        "conclusion": None,
+    }, {}))
+    def test_matching_but_running_job_remains_pending(self, _request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "1000")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "1000"
+        )
+        self.assertEqual(result["bucket"], "pending")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 456,
+        "head_sha": "abc123",
+        "name": "build",
+        "status": "completed",
+        "conclusion": "success",
+    }, {}))
+    @patch.object(VERIFY_PR_CHECKS, "paginate")
+    def test_fetch_external_checks_integrates_exact_job_reconciliation(self, paginate, _request):
+        check_run = {
+            "name": "build",
+            "status": "in_progress",
+            "conclusion": None,
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        paginate.side_effect = [[check_run], []]
+        result = VERIFY_PR_CHECKS.fetch_external_checks("o/r", "abc123", "1000")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["bucket"], "pass")
+        self.assertEqual(result[0]["source"], "check_run+actions_job")
+
+
 if __name__ == "__main__":
     unittest.main()
