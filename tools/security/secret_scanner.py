@@ -32,6 +32,10 @@ def relative_path(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 def candidate_files(root: Path):
+    # The scan root itself may be inside an EFI path; the exclusion is absolute
+    # to the requested scan boundary, not only relative child paths.
+    if is_efi_path(root):
+        return
     for path in root.rglob("*"):
         if not path.is_file() or excluded(root, path):
             continue
