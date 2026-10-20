@@ -71,6 +71,86 @@ class VerifyPrChecksTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             current_pr_head("o/r", "390")
 
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 456,
+        "head_sha": "abc123",
+        "name": "build",
+        "status": "completed",
+        "conclusion": "success",
+    }, {}))
+    def test_stale_pending_check_reconciles_only_matching_completed_job(self, request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "conclusion": None,
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "999")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "999"
+        )
+        self.assertEqual(result["bucket"], "pass")
+        self.assertEqual(result["state"], "SUCCESS")
+        self.assertEqual(result["source"], "check_run+actions_job")
+        request.assert_called_once_with("https://api.github.com/repos/o/r/actions/jobs/789")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 456,
+        "head_sha": "different-sha",
+        "name": "build",
+        "status": "completed",
+        "conclusion": "success",
+    }, {}))
+    def test_stale_pending_check_does_not_accept_different_job_sha(self, _request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "999")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "999"
+        )
+        self.assertEqual(result["bucket"], "pending")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "run_id": 456,
+        "head_sha": "abc123",
+        "name": "build",
+        "status": "completed",
+        "conclusion": "failure",
+    }, {}))
+    def test_stale_pending_check_preserves_real_job_failure(self, _request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "999")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "999"
+        )
+        self.assertEqual(result["bucket"], "fail")
+        self.assertEqual(result["state"], "FAILURE")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json")
+    def test_pending_check_with_untrusted_url_is_not_reconciled(self, request):
+        original = {
+            "name": "build",
+            "status": "in_progress",
+            "head_sha": "abc123",
+            "details_url": "https://example.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(original, "999")
+        result = VERIFY_PR_CHECKS.reconcile_pending_job_check(
+            original, normalized, "o/r", "abc123", "999"
+        )
+        self.assertEqual(result["bucket"], "pending")
+        request.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
