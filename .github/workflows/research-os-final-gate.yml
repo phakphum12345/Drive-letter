@@ -90,7 +90,7 @@ jobs:
   flutter-windows-scope-waiver:
     name: Flutter Windows validation not applicable (scope-verified)
     needs: detect-flutter-scope
-    if: needs.detect-flutter-scope.outputs.run_flutter != 'true'
+    if: ${{ needs.detect-flutter-scope.outputs.run_flutter != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.skip_legacy_flutter_windows) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -98,18 +98,12 @@ jobs:
         shell: bash
         env:
           RUN_FLUTTER: ${{ needs.detect-flutter-scope.outputs.run_flutter }}
-          EVENT_NAME: ${{ github.event_name }}
-          SKIP_LEGACY_FLUTTER: ${{ inputs.skip_legacy_flutter_windows }}
         run: |
           set -euo pipefail
           test "$RUN_FLUTTER" = "false"
           echo "SCOPE_WAIVER=VERIFIED"
           echo "WAIVED_CHECK=Flutter Windows build analyze test"
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$SKIP_LEGACY_FLUTTER" == "true" ]]; then
-            echo "REASON=Explicit manual input requested skip of legacy V3 Windows compatibility validation."
-          else
-            echo "REASON=No changed paths matched the legacy V3 Flutter Windows compatibility scope."
-          fi
+          echo "REASON=No changed paths matched the legacy V3 Flutter Windows compatibility scope."
           echo "This job is evidence of non-applicability, not a Windows build pass."
 
   python-gate:
