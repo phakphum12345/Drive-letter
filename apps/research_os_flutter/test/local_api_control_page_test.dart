@@ -34,7 +34,7 @@ void main() {
       (tester) async {
     final manager = _FakeLocalApiManager();
     await tester.pumpWidget(
-      MaterialApp(home: LocalApiControlPage(manager: manager)),
+      MaterialApp(home: Scaffold(body: LocalApiControlPage(manager: manager))),
     );
     await tester.pumpAndSettle();
 
@@ -63,7 +63,7 @@ void main() {
       (tester) async {
     final manager = _FakeLocalApiManager();
     await tester.pumpWidget(
-      MaterialApp(home: LocalApiControlPage(manager: manager)),
+      MaterialApp(home: Scaffold(body: LocalApiControlPage(manager: manager))),
     );
     await tester.pumpAndSettle();
 
@@ -90,7 +90,7 @@ void main() {
       (tester) async {
     final manager = _FakeLocalApiManager();
     await tester.pumpWidget(
-      MaterialApp(home: LocalApiControlPage(manager: manager)),
+      MaterialApp(home: Scaffold(body: LocalApiControlPage(manager: manager))),
     );
     await tester.pumpAndSettle();
 
@@ -113,7 +113,7 @@ void main() {
       (tester) async {
     final manager = _FakeLocalApiManager();
     await tester.pumpWidget(
-      MaterialApp(home: LocalApiControlPage(manager: manager)),
+      MaterialApp(home: Scaffold(body: LocalApiControlPage(manager: manager))),
     );
     await tester.pumpAndSettle();
 
