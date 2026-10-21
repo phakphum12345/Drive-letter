@@ -121,7 +121,7 @@ jobs:
         run: python tools/aeos/test_final_gate_flutter_scope.py
 
   flutter-gate:
-    name: Legacy Flutter Windows scope-aware validation
+    name: Flutter Windows build analyze test
     needs: detect-flutter-scope
     runs-on: windows-latest
     timeout-minutes: 20
