@@ -1,0 +1,150 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:research_os_flutter/src/features/local_api/local_api_control_page.dart';
+import 'package:research_os_flutter/src/platform/local_api_manager.dart';
+
+class _FakeLocalApiManager extends LocalApiManager {
+  _FakeLocalApiManager();
+
+  int installCalls = 0;
+  int uninstallCalls = 0;
+
+  @override
+  bool get supported => true;
+
+  @override
+  Future<LocalApiCommandResult> serviceStatus() async =>
+      const LocalApiCommandResult(ok: true, message: 'status');
+
+  @override
+  Future<LocalApiCommandResult> installService() async {
+    installCalls++;
+    return const LocalApiCommandResult(ok: true, message: 'installed');
+  }
+
+  @override
+  Future<LocalApiCommandResult> uninstallService() async {
+    uninstallCalls++;
+    return const LocalApiCommandResult(ok: true, message: 'uninstalled');
+  }
+}
+
+Future<void> _openServiceDialog(
+  WidgetTester tester,
+  String actionLabel,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(home: LocalApiControlPage(manager: _FakeLocalApiManager())),
+  );
+  await tester.pumpAndSettle();
+  final action = find.text(actionLabel).first;
+  await tester.ensureVisible(action);
+  await tester.tap(action);
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('install requires acknowledgement and cancel has no side effect',
+      (tester) async {
+    final manager = _FakeLocalApiManager();
+    await tester.pumpWidget(
+      MaterialApp(home: LocalApiControlPage(manager: manager)),
+    );
+    await tester.pumpAndSettle();
+
+    final action = find.text('ติดตั้ง Service').first;
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('ติดตั้งเฉพาะ Windows Service ResearchOSService'),
+      findsOneWidget,
+    );
+    final confirmButton = find.ancestor(
+      of: find.text('ติดตั้ง Service').last,
+      matching: find.byType(FilledButton),
+    ).first;
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.tap(find.text('ยกเลิก'));
+    await tester.pumpAndSettle();
+    expect(manager.installCalls, 0);
+  });
+
+  testWidgets('install runs only after acknowledgement is checked',
+      (tester) async {
+    final manager = _FakeLocalApiManager();
+    await tester.pumpWidget(
+      MaterialApp(home: LocalApiControlPage(manager: manager)),
+    );
+    await tester.pumpAndSettle();
+
+    final action = find.text('ติดตั้ง Service').first;
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    final confirmButton = find.ancestor(
+      of: find.text('ติดตั้ง Service').last,
+      matching: find.byType(FilledButton),
+    ).first;
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+    expect(manager.installCalls, 1);
+  });
+
+  testWidgets('uninstall shows service-only warning and cancel has no side effect',
+      (tester) async {
+    final manager = _FakeLocalApiManager();
+    await tester.pumpWidget(
+      MaterialApp(home: LocalApiControlPage(manager: manager)),
+    );
+    await tester.pumpAndSettle();
+
+    final action = find.text('ถอน Service').first;
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('ถอนการลงทะเบียน Windows Service เท่านั้น'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('ยกเลิก'));
+    await tester.pumpAndSettle();
+    expect(manager.uninstallCalls, 0);
+  });
+
+  testWidgets('uninstall runs only after acknowledgement is checked',
+      (tester) async {
+    final manager = _FakeLocalApiManager();
+    await tester.pumpWidget(
+      MaterialApp(home: LocalApiControlPage(manager: manager)),
+    );
+    await tester.pumpAndSettle();
+
+    final action = find.text('ถอน Service').first;
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    final confirmButton = find.ancestor(
+      of: find.text('ถอน Service').last,
+      matching: find.byType(OutlinedButton),
+    ).first;
+    expect(tester.widget<OutlinedButton>(confirmButton).onPressed, isNull);
+
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    expect(tester.widget<OutlinedButton>(confirmButton).onPressed, isNotNull);
+
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+    expect(manager.uninstallCalls, 1);
+  });
+}
