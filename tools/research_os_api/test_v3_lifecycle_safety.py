@@ -75,6 +75,21 @@ class V3LifecycleSafetyTests(unittest.TestCase):
         self.assertIn("refusing to terminate unrelated listeners", source)
         self.assertIn("data_preserved", source)
 
+    def test_candidate_and_windows_service_expect_the_full_master_contract(self):
+        candidate = CANDIDATE.read_text(encoding="utf-8")
+        clean_core = CLEAN_CORE_WORKFLOW.read_text(encoding="utf-8")
+        expected = "unified-master-orchestrator-v3-full"
+        self.assertIn(expected, candidate)
+        self.assertIn(expected, clean_core)
+        self.assertNotIn("unified-master-orchestrator-v3-clean", candidate)
+        self.assertNotIn("unified-master-orchestrator-v3-clean", clean_core)
+
+    def test_service_cancels_worker_before_stopping_child_process(self):
+        service_host = ROOT / "v3" / "windows_service" / "Program.cs"
+        source = service_host.read_text(encoding="utf-8")
+        stop_method = source[source.index("public override async Task StopAsync"):source.index("public override void Dispose")]
+        self.assertLess(stop_method.index("await base.StopAsync(cancellationToken)"), stop_method.index("await StopChildProcessAsync(CancellationToken.None)"))
+
 
 if __name__ == "__main__":
     unittest.main()
