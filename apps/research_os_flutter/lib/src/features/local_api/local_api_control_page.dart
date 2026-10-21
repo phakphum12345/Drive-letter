@@ -4,14 +4,17 @@ import '../../platform/local_api_manager.dart';
 import '../../ui/enterprise_components.dart';
 
 class LocalApiControlPage extends StatefulWidget {
-  const LocalApiControlPage({super.key});
+  const LocalApiControlPage({super.key, this.manager});
+
+  @visibleForTesting
+  final LocalApiManager? manager;
 
   @override
   State<LocalApiControlPage> createState() => _LocalApiControlPageState();
 }
 
 class _LocalApiControlPageState extends State<LocalApiControlPage> {
-  final LocalApiManager _manager = const LocalApiManager();
+  LocalApiManager get _manager => widget.manager ?? const LocalApiManager();
   bool _busy = false;
   LocalApiCommandResult? _lastResult;
 
@@ -35,6 +38,88 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
         SnackBar(content: Text(result.ok ? 'สำเร็จ: ${result.message}' : 'ไม่สำเร็จ: ${result.message}')),
       );
     }
+  }
+
+  Future<void> _confirmServiceAction({
+    required String label,
+    required String explanation,
+    required String impact,
+    required Future<LocalApiCommandResult> Function() command,
+  }) async {
+    var confirmed = false;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('ยืนยัน$label'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(explanation),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(impact),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: confirmed,
+                  onChanged: (value) =>
+                      setDialogState(() => confirmed = value == true),
+                  title: const Text(
+                    'ฉันตรวจสอบขอบเขตและยืนยันให้ดำเนินการนี้',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('ยกเลิก'),
+            ),
+            FilledButton(
+              onPressed: confirmed
+                  ? () => Navigator.of(dialogContext).pop(true)
+                  : null,
+              child: Text(label),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted == true && mounted) await _run(command);
+  }
+
+  Widget _guardedServiceButton({
+    required IconData icon,
+    required String label,
+    required String explanation,
+    required String impact,
+    required Future<LocalApiCommandResult> Function() command,
+    bool filled = false,
+  }) {
+    final onPressed = _busy || !_manager.supported
+        ? null
+        : () => _confirmServiceAction(
+              label: label,
+              explanation: explanation,
+              impact: impact,
+              command: command,
+            );
+    return filled
+        ? FilledButton.icon(onPressed: onPressed, icon: Icon(icon), label: Text(label))
+        : OutlinedButton.icon(onPressed: onPressed, icon: Icon(icon), label: Text(label));
   }
 
   Widget _actionButton({
@@ -94,12 +179,25 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
                     spacing: 10,
                     runSpacing: 10,
                     children: <Widget>[
-                      _actionButton(icon: Icons.download_for_offline_outlined, label: 'ติดตั้ง Service', command: _manager.installService, filled: true),
+                      _guardedServiceButton(
+                        icon: Icons.download_for_offline_outlined,
+                        label: 'ติดตั้ง Service',
+                        explanation: 'คำสั่งนี้ติดตั้งเฉพาะ Windows Service ResearchOSService ไม่ใช่ตัวติดตั้งแอป Research OS ทั้งชุด',
+                        impact: 'ตรวจสอบก่อน: เปิด UAC เพื่อขอสิทธิ์ Administrator และใช้ไฟล์ ServiceHost/สคริปต์จากโฟลเดอร์ของ repository ที่พบจริง หากแหล่งไฟล์หรือ SHA ยังไม่ยืนยัน ให้ยกเลิกและตรวจแพ็กเกจก่อน',
+                        command: _manager.installService,
+                        filled: true,
+                      ),
                       _actionButton(icon: Icons.play_arrow, label: 'Start', command: _manager.startService),
                       _actionButton(icon: Icons.stop, label: 'Stop', command: _manager.stopService),
                       _actionButton(icon: Icons.restart_alt, label: 'Restart', command: _manager.restartService),
                       _actionButton(icon: Icons.monitor_heart_outlined, label: 'Status', command: _manager.serviceStatus),
-                      _actionButton(icon: Icons.delete_outline, label: 'ถอน Service', command: _manager.uninstallService),
+                      _guardedServiceButton(
+                        icon: Icons.delete_outline,
+                        label: 'ถอน Service',
+                        explanation: 'คำสั่งนี้ถอนการลงทะเบียน Windows Service เท่านั้น ไม่ใช่การถอนแอปทั้งชุด',
+                        impact: 'การถอนอาจหยุดบริการที่เกี่ยวข้องได้ อย่าดำเนินการระหว่างมีงานสำคัญ และอย่าลบหรือย้ายข้อมูลใน ProgramData ด้วยตนเอง',
+                        command: _manager.uninstallService,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
