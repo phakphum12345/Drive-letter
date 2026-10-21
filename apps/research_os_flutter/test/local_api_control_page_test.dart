@@ -29,20 +29,6 @@ class _FakeLocalApiManager extends LocalApiManager {
   }
 }
 
-Future<void> _openServiceDialog(
-  WidgetTester tester,
-  String actionLabel,
-) async {
-  await tester.pumpWidget(
-    MaterialApp(home: LocalApiControlPage(manager: _FakeLocalApiManager())),
-  );
-  await tester.pumpAndSettle();
-  final action = find.text(actionLabel).first;
-  await tester.ensureVisible(action);
-  await tester.tap(action);
-  await tester.pumpAndSettle();
-}
-
 void main() {
   testWidgets('install requires acknowledgement and cancel has no side effect',
       (tester) async {
