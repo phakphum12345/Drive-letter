@@ -386,7 +386,7 @@ jobs:
               "signing": "simulator-build; not an iOS device IPA",
           }
           Path(os.environ["MANIFEST_PATH"]).write_text(
-              json.dumps(manifest, indent=2, sort_keys=True) + "\\n",
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
           print(f"IOS_SIMULATOR_SOURCE_SHA={manifest['source_sha']}")
