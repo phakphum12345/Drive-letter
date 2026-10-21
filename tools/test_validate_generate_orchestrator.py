@@ -54,7 +54,7 @@ class GenerateOrchestratorInputTests(unittest.TestCase):
             ".github/workflows/generate-orchestrator.yml",
         ):
             source = (root / relative).read_text(encoding="utf-8")
-            refs = re.findall(r"uses:\\s*actions/upload-artifact@([^\\s#]+)", source)
+            refs = re.findall(r"uses:\s*actions/upload-artifact@([^\s#]+)", source)
             self.assertTrue(refs, f"{relative} must declare its artifact upload action")
             for ref in refs:
                 self.assertRegex(
