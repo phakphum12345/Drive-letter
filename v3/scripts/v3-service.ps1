@@ -75,13 +75,64 @@ function Assert-V3OwnedLoopbackListener {
 
 function Remove-V3Service {
     $serviceRecord = Get-V3ServiceRecord
+    $ownedListenerSnapshots = @()
     if ($serviceRecord) {
         Assert-V3ServiceOwnership $serviceRecord
+        # Snapshot only listeners proven to be descendants of this exact service
+        # and running the expected bundled/installed Python entrypoint. This is
+        # used only if Windows service shutdown leaves that same process alive.
+        if ($serviceRecord.State -eq 'Running' -and [int]$serviceRecord.ProcessId -gt 0) {
+            $listenersBeforeStop = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+            foreach ($listener in $listenersBeforeStop) {
+                $listenerPid = [int]$listener.OwningProcess
+                if ($listener.LocalAddress -ne '127.0.0.1' -or
+                    -not (Test-V3ProcessDescendant -ProcessId $listenerPid -AncestorProcessId ([int]$serviceRecord.ProcessId))) {
+                    continue
+                }
+                $processRecord = Get-CimInstance Win32_Process -Filter "ProcessId = $listenerPid" -ErrorAction SilentlyContinue
+                if (-not $processRecord -or
+                    -not [string]::Equals([string]$processRecord.ExecutablePath, [System.IO.Path]::GetFullPath($pythonExe), [System.StringComparison]::OrdinalIgnoreCase) -or
+                    ([string]$processRecord.CommandLine -notmatch [regex]::Escape([System.IO.Path]::GetFullPath((Join-Path $v3Root 'scripts\\run_service.py'))))) {
+                    continue
+                }
+                $ownedListenerSnapshots += [pscustomobject]@{
+                    ProcessId = $listenerPid
+                    CreationDate = [string]$processRecord.CreationDate
+                    ExecutablePath = [string]$processRecord.ExecutablePath
+                    CommandLine = [string]$processRecord.CommandLine
+                }
+            }
+        }
         $service = Get-Service -Name $ServiceName -ErrorAction Stop
         if ($service.Status -ne 'Stopped') {
             Stop-Service -Name $ServiceName -Force -ErrorAction Stop
             $service = Get-Service -Name $ServiceName -ErrorAction Stop
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+        }
+        # A service stop can leave its verified Python listener alive on some
+        # Windows shutdown paths. Revalidate PID plus creation time, image and
+        # command line before stopping it; never act on a port/PID alone.
+        foreach ($snapshot in $ownedListenerSnapshots) {
+            $current = Get-CimInstance Win32_Process -Filter "ProcessId = $($snapshot.ProcessId)" -ErrorAction SilentlyContinue
+            if (-not $current) { continue }
+            $sameProcess = ([string]$current.CreationDate -eq $snapshot.CreationDate) -and
+                [string]::Equals([string]$current.ExecutablePath, $snapshot.ExecutablePath, [System.StringComparison]::OrdinalIgnoreCase) -and
+                [string]::Equals([string]$current.CommandLine, $snapshot.CommandLine, [System.StringComparison]::Ordinal)
+            if (-not $sameProcess) {
+                throw "Refusing to stop PID $($snapshot.ProcessId): process identity changed after service shutdown"
+            }
+            $stillListening = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { [int]$_.OwningProcess -eq [int]$snapshot.ProcessId -and $_.LocalAddress -eq '127.0.0.1' })
+            if ($stillListening.Count -gt 0) {
+                Stop-Process -Id ([int]$snapshot.ProcessId) -Force -ErrorAction Stop
+                for ($attempt = 0; $attempt -lt 40; $attempt++) {
+                    if (-not (Get-CimInstance Win32_Process -Filter "ProcessId = $($snapshot.ProcessId)" -ErrorAction SilentlyContinue)) { break }
+                    Start-Sleep -Milliseconds 250
+                }
+                if (Get-CimInstance Win32_Process -Filter "ProcessId = $($snapshot.ProcessId)" -ErrorAction SilentlyContinue) {
+                    throw "Verified V3 listener PID $($snapshot.ProcessId) remained after targeted cleanup"
+                }
+            }
         }
         $deleteOutput = sc.exe delete $ServiceName 2>&1
         if ($LASTEXITCODE -ne 0 -and ($deleteOutput -join ' ') -notmatch 'marked for deletion') {
