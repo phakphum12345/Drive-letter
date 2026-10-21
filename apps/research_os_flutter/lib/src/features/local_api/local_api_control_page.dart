@@ -4,14 +4,17 @@ import '../../platform/local_api_manager.dart';
 import '../../ui/enterprise_components.dart';
 
 class LocalApiControlPage extends StatefulWidget {
-  const LocalApiControlPage({super.key});
+  const LocalApiControlPage({super.key, this.manager});
+
+  @visibleForTesting
+  final LocalApiManager? manager;
 
   @override
   State<LocalApiControlPage> createState() => _LocalApiControlPageState();
 }
 
 class _LocalApiControlPageState extends State<LocalApiControlPage> {
-  final LocalApiManager _manager = const LocalApiManager();
+  LocalApiManager get _manager => widget.manager ?? const LocalApiManager();
   bool _busy = false;
   LocalApiCommandResult? _lastResult;
 
