@@ -117,6 +117,9 @@ jobs:
           PYTHONPATH: v3
         run: python -c "import research_os_v3; print('research_os_v3 import OK')"
 
+      - name: Verify Flutter scope gate contract
+        run: python tools/aeos/test_final_gate_flutter_scope.py
+
   flutter-gate:
     name: Legacy Flutter Windows scope-aware validation
     needs: detect-flutter-scope
