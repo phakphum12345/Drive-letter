@@ -101,6 +101,20 @@
     "failed_verification_must_not_install": true,
     "failed_install_must_not_advertise_ready": true,
     "staging_must_be_disposable": true,
-    "rollback_must_preserve_user_data": true
+    "rollback_must_preserve_user_data": true,
+    "windows_runtime_auto_recovery": {
+      "entrypoint": "tools/recover-research-os-runtime.ps1",
+      "invoked_before_api_python_start": true,
+      "source_bound_platform_zip_required": true,
+      "distribution_manifest_sha256_required": true,
+      "runtime_file_sha256_verification_required": true,
+      "scope": ["runtime/python/**", "tools/**", "v3/**", "current/**", "platform/**"],
+      "must_not_stop_processes": true,
+      "must_not_modify_user_data": true,
+      "failed_verification_or_repair": "RECOVERY_BLOCKED",
+      "failed_recovery_must_block_api_startup": true,
+      "unresolved_partial_repair_requires_manual_review": true,
+      "release_authority": "FINAL_GATE"
+    }
   }
 }
