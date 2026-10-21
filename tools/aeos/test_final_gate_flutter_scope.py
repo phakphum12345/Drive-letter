@@ -28,7 +28,8 @@ class FinalGateFlutterScopeTests(unittest.TestCase):
         self.assertIn("v3/flutter_app/", self.source)
         self.assertIn("packages/research_os_contracts/", self.source)
         self.assertIn(".github/actions/flutter-setup/", self.source)
-        self.assertIn(r"research-os-final-gate\.yml", self.source)
+        self.assertIn("research-os-final-gate|v3-candidate|v3-clean-core", self.source)
+        self.assertIn(r")\\.yml$", self.source)
 
     def test_irrelevant_scope_has_explicit_report_step(self):
         expected = (
