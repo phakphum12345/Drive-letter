@@ -46,6 +46,10 @@ sealed class ResearchOsApiWorker : BackgroundService
         var stdoutPath = Path.Combine(dataDir, "logs", "service-api.out.log");
         var stderrPath = Path.Combine(dataDir, "logs", "service-api.err.log");
 
+        // Verify the packaged Runtime against its source-bound distribution ZIP
+        // before starting Python. This repairs only manifest-listed Runtime files.
+        RunRuntimeRecovery(repoRoot, dataDir, _logger);
+
         _logger.LogInformation("Research OS root: {RepoRoot}", repoRoot);
         _logger.LogInformation("Research OS Python: {PythonExe}", pythonExe);
         _logger.LogInformation("Research OS data: {DataDir}", dataDir);
@@ -194,6 +198,70 @@ sealed class ResearchOsApiWorker : BackgroundService
         finally
         {
             _processStopLock.Release();
+        }
+    }
+
+    private static void RunRuntimeRecovery(string repoRoot, string dataDir, ILogger logger)
+    {
+        var recoveryScript = Path.Combine(repoRoot, "tools", "recover-research-os-runtime.ps1");
+        if (!File.Exists(recoveryScript))
+        {
+            logger.LogWarning("Runtime recovery helper is missing; automatic integrity repair is unavailable: {Path}", recoveryScript);
+            return;
+        }
+
+        var systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var powershell = Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        if (!File.Exists(powershell))
+        {
+            throw new FileNotFoundException("Runtime recovery requires Windows PowerShell.", powershell);
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = powershell,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var argument in new[]
+        {
+            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+            "-File", recoveryScript, "-InstallRoot", repoRoot, "-DataDir", dataDir
+        })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var recovery = new Process { StartInfo = startInfo };
+        if (!recovery.Start())
+        {
+            throw new InvalidOperationException("Failed to start the Runtime recovery helper.");
+        }
+
+        var stdout = recovery.StandardOutput.ReadToEndAsync();
+        var stderr = recovery.StandardError.ReadToEndAsync();
+        if (!recovery.WaitForExit(60_000))
+        {
+            try { recovery.Kill(entireProcessTree: true); } catch { }
+            throw new TimeoutException("Runtime recovery exceeded the 60-second startup budget.");
+        }
+
+        Task.WaitAll(stdout, stderr);
+        foreach (var line in stdout.Result.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            logger.LogInformation("Runtime recovery: {RecoveryOutput}", line);
+        }
+        foreach (var line in stderr.Result.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            logger.LogWarning("Runtime recovery: {RecoveryError}", line);
+        }
+
+        if (recovery.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Runtime recovery failed closed with exit code {recovery.ExitCode}; API startup is blocked.");
         }
     }
 
