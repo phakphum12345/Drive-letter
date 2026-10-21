@@ -46,9 +46,9 @@ sealed class ResearchOsApiWorker : BackgroundService
         var stdoutPath = Path.Combine(dataDir, "logs", "service-api.out.log");
         var stderrPath = Path.Combine(dataDir, "logs", "service-api.err.log");
 
-        // Verify the packaged Runtime against its source-bound distribution ZIP
-        // before starting Python. This repairs only manifest-listed Runtime files.
-        RunRuntimeRecovery(repoRoot, dataDir, _logger);
+        // Do not hash the full distribution manifest before every API startup.
+        // Recovery is deferred until the child exits unexpectedly, so a full
+        // integrity scan cannot consume the health-check startup budget.
 
         _logger.LogInformation("Research OS root: {RepoRoot}", repoRoot);
         _logger.LogInformation("Research OS Python: {PythonExe}", pythonExe);
@@ -121,7 +121,11 @@ sealed class ResearchOsApiWorker : BackgroundService
 
         if (!stoppingToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException($"Research OS API exited unexpectedly with code {_process?.ExitCode}.");
+            // The child has exited, so the recovery helper can safely inspect and
+            // replace manifest-listed files without racing a live API process.
+            // A successful repair is followed by the existing SCM service restart.
+            RunRuntimeRecovery(repoRoot, dataDir, _logger);
+            throw new InvalidOperationException($"Research OS API exited unexpectedly with code {_process?.ExitCode}; Runtime recovery was attempted.");
         }
     }
 
