@@ -20,9 +20,17 @@ class FinalGateFlutterScopeTests(unittest.TestCase):
 
     def test_scope_aware_job_is_not_skipped_at_job_level(self):
         header = self.job.split("    steps:\n", 1)[0]
-        self.assertIn("name: Legacy Flutter Windows scope-aware validation", header)
+        self.assertIn("name: Flutter Windows build analyze test", header)
         self.assertIn("needs: detect-flutter-scope", header)
         self.assertNotIn("    if:", header)
+
+    def test_scope_detector_covers_authoritative_legacy_flutter_inputs(self):
+        detector = self.source.split("      - name: Detect V3 Flutter compatibility changes\\n", 1)[1]
+        detector = detector.split("\\n  python-gate:", 1)[0]
+        self.assertIn("v3/flutter_app/", detector)
+        self.assertIn("packages/research_os_contracts/", detector)
+        self.assertIn(".github/actions/flutter-setup/", detector)
+        self.assertIn(".github/workflows/research-os-final-gate\\\\.yml", detector)
 
     def test_irrelevant_scope_has_explicit_successful_report_step(self):
         expected = (
