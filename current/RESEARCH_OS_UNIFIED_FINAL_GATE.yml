@@ -112,10 +112,13 @@ required_workflows:
 
 required_surface_contracts:
   - apps/research_os_flutter/lib/src/ui/enterprise_navigation.dart
+  - apps/research_os_flutter/lib/src/ui/research_os_feature_color_system.dart
+  - apps/research_os_flutter/test/research_os_feature_color_system_test.dart
   - apps/research_os_flutter/test/platform_surface_parity_test.dart
   - apps/research_os_flutter/test/desktop_shell_test.dart
   - tools/validate_research_os_capability_convergence.py
   - tools/test_validate_research_os_capability_convergence.py
+  - tools/validate_research_os_feature_color_system.py
   - tools/validate_research_os_identity_access_wave1.py
   - tools/test_validate_research_os_identity_access_wave1.py
   - tools/validate_research_os_platform_one_pass.py
