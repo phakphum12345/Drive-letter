@@ -86,6 +86,26 @@ jobs:
             echo "LEGACY_FLUTTER_WINDOWS=SKIP_UNRELATED_CHANGES"
           fi
 
+
+  flutter-windows-scope-waiver:
+    name: Flutter Windows validation not applicable (scope-verified)
+    needs: detect-flutter-scope
+    if: needs.detect-flutter-scope.outputs.run_flutter != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Certify explicit non-applicability decision
+        shell: bash
+        env:
+          RUN_FLUTTER: ${{ needs.detect-flutter-scope.outputs.run_flutter }}
+        run: |
+          set -euo pipefail
+          test "$RUN_FLUTTER" = "false"
+          echo "SCOPE_WAIVER=VERIFIED"
+          echo "WAIVED_CHECK=Flutter Windows build analyze test"
+          echo "REASON=No changed paths matched the legacy V3 Flutter Windows compatibility scope."
+          echo "This job is evidence of non-applicability, not a Windows build pass."
+
   python-gate:
     name: Python build test analyze e2e
     runs-on: ubuntu-latest
