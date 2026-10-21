@@ -123,12 +123,19 @@ class WindowsServiceRuntimeAutoRecoveryContractTests(unittest.TestCase):
         cls.recovery = (ROOT / "recover-research-os-runtime.ps1").read_text(encoding="utf-8")
         cls.service_host = (ROOT / "research_os_service" / "Program.cs").read_text(encoding="utf-8")
 
-    def test_service_host_verifies_runtime_before_starting_python(self) -> None:
-        self.assertIn("RunRuntimeRecovery(repoRoot, dataDir, _logger);", self.service_host)
+    def test_deep_recovery_does_not_block_initial_api_startup(self) -> None:
+        recovery_call = "RunRuntimeRecovery(repoRoot, dataDir, _logger);"
+        self.assertEqual(self.service_host.count(recovery_call), 1)
         self.assertLess(
-            self.service_host.index("RunRuntimeRecovery(repoRoot, dataDir, _logger);"),
             self.service_host.index("if (!_process.Start())"),
+            self.service_host.index("await exitTask;"),
         )
+        self.assertLess(
+            self.service_host.index("await exitTask;"),
+            self.service_host.index(recovery_call),
+        )
+        self.assertIn("child has exited", self.service_host)
+        self.assertIn("existing SCM service restart", self.service_host)
         self.assertIn("recovery.ExitCode != 0", self.service_host)
         self.assertIn("API startup is blocked", self.service_host)
 
