@@ -116,5 +116,56 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
         self.assertNotIn("RELEASE_CERTIFIED=TRUE", self.source)
 
 
+
+class WindowsServiceRuntimeAutoRecoveryContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.recovery = (ROOT / "recover-research-os-runtime.ps1").read_text(encoding="utf-8")
+        cls.service_host = (ROOT / "research_os_service" / "Program.cs").read_text(encoding="utf-8")
+
+    def test_service_host_verifies_runtime_before_starting_python(self) -> None:
+        self.assertIn("RunRuntimeRecovery(repoRoot, dataDir, _logger);", self.service_host)
+        self.assertLess(
+            self.service_host.index("RunRuntimeRecovery(repoRoot, dataDir, _logger);"),
+            self.service_host.index("if (!_process.Start())"),
+        )
+        self.assertIn("recovery.ExitCode != 0", self.service_host)
+        self.assertIn("API startup is blocked", self.service_host)
+
+    def test_recovery_requires_source_bound_zip_and_manifest_hashes(self) -> None:
+        for marker in (
+            "OWNER_SPECIAL_PLATFORM_INSTALL_PROVENANCE.json",
+            "platform_zip_sha256",
+            "distribution_manifest_sha256",
+            "DISTRIBUTION_MANIFEST.json",
+            "DISTRIBUTION_MANIFEST.sha256",
+            "Get-Sha256 $zipPath",
+            "RECOVERY_BLOCKED",
+            "source_sha",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.recovery)
+
+    def test_recovery_is_runtime_only_and_fail_closed(self) -> None:
+        for marker in (
+            "'runtime/python/'",
+            "'tools/'",
+            "'v3/'",
+            "'current/'",
+            "'platform/'",
+            "runtime-recovery-attempt.json",
+            "a previous recovery attempt",
+            "no process was stopped",
+            "user_data_modified = $false",
+            "Get-CimInstance Win32_Process",
+            "post-repair verification failed",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.recovery)
+        self.assertNotIn("Expand-Archive", self.recovery)
+        self.assertNotIn("Stop-Process", self.recovery)
+        self.assertNotIn("Stop-Service", self.recovery)
+        self.assertNotIn("sc.exe delete", self.recovery)
+
 if __name__ == "__main__":
     unittest.main()
