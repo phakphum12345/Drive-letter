@@ -206,7 +206,7 @@ try {
     Record-Evidence 'loopback_binding' @{ binding = '127.0.0.1'; port = $port }
 
     $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5
-    if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {
+    if ($master.contract -ne 'unified-master-orchestrator-v3-full') {
         throw 'Installed V3 master contract is invalid'
     }
     if ($master.scale -ne '6^3' -or [int]$master.maximum_leaf_capacity -ne 216) {
