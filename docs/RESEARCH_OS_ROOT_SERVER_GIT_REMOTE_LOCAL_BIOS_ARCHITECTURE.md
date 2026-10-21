@@ -182,3 +182,81 @@ Allowed results: `PASS`, `FAIL`, `SKIPPED_JUSTIFIED`, `BLOCKED_EVIDENCE`, `NOT_R
 ## Revision history
 
 - 1.0.0 — Initial evidence-first architecture proposal; no machine, service, disk, or firmware changes performed.
+
+## 11. Change-safety contract — prevent incorrect edits
+
+This section is a mandatory change-control contract for edits to this architecture document and for any implementation proposed from it. It is designed to prevent an edit made to the wrong file, wrong branch, wrong source revision, or wrong system layer from silently becoming an operational change.
+
+### 11.1 Scope is explicit
+
+- This PR is documentation-only. It may clarify architecture, evidence requirements, safety boundaries, and review criteria.
+- Do not add or modify application code, UI implementation, runtime recovery behavior, service scripts, CI/workflow skip rules, release packaging, installer behavior, disk-repair logic, or BIOS/UEFI settings in this PR.
+- The proposed Architecture & Evidence UI must be implemented in a separate PR after inspecting the existing UI, API, and contracts. Reuse existing components and contracts; do not create a parallel dashboard or invent APIs.
+- A documentation statement is not proof that a check ran, a file is correct, a host is healthy, or an operation is authorized.
+
+### 11.2 Pre-edit identity checks — stop if any check is uncertain
+
+Before changing this file:
+
+1. Confirm repository is `phakphum12345/Drive-letter`, branch is `docs/root-server-git-remote-local-bios-architecture`, and the intended PR is #34.
+2. Record the current full head SHA and fetch the file from that exact SHA. Do not rely on a branch name, cached local copy, editor tab, or a similarly named file.
+3. Confirm the exact path is `docs/RESEARCH_OS_ROOT_SERVER_GIT_REMOTE_LOCAL_BIOS_ARCHITECTURE.md`.
+4. Inspect the complete current content and the relevant existing contracts/scripts before changing any technical claim.
+5. Confirm the working diff contains only the intended change. If the branch/head/file identity cannot be proven, stop and report `BLOCKED_EVIDENCE`; do not guess or recreate content from memory.
+
+### 11.3 Safe editing rules
+
+- Make the smallest targeted edit possible. Prefer a new, clearly titled subsection over rewriting unrelated sections.
+- Preserve existing evidence, dates, SHA values, artifact names, caveats, and revision history unless the source of truth proves a correction is needed. Never silently replace historical observations with current-state claims.
+- Do not use broad search-and-replace for paths, hashes, branch names, port numbers, status values, or security settings. Inspect the surrounding text and intended meaning first.
+- Preserve Windows path literals exactly. In Markdown inline code, use the intended literal path, for example `C:\ProgramData\ResearchOS`; do not introduce extra backslashes or remove them without checking the rendered source and intended path.
+- Separate facts observed from live evidence, historical observations, assumptions, recommendations, and unverified proposals. Include the observation time and exact SHA where relevant.
+- Do not weaken a safety rule to make a check pass. A skipped, missing, stale, or mismatched check must not be relabelled as `PASS`.
+- Do not paste secrets, tokens, private keys, personal identifiers, or sensitive machine output into this document.
+
+### 11.4 Protected operations — documentation is not permission
+
+No edit to this document, successful CI run, or UI status grants permission to perform these actions:
+
+- delete, overwrite, relocate, or reset persistent data, including `C:\ProgramData\ResearchOS`;
+- uninstall, stop, restart, or replace a service; terminate a process by a remembered PID; change ports, firewall rules, or listener exposure;
+- overwrite an install root, EFI/system partition, boot entry, BIOS/UEFI setting, Secure Boot setting, or firmware;
+- install or promote an artifact whose repository, source SHA, workflow run, archive digest, inner package SHA256, manifest, or per-file verification does not match;
+- merge, release, or deploy based solely on a green summary, a branch name, or a subset of checks.
+
+Such actions require a separate, reviewed operational plan, fresh read-only evidence, verified recovery/backup where relevant, explicit authorization, and the existing `FINAL_GATE` release decision. BIOS/UEFI inspection remains read-only unless a separate explicitly approved change procedure exists.
+
+### 11.5 Post-edit verification — exact-SHA evidence
+
+After each change:
+
+1. Read the committed file back from the new commit SHA and confirm the intended section and all unaffected content remain present.
+2. Inspect the full diff against the previous head; verify path, additions, deletions, whitespace, Windows paths, hashes, and Markdown fences/tables.
+3. Confirm no unrelated file changed and no code, workflow, service, runtime, storage, or firmware operation was performed.
+4. Run the repository-required checks for the new exact SHA. Report each check as `PASS`, `FAIL`, `SKIPPED_JUSTIFIED`, `BLOCKED_EVIDENCE`, or `NOT_RUN`; include the run/SHA and justification for any skip.
+5. Re-check the current base/main SHA and PR status before proposing merge. A previous green result on an older SHA is not evidence for the new SHA.
+6. Keep this PR in Draft until the document, contracts, and referenced scripts have been reviewed and the required evidence is complete. Do not merge as part of a documentation edit.
+
+### 11.6 Error response and recovery
+
+If the wrong file, branch, SHA, or scope is discovered—or an edit changes an unrelated behavior:
+
+1. Stop further writes immediately; do not stack a second speculative fix on top.
+2. Preserve the failed diff, commit SHA, tool output, and relevant check results as evidence.
+3. Identify the last known-good file/commit from Git history and compare it with the erroneous change.
+4. Propose a minimal revert or correction on the same review branch; do not force-push, reset shared history, delete data, or overwrite a user's local work without explicit authorization.
+5. Re-read the corrected file and re-run all required checks on the new exact SHA. Do not claim recovery until read-back and checks prove it.
+6. If source identity or recovery evidence is unavailable, mark `BLOCKED_EVIDENCE` and request the missing authoritative source instead of reconstructing it from assumptions.
+
+### 11.7 Acceptance checklist for every edit
+
+- [ ] Correct repository, PR, branch, path, and full starting SHA verified.
+- [ ] Existing file content and related contracts/scripts inspected before editing.
+- [ ] Change is minimal and within the declared documentation-only scope.
+- [ ] Historical facts remain dated and are not presented as fresh observations.
+- [ ] Persistent data, service state, network exposure, and BIOS/UEFI settings are unchanged.
+- [ ] Full diff and committed-file read-back confirm no accidental or unrelated edits.
+- [ ] Required checks refer to the new exact SHA; skips and missing evidence are explicit.
+- [ ] PR remains unmerged until review and `FINAL_GATE` requirements are satisfied.
+
+
