@@ -53,6 +53,7 @@ class ExternalValidationPlaneTests(unittest.TestCase):
                 timeout=120,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(f"EVIDENCE={output.as_posix()}", result.stdout)
             evidence = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(evidence["source_sha"], sha)
             self.assertEqual(evidence["status"], "PASS")
