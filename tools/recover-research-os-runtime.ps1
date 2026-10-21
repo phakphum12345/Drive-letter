@@ -132,9 +132,10 @@ try {
 
         $processes = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
             $exe = [string]$_.ExecutablePath
+            $commandLine = [string]$_.CommandLine
+            $usesInstallRoot = $commandLine -and ($commandLine.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0)
             ($exe -and $exe.StartsWith((Join-Path $root 'runtime\python').TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) -or
-            ([string]$_.CommandLine -and [string]$_.CommandLine.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-             [string]$_.CommandLine -match '(?i)(server\.py|run_friend_service\.py)')
+            ($usesInstallRoot -and $commandLine -match '(?i)(server\.py|run_friend_service\.py)')
         } | ForEach-Object {
             [pscustomobject]@{ process_id = [int]$_.ProcessId; name = [string]$_.Name }
         })
