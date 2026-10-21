@@ -44,6 +44,25 @@ class GenerateOrchestratorInputTests(unittest.TestCase):
             [],
         )
 
+    def test_artifact_upload_actions_are_pinned_to_full_commit_shas(self):
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1]
+        for relative in (
+            ".github/workflows/final-gate.yml",
+            ".github/workflows/generate-orchestrator.yml",
+        ):
+            source = (root / relative).read_text(encoding="utf-8")
+            refs = re.findall(r"uses:\\s*actions/upload-artifact@([^\\s#]+)", source)
+            self.assertTrue(refs, f"{relative} must declare its artifact upload action")
+            for ref in refs:
+                self.assertRegex(
+                    ref,
+                    r"^[0-9a-f]{40}$",
+                    f"{relative} has an unpinned artifact upload action ref: {ref}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
