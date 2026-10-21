@@ -70,6 +70,8 @@ jobs:
 
       - name: Run V3 Clean unit tests
         working-directory: v3
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         shell: bash
         run: |
           set -euo pipefail
