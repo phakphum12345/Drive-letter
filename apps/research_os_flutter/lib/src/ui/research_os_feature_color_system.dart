@@ -57,7 +57,7 @@ class ResearchOSFeatureColorSystem {
   static const workspace = ResearchOSFeatureStyle(
     id: 'workspace',
     label: 'Workspace',
-    color: Color(0xFF2563EB),
+    color: Color(0xFF64748B),
     icon: Icons.dashboard_outlined,
   );
   static const unclassified = ResearchOSFeatureStyle(
