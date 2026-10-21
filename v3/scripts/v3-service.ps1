@@ -92,7 +92,7 @@ function Remove-V3Service {
                 $processRecord = Get-CimInstance Win32_Process -Filter "ProcessId = $listenerPid" -ErrorAction SilentlyContinue
                 if (-not $processRecord -or
                     -not [string]::Equals([string]$processRecord.ExecutablePath, [System.IO.Path]::GetFullPath($pythonExe), [System.StringComparison]::OrdinalIgnoreCase) -or
-                    ([string]$processRecord.CommandLine -notmatch [regex]::Escape([System.IO.Path]::GetFullPath((Join-Path $v3Root 'scripts\\run_service.py'))))) {
+                    ([string]$processRecord.CommandLine -notmatch [regex]::Escape([System.IO.Path]::GetFullPath((Join-Path $v3Root 'scripts\run_service.py'))))) {
                     continue
                 }
                 $ownedListenerSnapshots += [pscustomobject]@{
