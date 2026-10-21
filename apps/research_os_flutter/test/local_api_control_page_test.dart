@@ -39,11 +39,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ติดตั้ง Service').first;
-    await tester.scrollUntilVisible(
-      action,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -71,11 +68,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ติดตั้ง Service').first;
-    await tester.scrollUntilVisible(
-      action,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -101,11 +95,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ถอน Service').first;
-    await tester.scrollUntilVisible(
-      action,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -127,11 +118,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ถอน Service').first;
-    await tester.scrollUntilVisible(
-      action,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -139,11 +127,11 @@ void main() {
       of: find.byType(AlertDialog),
       matching: find.byType(FilledButton),
     );
-    expect(tester.widget<OutlinedButton>(confirmButton).onPressed, isNull);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
 
     await tester.tap(find.byType(CheckboxListTile));
     await tester.pumpAndSettle();
-    expect(tester.widget<OutlinedButton>(confirmButton).onPressed, isNotNull);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
 
     await tester.tap(confirmButton);
     await tester.pumpAndSettle();
