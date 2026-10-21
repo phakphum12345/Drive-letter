@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 from pathlib import Path
 import tempfile
@@ -134,7 +135,7 @@ class DurableWorkflowEventStoreTests(unittest.TestCase):
             correlation_id="corr-1", causation_id="root", producer="runner",
         )
         self.assertTrue(store.claim_delivery(event.event_id, "consumer-a", lease_seconds=1))
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(
                 "UPDATE event_deliveries SET lease_until=? WHERE event_id=?",
                 ("2000-01-01T00:00:00+00:00", event.event_id),
@@ -149,7 +150,7 @@ class DurableWorkflowEventStoreTests(unittest.TestCase):
         )
         first_token = store.claim_delivery_token(event.event_id, "consumer-a", lease_seconds=1)
         self.assertIsNotNone(first_token)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(
                 "UPDATE event_deliveries SET lease_until=? WHERE event_id=?",
                 ("2000-01-01T00:00:00+00:00", event.event_id),
