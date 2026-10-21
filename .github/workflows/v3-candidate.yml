@@ -88,6 +88,8 @@ jobs:
 
       - name: Validate V3 source before packaging
         working-directory: v3
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v
