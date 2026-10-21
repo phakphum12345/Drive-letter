@@ -39,7 +39,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ติดตั้ง Service').first;
-    await tester.ensureVisible(action);
+    await tester.scrollUntilVisible(
+      action,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -47,10 +51,10 @@ void main() {
       find.textContaining('ติดตั้งเฉพาะ Windows Service ResearchOSService'),
       findsOneWidget,
     );
-    final confirmButton = find.ancestor(
-      of: find.text('ติดตั้ง Service').last,
+    final confirmButton = find.descendant(
+      of: find.byType(AlertDialog),
       matching: find.byType(FilledButton),
-    ).first;
+    );
     expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
 
     await tester.tap(find.text('ยกเลิก'));
@@ -67,16 +71,20 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ติดตั้ง Service').first;
-    await tester.ensureVisible(action);
+    await tester.scrollUntilVisible(
+      action,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(action);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(CheckboxListTile));
     await tester.pumpAndSettle();
-    final confirmButton = find.ancestor(
-      of: find.text('ติดตั้ง Service').last,
+    final confirmButton = find.descendant(
+      of: find.byType(AlertDialog),
       matching: find.byType(FilledButton),
-    ).first;
+    );
     expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
 
     await tester.tap(confirmButton);
@@ -93,7 +101,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ถอน Service').first;
-    await tester.ensureVisible(action);
+    await tester.scrollUntilVisible(
+      action,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(action);
     await tester.pumpAndSettle();
 
@@ -115,14 +127,18 @@ void main() {
     await tester.pumpAndSettle();
 
     final action = find.text('ถอน Service').first;
-    await tester.ensureVisible(action);
+    await tester.scrollUntilVisible(
+      action,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(action);
     await tester.pumpAndSettle();
 
-    final confirmButton = find.ancestor(
-      of: find.text('ถอน Service').last,
-      matching: find.byType(OutlinedButton),
-    ).first;
+    final confirmButton = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(FilledButton),
+    );
     expect(tester.widget<OutlinedButton>(confirmButton).onPressed, isNull);
 
     await tester.tap(find.byType(CheckboxListTile));
