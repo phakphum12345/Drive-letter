@@ -226,12 +226,35 @@ def fetch_external_checks(repository: str, head_sha: str, current_run_id: str) -
     check_runs = paginate(f"https://api.github.com/repos/{repo_path}/commits/{ref}/check-runs?per_page=100", "check_runs")
     statuses = paginate(f"https://api.github.com/repos/{repo_path}/commits/{ref}/status?per_page=100", "statuses")
     external: list[dict[str, Any]] = []
+    # A skipped Windows compatibility job is non-applicable only when a
+    # separate scope-waiver job completed successfully on this exact HEAD.
+    # The waiver job is emitted by the trusted workflow only when its scope
+    # detector explicitly outputs run_flutter=false. A missing, skipped,
+    # failed, or stale-SHA waiver must leave the Windows check unproven.
+    windows_scope_waiver_verified = any(
+        str(item.get("name") or "").strip()
+        == "Flutter Windows validation not applicable (scope-verified)"
+        and str(item.get("status") or "").lower() == "completed"
+        and str(item.get("conclusion") or "").lower() == "success"
+        and item.get("head_sha") == head_sha
+        for item in check_runs
+    )
     for item in check_runs:
         normalized = normalize_check_run(item, current_run_id)
         if normalized:
             normalized = reconcile_pending_job_check(
                 item, normalized, repository, head_sha, current_run_id
             )
+            if (
+                normalized.get("name") == "Flutter Windows build analyze test"
+                and normalized.get("bucket") == "unproven"
+                and normalized.get("state") == "SKIPPED"
+                and windows_scope_waiver_verified
+            ):
+                normalized["bucket"] = "not_applicable"
+                normalized["reason_code"] = (
+                    "SCOPE_VERIFIED_NOT_APPLICABLE: exact-HEAD waiver check succeeded"
+                )
             external.append(normalized)
     for item in statuses:
         normalized = normalize_status_context(item, current_run_id)
