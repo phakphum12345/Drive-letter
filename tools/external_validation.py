@@ -110,7 +110,12 @@ def main() -> int:
     print(f"SOURCE_SHA={args.source_sha}")
     print(f"VALIDATORS={len(results)}")
     print(f"FAILED={','.join(failed) if failed else 'NONE'}")
-    print(f"EVIDENCE={output.relative_to(root).as_posix()}")
+    try:
+        display_path = output.relative_to(root).as_posix()
+    except ValueError:
+        # Evidence may intentionally be written to a caller-owned temp directory.
+        display_path = output.as_posix()
+    print(f"EVIDENCE={display_path}")
     return 0 if status == "PASS" else 1
 
 
