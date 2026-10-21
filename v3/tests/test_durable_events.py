@@ -31,6 +31,17 @@ class DurableWorkflowEventStoreTests(unittest.TestCase):
         self.assertEqual(2, second.sequence)
         self.assertEqual(["task.queued", "task.started"], [item.event_type for item in store.list_events("workflow-1")])
 
+    def test_database_file_can_be_removed_after_store_use(self) -> None:
+        store = DurableWorkflowEventStore(self.path)
+        store.append(
+            "task.queued", workflow_id="workflow-1", task_id="task-1",
+            correlation_id="corr-1", causation_id="root", producer="engine",
+        )
+
+        # On Windows this fails with WinError 32 if a connection is still open.
+        self.path.unlink()
+        self.assertFalse(self.path.exists())
+
     def test_duplicate_event_id_is_idempotent(self) -> None:
         store = DurableWorkflowEventStore(self.path)
         first = store.append(
