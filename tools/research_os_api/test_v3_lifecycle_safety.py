@@ -41,6 +41,19 @@ class V3LifecycleSafetyTests(unittest.TestCase):
         self.assertIn("refusing to terminate unrelated listeners", source)
         self.assertNotIn("catch { }", source[source.index("- name: Final candidate cleanup"):])
 
+    def test_orphan_cleanup_revalidates_exact_process_identity(self):
+        service = SERVICE.read_text(encoding="utf-8")
+        clean_core = CLEAN_CORE_WORKFLOW.read_text(encoding="utf-8")
+        for source in (service, clean_core):
+            self.assertIn("ownedListenerSnapshots", source)
+            self.assertIn("CreationDate", source)
+            self.assertIn("ExecutablePath", source)
+            self.assertIn("CommandLine", source)
+            self.assertIn("Test-V3ProcessDescendant" if source is service else "Test-CIProcessDescendant", source)
+            self.assertIn("process identity changed after", source)
+            self.assertIn("Stop-Process -Id ([int]$snapshot.ProcessId)", source)
+            self.assertIn("refusing to terminate unrelated listeners", source)
+
 
     def test_service_cleanup_verifies_image_path_before_stop_or_delete(self):
         source = SERVICE.read_text(encoding="utf-8")
