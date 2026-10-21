@@ -67,11 +67,19 @@ try {
         if (-not $manifestEntry -or -not $manifestHashEntry) {
             throw 'RECOVERY_BLOCKED: canonical ZIP is missing its distribution manifest.'
         }
-        $reader = [IO.StreamReader]::new($manifestEntry.Open())
-        try { $manifestText = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        $manifestInput = $manifestEntry.Open()
+        $manifestBuffer = [IO.MemoryStream]::new()
+        try {
+            $manifestInput.CopyTo($manifestBuffer)
+            $manifestBytes = $manifestBuffer.ToArray()
+        } finally {
+            $manifestInput.Dispose()
+            $manifestBuffer.Dispose()
+        }
+        $manifestReader = [IO.StreamReader]::new([IO.MemoryStream]::new($manifestBytes), [Text.Encoding]::UTF8, $true)
+        try { $manifestText = $manifestReader.ReadToEnd() } finally { $manifestReader.Dispose() }
         $hashReader = [IO.StreamReader]::new($manifestHashEntry.Open())
         try { $declaredManifestSha = ($hashReader.ReadToEnd().Trim() -split '\s+')[0].ToLowerInvariant() } finally { $hashReader.Dispose() }
-        $manifestBytes = [Text.Encoding]::UTF8.GetBytes($manifestText)
         $shaProvider = [Security.Cryptography.SHA256]::Create()
         try { $actualManifestSha = ([BitConverter]::ToString($shaProvider.ComputeHash($manifestBytes))).Replace('-', '').ToLowerInvariant() } finally { $shaProvider.Dispose() }
         if ($actualManifestSha -ne $expectedManifestSha -or $declaredManifestSha -ne $expectedManifestSha) {
@@ -136,7 +144,7 @@ try {
 
         $markerPath = Join-Path $data 'logs\runtime-recovery-attempt.json'
         if (Test-Path -LiteralPath $markerPath -PathType Leaf) {
-            throw 'RECOVERY_BLOCKED: a previous recovery attempt for this installation has not been cleared by a successful health check.'
+            throw 'RECOVERY_BLOCKED: a previous recovery attempt did not complete successfully; manual review is required.'
         }
         New-Item -ItemType Directory -Path (Split-Path -Parent $markerPath) -Force | Out-Null
         [ordered]@{ source_sha = $sourceSha; package_sha256 = $expectedZipSha; started_at = [DateTimeOffset]::UtcNow.ToString('o'); paths = @($repairs.path) } |
