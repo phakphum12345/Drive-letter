@@ -118,22 +118,30 @@ jobs:
         run: python -c "import research_os_v3; print('research_os_v3 import OK')"
 
   flutter-gate:
-    name: Flutter Windows build analyze test
+    name: Legacy Flutter Windows scope-aware validation
     needs: detect-flutter-scope
-    if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Report legacy Flutter scope decision
+        if: needs.detect-flutter-scope.outputs.run_flutter != 'true'
+        shell: pwsh
+        run: |
+          Write-Host 'LEGACY_FLUTTER_WINDOWS=NOT_REQUIRED_FOR_THIS_CHANGE'
+          Write-Host 'The scope detector completed successfully; V3 Flutter tests are intentionally not applicable to this diff.'
+
       - name: Set up Flutter
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
           channel: stable
           cache: true
 
       - name: Validate V3 Flutter source contract
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         working-directory: v3/flutter_app
         shell: pwsh
         run: |
@@ -144,18 +152,22 @@ jobs:
           Write-Host 'V3_FLUTTER_SOURCE_CONTRACT=PASS'
 
       - name: Flutter dependencies
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         working-directory: v3/flutter_app
         run: flutter pub get
 
       - name: Flutter analyze
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         working-directory: v3/flutter_app
         run: flutter analyze
 
       - name: Flutter tests
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         working-directory: v3/flutter_app
         run: flutter test
 
       - name: Bootstrap isolated Windows build workspace
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -179,6 +191,7 @@ jobs:
           "V3_FLUTTER_WINDOWS_WORKSPACE=$work" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
       - name: Flutter Windows build smoke
+        if: needs.detect-flutter-scope.outputs.run_flutter == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
