@@ -26,6 +26,29 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("-ne 46656", repaired)
         self.assertEqual(repair_workflow(repaired), repaired)
 
+    def test_workflow_audit_handles_windows_crlf_checkout(self) -> None:
+        source = (
+            "    timeout-minutes: 45\\r\\n    strategy:\\r\\n"
+            "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\\r\\n"
+            "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\\r\\n"
+        )
+        repaired = repair_workflow(source)
+        self.assertIn("        shell: bash", repaired)
+        self.assertIn("\\r\\n", repaired)
+        self.assertNotIn("\\n", repaired.replace("\\r\\n", ""))
+        self.assertEqual(repair_workflow(repaired), repaired)
+
+    def test_candidate_validation_requests_capacity_for_max_profile(self) -> None:
+        source = (
+            "Invoke-RestMethod -Uri \\\"http://127.0.0.1:$port/v3/master?tasks=30\\\"\n"
+            "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\n"
+            "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\n"
+        )
+        repaired = repair_candidate(source)
+        self.assertIn("/v3/master?tasks=217", repaired)
+        self.assertIn("'6^6'", repaired)
+        self.assertEqual(repair_candidate(repaired), repaired)
+
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
         source = "import os\nimport tempfile\nfrom pathlib import Path\n\nfrom research_os_v3 import DataLayout\n"
         repaired = repair_service_smoke(source)
