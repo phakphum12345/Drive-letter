@@ -7,6 +7,11 @@ on:
         description: Exact commit SHA to validate
         required: false
         type: string
+  pull_request:
+    paths:
+      - 'v3/**'
+      - 'packages/research_os_contracts/**'
+      - '.github/workflows/v3-candidate.yml'
   push:
     branches:
       - architecture/v3-clean
@@ -24,7 +29,7 @@ concurrency:
 
 jobs:
   candidate:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[candidate]')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || contains(github.event.head_commit.message, '[candidate]')
     runs-on: windows-latest
     timeout-minutes: 60
     env:
