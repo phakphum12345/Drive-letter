@@ -175,8 +175,8 @@ jobs:
             Set-Content -Path $marker -Value 'preserve-me' -Encoding utf8
 
             $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5
-            if ($master.contract -ne 'unified-master-orchestrator-v3-clean') { throw 'Unexpected V3 master contract' }
-            if ($master.scale -ne '6^3' -or [int]$master.maximum_leaf_capacity -ne 216) { throw 'Unexpected V3 adaptive scale result' }
+            if ($master.contract -ne 'unified-master-orchestrator-v3-full') { throw 'Unexpected V3 master contract' }
+            if ($master.scale -ne '6^6' -or [int]$master.maximum_leaf_capacity -ne 46656) { throw 'Unexpected V3 adaptive scale result' }
 
             $providers = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/providers" -TimeoutSec 5
             if (-not $providers.providers -or $providers.providers[0].secret_exposed -ne $false) {
