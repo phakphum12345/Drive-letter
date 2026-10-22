@@ -47,12 +47,38 @@ function Find-AvailableLoopbackPort([int]$StartPort, [int]$ScanCount) {
 }
 
 function Remove-V3Service {
+    $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+    $servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
+    $serviceExeFullPath = [System.IO.Path]::GetFullPath($serviceExe)
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
     if ($service -and $service.Status -ne 'Stopped') {
         Stop-Service -Name $ServiceName -Force
         $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
         if ($service) {
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+        }
+    }
+
+    # SCM can report Stopped before the service process has released its image.
+    # Wait for the exact ServiceHost PID to exit before Inno Setup replaces files.
+    if ($servicePid -gt 0) {
+        $serviceProcessExited = $false
+        for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+            if (-not $processInfo) {
+                $serviceProcessExited = $true
+                break
+            }
+            if ($processInfo.ExecutablePath -and
+                [System.IO.Path]::GetFullPath($processInfo.ExecutablePath) -ine $serviceExeFullPath) {
+                $serviceProcessExited = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        if (-not $serviceProcessExited) {
+            throw "Windows service host PID $servicePid still holds the V3 ServiceHost image after bounded shutdown wait"
         }
     }
 
