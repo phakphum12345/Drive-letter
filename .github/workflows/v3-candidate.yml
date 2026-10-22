@@ -198,13 +198,12 @@ jobs:
               sha256 = $hash
               size = [long]$setup.Length
             }
-            serviceConfigPath = 'C:\\ProgramData\\ResearchOSV3\\service.json'
+            serviceConfigPath = (Join-Path $env:ProgramData 'ResearchOSV3\service.json')
             service = [ordered]@{
               name = 'ResearchOSV3Service'
               binding = '127.0.0.1'
-              port = [int]((Get-Content 'C:\\ProgramData\\ResearchOSV3\\service.json' -Raw | ConvertFrom-Json).port)
+              port = [int]((Get-Content -LiteralPath (Join-Path $env:ProgramData 'ResearchOSV3\service.json') -Raw | ConvertFrom-Json).port)
             }
-            data_boundary = 'ProgramData\\ResearchOSV3'
             upgrade_policy = 'in-place-preserve-data'
             uninstall_policy = 'remove-app-and-service-preserve-data'
             stages = $progress['stages']
@@ -236,9 +235,8 @@ jobs:
           $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
           if ($service -and $service.Status -ne 'Stopped') { Stop-Service $serviceName -Force -ErrorAction SilentlyContinue }
           if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { sc.exe delete $serviceName | Out-Null }
-          foreach ($listener in @(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue)) {
-            Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-          }
+          # The uninstall script owns service shutdown. Never terminate an
+          # unrelated process just because it listens on the default port.
 
       - name: Upload incremental V3 candidate evidence
         if: always()
