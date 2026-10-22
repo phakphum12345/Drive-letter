@@ -30,9 +30,12 @@ def repair_workflow(text: str) -> str:
     text = text.replace("          if ($LASTEXITCODE -ne 0) { throw 'V3 Clean unit tests failed' }\n", "")
     text = text.replace("unified-master-orchestrator-v3-clean", "unified-master-orchestrator-v3-full")
     text = text.replace("'6^3'", "'6^6'").replace("-ne 216", "-ne 46656")
+    text = text.replace('?tasks=30"', '?tasks=217"')
     if "unified-master-orchestrator-v3-clean" in text or "'6^3'" in text:
         raise ValueError("workflow: conflicting V3 master contract remains")
-    for required in ("shell: bash", "unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
+    if '?tasks=30"' in text:
+        raise ValueError("workflow: stale tasks=30 master-scale request remains")
+    for required in ("shell: bash", "unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656", '?tasks=217"'):
         if required not in text:
             raise ValueError(f"workflow: required contract marker missing: {required}")
     return text.replace("\n", "\r\n") if newline == "\r\n" else text
