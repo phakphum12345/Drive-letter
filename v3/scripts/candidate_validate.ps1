@@ -164,10 +164,19 @@ try {
     if ($master.scale -ne '6^6' -or [int]$master.maximum_leaf_capacity -ne 46656) {
         throw 'Installed V3 adaptive master result is invalid'
     }
+    if ($master.system_maximum_scale -ne '10^10' -or [int64]$master.system_maximum_logical_capacity -ne 10000000000) {
+        throw 'Installed V3 system capacity contract is invalid'
+    }
+    if ($master.capacity_policy -ne 'lazy-bounded-execution') {
+        throw 'Installed V3 capacity policy is invalid'
+    }
     Record-Evidence 'installed_unified_master' @{
         contract = $master.contract
         scale = $master.scale
         capacity = [int]$master.maximum_leaf_capacity
+        system_scale = $master.system_maximum_scale
+        system_capacity = [int64]$master.system_maximum_logical_capacity
+        capacity_policy = $master.capacity_policy
     }
 
     $providers = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/providers" -TimeoutSec 5
