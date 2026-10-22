@@ -78,7 +78,7 @@ jobs:
 
           changed="$(git diff --name-only "$base" "$head")"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(tools/aeos/(verify_pr_checks|test_verify_pr_checks)\.py$|v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\.yml$)'; then
             echo "run_flutter=true" >> "$GITHUB_OUTPUT"
             echo "LEGACY_FLUTTER_WINDOWS=RUN_RELEVANT_CHANGES"
           else
