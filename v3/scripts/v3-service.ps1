@@ -141,6 +141,7 @@ $config = [ordered]@{
     host = '127.0.0.1'
     port = $selectedPort
 }
-$config | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $configPath -Encoding UTF8
+$configJson = $config | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($configPath, $configJson, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Research OS V3 service installed and ready on 127.0.0.1:$selectedPort"
 Write-Host "Selected port saved to $configPath"
