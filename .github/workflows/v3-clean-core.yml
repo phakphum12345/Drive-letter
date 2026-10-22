@@ -211,19 +211,31 @@ jobs:
             $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -ne 'Stopped') {
               Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-              try { $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15)) } catch { }
+              try { $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30)) } catch { }
             }
             if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
               sc.exe delete $serviceName | Out-Null
-              Start-Sleep -Seconds 1
             }
-            # Never kill a process by port alone. Stopping the named service
-            # must stop its owned child; a leftover listener is reported below.
+            # Service control and socket teardown are asynchronous on Windows.
+            # Wait for the exact test-owned service's port to drain; do not kill
+            # an arbitrary PID merely because it later binds the same port.
           }
 
+          $serviceGone = $false
+          $listenerGone = $false
+          for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            $serviceGone = -not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)
+            $listenerGone = -not (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+            if ($serviceGone -and $listenerGone) { break }
+            Start-Sleep -Milliseconds 250
+          }
           if (-not $validated) { throw 'V3 Windows Service lifecycle validation did not complete' }
-          if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { throw 'V3 Windows Service was not removed' }
-          if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { throw 'V3 service listener remained after cleanup' }
+          if (-not $serviceGone) { throw 'V3 Windows Service was not removed after bounded cleanup wait' }
+          if (-not $listenerGone) {
+            $remaining = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+              Select-Object LocalAddress, LocalPort, OwningProcess)
+            throw ("V3 service listener remained after 30-second cleanup wait: " + ($remaining | ConvertTo-Json -Compress))
+          }
           if (-not (Test-Path $marker)) { throw 'V3 data was not preserved after service removal' }
           if ((Get-Content $marker -Raw).Trim() -ne 'preserve-me') { throw 'V3 preserved data changed during service lifecycle' }
           python v3/scripts/evidence.py --output v3/evidence/progress.json --stage windows_service_cleanup --status passed --data '{"service_removed":true,"listener_removed":true,"data_preserved":true}'
