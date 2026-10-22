@@ -68,7 +68,28 @@ function Invoke-Setup([string]$LogPath) {
         -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$LogPath") `
         -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        throw "Research OS V3 Setup failed with exit code $($process.ExitCode)"
+        $stage = if ($LogPath -match '(?i)upgrade') { 'upgrade' } else { 'install' }
+        $diagnosticDir = Join-Path $v3Root 'evidence\installer-logs'
+        New-Item -ItemType Directory -Path $diagnosticDir -Force | Out-Null
+        $diagnosticPath = Join-Path $diagnosticDir "setup-$stage.log"
+        if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+            $sanitized = @(
+                Get-Content -LiteralPath $LogPath -ErrorAction Stop | ForEach-Object {
+                    $line = [string]$_
+                    $line = $line -replace '(?i)(password|token|secret|api[_-]?key|authorization)(\s*[:=]\s*)[^\s,;]+', '$1$2[REDACTED]'
+                    $line = $line -replace '(?i)(Bearer\s+)[A-Za-z0-9._~+/-]+=*', '$1[REDACTED]'
+                    $line
+                }
+            )
+            Set-Content -LiteralPath $diagnosticPath -Value $sanitized -Encoding utf8
+            Write-Output "Installer failure stage: $stage; exit code: $($process.ExitCode)"
+            Write-Output "Sanitized installer log saved to: $diagnosticPath"
+            $sanitized | Select-Object -Last 80 | ForEach-Object { Write-Output $_ }
+        }
+        else {
+            Write-Warning "Installer returned exit code $($process.ExitCode), but its log was not created: $LogPath"
+        }
+        throw "Research OS V3 Setup failed during $stage with exit code $($process.ExitCode)"
     }
 }
 
