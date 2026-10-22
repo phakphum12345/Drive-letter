@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -7,13 +8,10 @@ import 'src/api/v3_api.dart';
 import 'src/research_os_v3_app.dart';
 import 'src/startup_probe.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const baseUrl = String.fromEnvironment(
-    'RESEARCH_OS_V3_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8788',
-  );
+  final baseUrl = await _resolveBaseUrl();
   final rawUser = Platform.environment['RESEARCH_OS_V3_USER_ID'] ??
       Platform.environment['USERNAME'] ??
       Platform.environment['USER'] ??
@@ -31,6 +29,36 @@ void main() {
 
   // Paint first, then prove loopback connectivity and user isolation context.
   unawaited(StartupProbe(api).run());
+}
+
+Future<String> _resolveBaseUrl() async {
+  const compileTimeBaseUrl = String.fromEnvironment(
+    'RESEARCH_OS_V3_BASE_URL',
+    defaultValue: '',
+  );
+  final environmentBaseUrl =
+      Platform.environment['RESEARCH_OS_V3_BASE_URL']?.trim() ?? '';
+  if (environmentBaseUrl.isNotEmpty) return environmentBaseUrl;
+  if (compileTimeBaseUrl.isNotEmpty) return compileTimeBaseUrl;
+
+  // The installer writes only the selected port here. Always use loopback,
+  // never a host value read from the file.
+  final programData = Platform.environment['PROGRAMDATA'] ?? r'C:\ProgramData';
+  final config = File('$programData\\ResearchOSV3\\service.json');
+  try {
+    final decoded = jsonDecode(await config.readAsString());
+    if (decoded is Map<String, dynamic>) {
+      final port = decoded['port'];
+      if (port is int && port >= 1 && port <= 65535) {
+        return 'http://127.0.0.1:$port';
+      }
+    }
+  } on FileSystemException {
+    // Source/dev builds without an installed service use the default port.
+  } on FormatException {
+    // Ignore incomplete config and use the stable default.
+  }
+  return 'http://127.0.0.1:8788';
 }
 
 String _safeIdentifier(String raw, {required String fallbackPrefix}) {
