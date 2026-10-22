@@ -13,9 +13,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $appRoot = Split-Path -Parent $PSScriptRoot
-$serviceExe = Join-Path $appRoot 'service\\ResearchOS.V3.ServiceHost.exe'
+$serviceExe = Join-Path $appRoot 'service\ResearchOS.V3.ServiceHost.exe'
 $v3Root = Join-Path $appRoot 'v3'
-$pythonExe = Join-Path $v3Root 'runtime\\python\\python.exe'
+$pythonExe = Join-Path $v3Root 'runtime\python\python.exe'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
 $configPath = Join-Path $dataDir 'service.json'
 
@@ -87,7 +87,7 @@ if (-not (Test-Path $serviceExe -PathType Leaf)) {
 if (-not (Test-Path $pythonExe -PathType Leaf)) {
     throw "Bundled Python executable not found: $pythonExe"
 }
-if (-not (Test-Path (Join-Path $v3Root 'scripts\\run_service.py') -PathType Leaf)) {
+if (-not (Test-Path (Join-Path $v3Root 'scripts\run_service.py') -PathType Leaf)) {
     throw "V3 service entrypoint not found under $v3Root"
 }
 
@@ -122,6 +122,17 @@ if ($listeners.Count -lt 1) {
 }
 if ($listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }) {
     throw 'Research OS V3 service is not loopback-only'
+}
+$serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
+if (-not $serviceInfo -or $serviceInfo.ProcessId -eq 0) {
+    throw 'Cannot establish ownership of the installed V3 Windows service process'
+}
+foreach ($listener in $listeners) {
+    $owner = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)"
+    if (-not $owner -or -not $owner.ExecutablePath -or
+        [System.IO.Path]::GetFullPath($owner.ExecutablePath) -ine [System.IO.Path]::GetFullPath($pythonExe)) {
+        throw "Selected port $selectedPort is not owned by the bundled V3 Python runtime"
+    }
 }
 
 $config = [ordered]@{
