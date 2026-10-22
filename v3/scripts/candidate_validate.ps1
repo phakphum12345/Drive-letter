@@ -93,6 +93,31 @@ function Invoke-Setup([string]$LogPath) {
     }
 }
 
+function Stop-CandidateApp([System.Diagnostics.Process]$Process) {
+    if ($null -eq $Process) { return }
+    try { $Process.Refresh() } catch { }
+    if ($Process.HasExited) { return }
+
+    # Ask the app to close normally before escalating. This PID came from the
+    # Start-Process call below; never terminate processes by port or image name.
+    try {
+        [void]$Process.CloseMainWindow()
+        if ($Process.WaitForExit(10000)) { return }
+    }
+    catch { }
+
+    $owned = Get-CimInstance Win32_Process -Filter "ProcessId = $($Process.Id)" -ErrorAction SilentlyContinue
+    if (-not $owned -or -not $owned.ExecutablePath -or
+        [System.IO.Path]::GetFullPath($owned.ExecutablePath) -ine [System.IO.Path]::GetFullPath($appExe)) {
+        throw "Refusing to stop app PID $($Process.Id): executable ownership could not be verified"
+    }
+
+    Stop-Process -Id $Process.Id -Force -ErrorAction Stop
+    if (-not $Process.WaitForExit(15000)) {
+        throw "Candidate app PID $($Process.Id) did not exit; refusing to run the upgrade against a locked app"
+    }
+}
+
 function Remove-StaleInstallation {
     $uninstaller = Get-ChildItem $installDir -Filter 'unins*.exe' -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
@@ -292,8 +317,8 @@ try {
     }
     Record-Evidence 'app_to_service_e2e' @{ health = 200; user = 200; providers = 200; installed_exe = $true; audit_secret_free = $true }
 
-    if ($app -and -not $app.HasExited) {
-        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+    if ($app) {
+        Stop-CandidateApp $app
     }
     $app = $null
 
@@ -356,7 +381,8 @@ try {
     Record-Evidence 'uninstall_data_preservation' @{ data_preserved = $true; user_scopes_preserved = $true; data_root = 'ProgramData\\ResearchOSV3' }
 }
 finally {
-    if ($app -and -not $app.HasExited) {
-        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+    if ($app) {
+        try { Stop-CandidateApp $app }
+        catch { Write-Warning "Candidate app cleanup did not complete: $($_.Exception.Message)" }
     }
 }
