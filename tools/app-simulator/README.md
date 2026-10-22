@@ -27,3 +27,14 @@ Open `index.html` directly in a current browser. No package installation, local 
 ## Scope
 
 This is a first-pass interactive simulator for reviewing flows and state transitions. It is not an iOS Simulator replacement, Android emulator, browser automation suite, or substitute for Flutter unit/widget/integration tests.
+
+## Live code editor
+
+Open `studio.html` to use the linked Code Studio:
+
+1. Open `studio.html` in your browser.
+2. Choose **Load Simulator HTML** and select `index.html` from this folder.
+3. Edit HTML, CSS, or JavaScript. The isolated preview refreshes automatically.
+4. Download the edited HTML as a new file, then review and test it before replacing any source file.
+
+The editor does not silently overwrite source files. It reads a user-selected local HTML file, previews edits in a sandboxed iframe, and downloads a new HTML file. No server or network API is required. The preview sandbox is a development convenience, not a security boundary for untrusted code; only load code you trust.
