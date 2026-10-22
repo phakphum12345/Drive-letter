@@ -40,7 +40,7 @@ class V3CISourceRepairTests(unittest.TestCase):
 
     def test_candidate_validation_requests_capacity_for_max_profile(self) -> None:
         source = (
-            "Invoke-RestMethod -Uri \\\"http://127.0.0.1:$port/v3/master?tasks=30\\\"\n"
+            "Invoke-RestMethod -Uri http://127.0.0.1:$port/v3/master?tasks=30\n"
             "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\n"
             "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\n"
         )
@@ -78,7 +78,7 @@ class V3CISourceRepairTests(unittest.TestCase):
 
     def test_candidate_contract_matches_full_implementation(self) -> None:
         source = (
-            "Invoke-RestMethod -Uri \"http://127.0.0.1:$port/v3/master?tasks=30\"\n"
+            "Invoke-RestMethod -Uri http://127.0.0.1:$port/v3/master?tasks=30\n"
             "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\n"
             "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\n"
         )
@@ -88,7 +88,6 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("'6^6'", repaired)
         self.assertIn("-ne 46656", repaired)
         self.assertEqual(repair_candidate(repaired), repaired)
-
 
 if __name__ == "__main__":
     unittest.main()
