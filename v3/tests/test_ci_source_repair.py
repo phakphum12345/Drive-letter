@@ -45,6 +45,14 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertNotIn(".relative_to(", repaired)
         self.assertEqual(repair_storage_smoke(repaired), repaired)
 
+    def test_audit_fails_closed_when_contract_assertions_are_missing(self) -> None:
+        with self.assertRaises(ValueError):
+            repair_candidate("Write-Output 'no contract assertion'")
+        with self.assertRaises(ValueError):
+            repair_workflow("    defaults:\n      run:\n        shell: bash\n")
+        with self.assertRaises(ValueError):
+            repair_storage_smoke("payload = {}")
+
     def test_candidate_contract_matches_full_implementation(self) -> None:
         source = (
             "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\n"
