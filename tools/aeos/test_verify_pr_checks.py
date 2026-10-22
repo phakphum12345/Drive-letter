@@ -85,7 +85,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         check = {"name":"Flutter Windows build analyze test","status":"completed","conclusion":"skipped",
                  "details_url":"https://github.com/o/r/actions/runs/456/job/789"}
         normalized = normalize_check_run(check, "999")
-        result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "36", "different-sha")
+        result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "", "abc123")
         self.assertEqual(result["bucket"], "unproven")
 
     def test_neutral_check_run_is_unproven_not_passing(self):
