@@ -66,14 +66,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Initialize incremental evidence
+        working-directory: v3
+        run: python scripts/evidence.py --output evidence/progress.json --stage initialized --status passed --data '{"sha":"${{ github.sha }}","os":"${{ runner.os }}"}'
+
       - name: Audit V3 CI source contracts
         run: |
           python v3/scripts/repair_v3_ci_sources.py --check
           python v3/scripts/evidence.py --output v3/evidence/progress.json --stage source_contract_audit --status passed --data '{"sha":"${{ github.sha }}","mode":"read-only","files_checked":4}'
-
-      - name: Initialize incremental evidence
-        working-directory: v3
-        run: python scripts/evidence.py --output evidence/progress.json --stage initialized --status passed --data '{"sha":"${{ github.sha }}","os":"${{ runner.os }}"}'
 
       - name: Run V3 Clean unit tests
         working-directory: v3
