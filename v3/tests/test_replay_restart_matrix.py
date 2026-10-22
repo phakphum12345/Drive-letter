@@ -42,6 +42,7 @@ class ReplayRestartMatrixTests(unittest.TestCase):
                     ("2000-01-01T00:00:00+00:00", "delivery-restart-1"),
                 )
 
+            db.close()
             for _ in range(3):
                 restarted = DurableEventDelivery(path, lease_seconds=30)
                 self.assertEqual(1, restarted.recover_expired())
@@ -53,6 +54,7 @@ class ReplayRestartMatrixTests(unittest.TestCase):
                         ("2000-01-01T00:00:00+00:00", "delivery-restart-1"),
                     )
 
+                db.close()
             final = DurableEventDelivery(path, lease_seconds=30)
             self.assertEqual(1, final.recover_expired())
             owner = final.claim("delivery-restart-1")
@@ -66,6 +68,7 @@ class ReplayRestartMatrixTests(unittest.TestCase):
                     "SELECT COUNT(*) FROM deliveries WHERE idempotency_key=?",
                     ("idem-restart-1",),
                 ).fetchone()[0]
+            db.close()
             self.assertEqual(1, count)
 
 
