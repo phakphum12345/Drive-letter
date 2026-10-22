@@ -67,15 +67,20 @@ jobs:
           HEAD: ${{ steps.target.outputs.head }}
         run: |
           set -euo pipefail
-          # --paginate emits one JSON document per page; --slurp wraps all
-          # pages into a single JSON array so Python receives valid JSON.
-          prs="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD/pulls?state=all" --paginate --slurp)"
-          pr="$(python3 -c 'import json,sys; pages=json.load(sys.stdin); rows=[p for page in pages for p in page]; matches=[p for p in rows if p.get("state") in {"open","closed"}]; print(matches[0]["number"] if len(matches)==1 else "")' <<< "$prs")"
-          test -n "$pr"
+          # Use gh's jq processing per page instead of --slurp. This avoids
+          # feeding empty/truncated command-substitution output to json.load.
+          # Keep API errors visible and fail closed if no unique PR can be resolved.
+          rows="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD/pulls?state=all" \
+            --paginate \
+            --jq '.[] | select(.state == "open" or .state == "closed") | [.number, .state, .head.sha] | @tsv')"
+          test -n "$rows" || { echo "PR_LOOKUP_EMPTY: commit=$HEAD repository=$GITHUB_REPOSITORY" >&2; exit 1; }
+          pr="$(python3 -c 'import sys; rows=[line.split("\\t") for line in sys.stdin.read().splitlines() if line.strip()]; open_rows=[r for r in rows if len(r)>=3 and r[1]=="open"]; exact=[r for r in open_rows if r[2] and r[2]==sys.argv[1]]; candidates=exact or open_rows or [r for r in rows if len(r)>=3]; nums=sorted({r[0] for r in candidates}); print(nums[0] if len(nums)==1 else "")' "$HEAD" <<< "$rows")"
+          test -n "$pr" || { echo "PR_LOOKUP_AMBIGUOUS: commit=$HEAD rows=$rows" >&2; exit 1; }
 
           # workflow_run can refer to an earlier commit after the PR was synchronized.
           # Resolve the PR from that commit, then pin the review to the PR current HEAD.
           current="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr")"
+          test -n "$current" || { echo "PR_LOOKUP_EMPTY_CURRENT: pr=$pr" >&2; exit 1; }
           current_head="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("head",{}).get("sha",""))' <<< "$current")"
           test -n "$current_head"
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
