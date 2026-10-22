@@ -69,8 +69,11 @@ jobs:
 
       - name: Run V3 Clean unit tests
         working-directory: v3
+        env:
+          PYTHONPATH: ${{ github.workspace }}${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/v3
         run: |
           python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'V3 Clean unit tests failed' }
           python scripts/evidence.py --output evidence/progress.json --stage unit_tests --status passed
 
       - name: Run provider adapter smoke
