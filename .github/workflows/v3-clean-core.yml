@@ -202,10 +202,8 @@ jobs:
               sc.exe delete $serviceName | Out-Null
               Start-Sleep -Seconds 1
             }
-            $leftovers = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
-            foreach ($connection in $leftovers) {
-              Stop-Process -Id $connection.OwningProcess -Force -ErrorAction SilentlyContinue
-            }
+            # Never kill a process by port alone. Stopping the named service
+            # must stop its owned child; a leftover listener is reported below.
           }
 
           if (-not $validated) { throw 'V3 Windows Service lifecycle validation did not complete' }
