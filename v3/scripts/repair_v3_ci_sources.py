@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -112,12 +113,14 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="Audit only; do not write source files (default).")
     parser.add_argument("--apply", action="store_true", help="Apply known repairs and save hashed backups first.")
     parser.add_argument("--root", type=Path, default=ROOT, help="Repository root (defaults to detected root).")
+    parser.add_argument("--evidence-output", type=Path, help="Write a JSON audit report without modifying source files.")
     args = parser.parse_args()
     if args.check and args.apply:
         parser.error("--check and --apply are mutually exclusive")
 
     root = args.root.resolve()
     changes: list[dict[str, str]] = []
+    audited: list[dict[str, str]] = []
     for relative, repair in REPAIRS.items():
         path = root / relative
         if not path.is_file():
@@ -130,8 +133,15 @@ def main() -> int:
         except (UnicodeDecodeError, ValueError) as exc:
             print(f"FAIL {relative}: {exc}", file=sys.stderr)
             return 2
+        entry = {
+            "path": relative.as_posix(),
+            "source_sha256": sha256(original),
+            "expected_sha256": sha256(updated.encode("utf-8")),
+            "status": "pass" if updated == source else ("repaired" if args.apply else "needs_repair"),
+        }
+        audited.append(entry)
         if updated == source:
-            print(f"PASS {relative}")
+            print(f"PASS {relative} sha256={entry['source_sha256']}")
             continue
         entry = {
             "path": relative.as_posix(),
@@ -157,6 +167,21 @@ def main() -> int:
         changes.append(entry)
         print(f"REPAIRED {relative} backup={entry['backup_path']}")
 
+    audit_status = "needs_repair" if changes and not args.apply else "pass"
+    if args.evidence_output:
+        report_path = args.evidence_output if args.evidence_output.is_absolute() else root / args.evidence_output
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report = {
+            "schema_version": 1,
+            "tool": "v3/scripts/repair_v3_ci_sources.py",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "git_sha": os.environ.get("GITHUB_SHA"),
+            "mode": "apply" if args.apply else "check",
+            "status": audit_status,
+            "sources": audited,
+        }
+        report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"AUDIT_EVIDENCE={report_path}")
     if changes and not args.apply:
         print(f"RESULT=NEEDS_REPAIR count={len(changes)}")
         return 1
