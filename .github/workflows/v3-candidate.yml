@@ -198,10 +198,11 @@ jobs:
               sha256 = $hash
               size = [long]$setup.Length
             }
+            serviceConfigPath = 'C:\\ProgramData\\ResearchOSV3\\service.json'
             service = [ordered]@{
               name = 'ResearchOSV3Service'
               binding = '127.0.0.1'
-              port = 8788
+              port = [int]((Get-Content 'C:\\ProgramData\\ResearchOSV3\\service.json' -Raw | ConvertFrom-Json).port)
             }
             data_boundary = 'ProgramData\\ResearchOSV3'
             upgrade_policy = 'in-place-preserve-data'
