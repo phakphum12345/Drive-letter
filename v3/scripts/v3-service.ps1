@@ -18,6 +18,19 @@ $v3Root = Join-Path $appRoot 'v3'
 $pythonExe = Join-Path $v3Root 'runtime\python\python.exe'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
 $configPath = Join-Path $dataDir 'service.json'
+$lifecycleLogPath = Join-Path $dataDir 'logs\service-lifecycle.log'
+
+function Write-ServiceLifecycleLog([string]$Message) {
+    try {
+        $logDir = Split-Path -Parent $lifecycleLogPath
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        $line = '[{0}] {1}' -f [DateTimeOffset]::UtcNow.ToString('O'), $Message
+        Add-Content -LiteralPath $lifecycleLogPath -Value $line -Encoding utf8
+    }
+    catch {
+        # Diagnostics must never replace the original service lifecycle error.
+    }
+}
 
 function Test-LoopbackPortAvailable([int]$CandidatePort) {
     $listener = $null
@@ -47,22 +60,27 @@ function Find-AvailableLoopbackPort([int]$StartPort, [int]$ScanCount) {
 }
 
 function Remove-V3Service {
+    Write-ServiceLifecycleLog "Remove-V3Service started; service=$ServiceName"
     $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
     $servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
     $serviceExeFullPath = [System.IO.Path]::GetFullPath($serviceExe)
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
+    Write-ServiceLifecycleLog ("Initial service state: status={0}; pid={1}" -f $(if ($service) { $service.Status } else { 'NotFound' }), $servicePid)
     if ($service -and $service.Status -ne 'Stopped') {
+        Write-ServiceLifecycleLog "Requesting service stop"
         Stop-Service -Name $ServiceName -Force
         $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
         if ($service) {
             $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+            Write-ServiceLifecycleLog "Service Control Manager reports Stopped"
         }
     }
 
     # SCM can report Stopped before the service process has released its image.
     # Wait for the exact ServiceHost PID to exit before Inno Setup replaces files.
     if ($servicePid -gt 0) {
+        Write-ServiceLifecycleLog "Waiting for captured service PID $servicePid to release ServiceHost image"
         $serviceProcessExited = $false
         for ($attempt = 0; $attempt -lt 120; $attempt++) {
             $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
@@ -77,12 +95,14 @@ function Remove-V3Service {
             }
             Start-Sleep -Milliseconds 250
         }
+        Write-ServiceLifecycleLog ("Service PID wait completed: exited={0}" -f $serviceProcessExited)
         if (-not $serviceProcessExited) {
             throw "Windows service host PID $servicePid still holds the V3 ServiceHost image after bounded shutdown wait"
         }
     }
 
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        Write-ServiceLifecycleLog "Requesting service registration deletion"
         sc.exe delete $ServiceName | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to delete Windows service $ServiceName"
@@ -94,15 +114,23 @@ function Remove-V3Service {
             Start-Sleep -Milliseconds 250
         }
         if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+            Write-ServiceLifecycleLog "Service registration still exists after deletion wait"
             throw "Windows service $ServiceName remains registered after deletion"
         }
     }
+    Write-ServiceLifecycleLog "Remove-V3Service completed successfully"
     # Never terminate a process merely because it owns the configured port.
     # A listener may belong to an unrelated application.
 }
 
 if ($Action -eq 'uninstall') {
-    Remove-V3Service
+    try {
+        Remove-V3Service
+    }
+    catch {
+        Write-ServiceLifecycleLog ("Remove-V3Service FAILED: {0}" -f ($_ | Out-String).Trim())
+        throw
+    }
     Write-Host "Research OS V3 service removed. Data preserved at $dataDir"
     exit 0
 }
