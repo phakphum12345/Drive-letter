@@ -251,6 +251,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: research-os-v3-candidate-progress-${{ env.TARGET_SHA }}-${{ github.run_id }}
-          path: v3/evidence/candidate-progress.json
+          path: |
+            v3/evidence/candidate-progress.json
+            v3/evidence/installer-logs/*.log
           if-no-files-found: warn
           retention-days: 30
