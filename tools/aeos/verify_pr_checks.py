@@ -259,6 +259,8 @@ def prove_flutter_scope_skip(
         and str(check.get("name") or "").strip() == "Flutter Windows build analyze test"
     ):
         return normalized
+    if not pr_number:
+        return normalized
 
     details_url = str(check.get("details_url") or check.get("html_url") or "")
     parsed = urllib.parse.urlparse(details_url)
