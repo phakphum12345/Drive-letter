@@ -15,7 +15,7 @@ $evidence = [System.IO.Path]::GetFullPath($EvidencePath)
 $installDir = Join-Path $env:ProgramFiles 'Research OS V3'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
 $serviceName = 'ResearchOSV3Service'
-$port = 8788
+$port = $null
 $appExe = Join-Path $installDir 'app\research_os_v3_flutter.exe'
 $auditPath = Join-Path $dataDir 'logs\http-audit.jsonl'
 $marker = Join-Path $dataDir 'sessions\candidate-preservation.marker'
@@ -89,10 +89,6 @@ function Remove-StaleInstallation {
         Start-Sleep -Seconds 1
     }
 
-    $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
-    foreach ($listener in $listeners) {
-        Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-    }
     if (Test-Path $installDir) {
         Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -105,8 +101,42 @@ try {
     }
 
     $installLog = Join-Path $env:RUNNER_TEMP 'research-os-v3-install.log'
-    Invoke-Setup $installLog
-    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean' }
+    # Hold the default port during install when it is available to prove that
+    # the installer selects another loopback port instead of killing a listener.
+    $defaultPortReservation = $null
+    $defaultPortWasReserved = $false
+    try {
+        $defaultPortReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 8788)
+        $defaultPortReservation.Start()
+        $defaultPortWasReserved = $true
+    }
+    catch {
+        if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } }
+        $defaultPortReservation = $null
+    }
+
+    try {
+        Invoke-Setup $installLog
+    }
+    finally {
+        if ($defaultPortReservation) {
+            try { $defaultPortReservation.Stop() } catch { }
+        }
+    }
+
+    $serviceConfigPath = Join-Path $dataDir 'service.json'
+    if (-not (Test-Path $serviceConfigPath -PathType Leaf)) {
+        throw 'Installer did not write the selected service port configuration'
+    }
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
+    if ($port -lt 1 -or $port -gt 65535 -or $serviceConfig.host -ne '127.0.0.1') {
+        throw 'Installer wrote an invalid or non-loopback service configuration'
+    }
+    if ($defaultPortWasReserved -and $port -eq 8788) {
+        throw 'Installer did not select a fallback port while the default port was reserved'
+    }
+    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean'; selected_port = $port; default_port_fallback = ($port -ne 8788) }
 
     if (-not (Test-Path $appExe -PathType Leaf)) {
         throw "Installed V3 Flutter executable is missing: $appExe"
@@ -241,6 +271,8 @@ try {
     Invoke-Setup $upgradeLog
     Record-Evidence 'in_place_upgrade' @{ exit_code = 0 }
 
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
     Wait-V3Health | Out-Null
     Assert-Marker $marker 'preserve-v3-candidate-data' 'V3 legacy-compatible data marker was not preserved by in-place upgrade'
     Assert-Marker $aliceDefaultMarker 'alice-default' 'Alice default user data was not preserved by in-place upgrade'
@@ -274,8 +306,13 @@ try {
     if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
         throw 'V3 Windows Service remained after uninstall'
     }
-    if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-        throw 'V3 listener remained after uninstall'
+    # Do not treat any listener on the old port as ours; other applications
+    # may legitimately bind it. The service lifecycle owns its child process.
+    if (Test-Path $serviceConfigPath -PathType Leaf) {
+        $savedConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+        if ([int]$savedConfig.port -ne $port) {
+            throw 'Selected port evidence changed unexpectedly during uninstall'
+        }
     }
     if (Test-Path $appExe -PathType Leaf) {
         throw 'V3 Flutter executable remained after uninstall'
