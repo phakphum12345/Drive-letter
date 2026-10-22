@@ -64,6 +64,26 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("[REDACTED]", source)
         self.assertIn("setup-$stage.log", source)
 
+    def test_candidate_upgrade_waits_for_its_app_process_to_release_files(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Stop-CandidateApp", source)
+        self.assertIn("CloseMainWindow()", source)
+        self.assertIn("WaitForExit(10000)", source)
+        self.assertIn("WaitForExit(15000)", source)
+        self.assertIn("Refusing to stop app PID", source)
+        self.assertIn("Stop-CandidateApp $app", source)
+
+    def test_windows_service_cleanup_waits_for_service_and_listener(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "v3-clean-core.yml").read_text(encoding="utf-8")
+        self.assertIn("WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))", source)
+        self.assertIn("$attempt -lt 120", source)
+        self.assertIn("OwningProcess", source)
+        self.assertIn("do not kill", source.lower())
+
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
         source = "import os\nimport tempfile\nfrom pathlib import Path\n\nfrom research_os_v3 import DataLayout\n"
         repaired = repair_service_smoke(source)
