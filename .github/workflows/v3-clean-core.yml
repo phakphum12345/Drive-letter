@@ -152,6 +152,8 @@ jobs:
           $binaryPath = "`"$exe`" --root `"$root`" --python `"$python`" --port $port --data-dir `"$dataDir`" --service-name `"$serviceName`""
           $validated = $false
           $serviceListenerPids = @()
+          $serviceHostPid = 0
+          $scriptPath = Join-Path $root 'scripts\run_service.py'
           $marker = Join-Path $dataDir 'sessions\service-preservation.marker'
           try {
             New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Manual | Out-Null
@@ -192,6 +194,9 @@ jobs:
             $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop)
             if ($listeners.Count -lt 1) { throw 'V3 service has no listening socket' }
             $serviceListenerPids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if (-not $serviceInfo -or [int]$serviceInfo.ProcessId -le 0) { throw 'Cannot establish the test ServiceHost PID' }
+            $serviceHostPid = [int]$serviceInfo.ProcessId
             $badListener = $listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }
             if ($badListener) { throw 'V3 Windows Service is not loopback-only' }
 
@@ -236,10 +241,39 @@ jobs:
           if (-not $validated) { throw 'V3 Windows Service lifecycle validation did not complete' }
           if (-not $serviceGone) { throw 'V3 Windows Service was not removed after bounded cleanup wait' }
           if (-not $listenerGone) {
+            # Some Windows service wrappers can exit before their Python child.
+            # Terminate only a listener whose PID was captured during this test AND
+            # whose parent, executable, and command line prove it is this test's child.
             $remaining = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-              Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess } |
-              Select-Object LocalAddress, LocalPort, OwningProcess)
-            throw ("V3 service-owned listener PIDs remained after 30-second cleanup wait: " + ($remaining | ConvertTo-Json -Compress))
+              Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+            foreach ($listener in $remaining) {
+              $pid = [int]$listener.OwningProcess
+              $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$pid" -ErrorAction SilentlyContinue
+              $imagePath = if ($processInfo.ExecutablePath) { [System.IO.Path]::GetFullPath($processInfo.ExecutablePath) } else { '' }
+              $expectedPython = [System.IO.Path]::GetFullPath($python)
+              $commandLine = [string]$processInfo.CommandLine
+              $isOwnedChild = $processInfo -and $serviceHostPid -gt 0 -and
+                [int]$processInfo.ParentProcessId -eq $serviceHostPid -and
+                $imagePath -ieq $expectedPython -and
+                $commandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+              if (-not $isOwnedChild) {
+                throw ("Refusing to stop listener PID $pid because ownership could not be proven; parent=$($processInfo.ParentProcessId), image=$imagePath, commandLine=$commandLine")
+              }
+              Write-Host "Stopping verified V3 child PID $pid (parent ServiceHost PID $serviceHostPid) after service shutdown."
+              Stop-Process -Id $pid -Force
+            }
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+              $left = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+              if ($left.Count -eq 0) { $listenerGone = $true; break }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $listenerGone) {
+              $left = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess } |
+                Select-Object LocalAddress, LocalPort, OwningProcess)
+              throw ("Verified V3 child listener remained after targeted cleanup: " + ($left | ConvertTo-Json -Compress))
+            }
           }
           if (-not (Test-Path $marker)) { throw 'V3 data was not preserved after service removal' }
           if ((Get-Content $marker -Raw).Trim() -ne 'preserve-me') { throw 'V3 preserved data changed during service lifecycle' }
