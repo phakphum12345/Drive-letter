@@ -133,11 +133,11 @@ def main() -> int:
         original = path.read_bytes()
         try:
             source = original.decode("utf-8")
-            newline = "\\r\\n" if "\\r\\n" in source else "\\n"
-            normalized_source = source.replace("\\r\\n", "\\n")
+            newline = "\r\n" if "\r\n" in source else "\n"
+            normalized_source = source.replace("\r\n", "\n")
             updated = repair(normalized_source)
-            if newline == "\\r\\n":
-                updated = updated.replace("\\n", "\\r\\n")
+            if newline == "\r\n":
+                updated = updated.replace("\n", "\r\n")
         except (UnicodeDecodeError, ValueError) as exc:
             print(f"FAIL {relative}: {exc}", file=sys.stderr)
             return 2
