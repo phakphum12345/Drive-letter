@@ -39,6 +39,55 @@ class VerifyPrChecksTests(unittest.TestCase):
         self.assertEqual(check["bucket"], "not_applicable")
         self.assertIn("only on push", check["reason_code"])
 
+    @patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[{"filename":"tools/recover-research-os-runtime.ps1"}])
+    @patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+        "name":"Decide whether legacy Flutter Windows validation is relevant",
+        "run_id":456,"conclusion":"success",
+    }])
+    @patch.object(VERIFY_PR_CHECKS, "request_json")
+    def test_flutter_skip_is_not_applicable_only_with_exact_scope_evidence(self, request, _jobs, _files):
+        request.side_effect = [
+            ({"name":"Research OS Final Gate","path":".github/workflows/research-os-final-gate.yml",
+              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+            ({"run_id":456,"name":"Flutter Windows build analyze test",
+              "status":"completed","conclusion":"skipped"}, {}),
+            ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+        ]
+        check = {"name":"Flutter Windows build analyze test","status":"completed","conclusion":"skipped",
+                 "details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "not_applicable")
+        self.assertIn("all PR files are outside", result["reason_code"])
+        self.assertEqual(result["source"], "check_run+exact_scope_evidence")
+
+    @patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[{"filename":"v3/flutter_app/lib/main.dart"}])
+    @patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+        "name":"Decide whether legacy Flutter Windows validation is relevant",
+        "run_id":456,"conclusion":"success",
+    }])
+    @patch.object(VERIFY_PR_CHECKS, "request_json")
+    def test_flutter_skip_with_relevant_changed_file_remains_unproven(self, request, _jobs, _files):
+        request.side_effect = [
+            ({"name":"Research OS Final Gate","path":".github/workflows/research-os-final-gate.yml",
+              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+            ({"run_id":456,"name":"Flutter Windows build analyze test",
+              "status":"completed","conclusion":"skipped"}, {}),
+            ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+        ]
+        check = {"name":"Flutter Windows build analyze test","status":"completed","conclusion":"skipped",
+                 "details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    def test_flutter_skip_without_pull_request_number_remains_unproven(self):
+        check = {"name":"Flutter Windows build analyze test","status":"completed","conclusion":"skipped",
+                 "details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "36", "different-sha")
+        self.assertEqual(result["bucket"], "unproven")
+
     def test_neutral_check_run_is_unproven_not_passing(self):
         check = normalize_check_run({"name":"non-blocking-note","status":"completed","conclusion":"neutral"}, "123")
         self.assertEqual(check["bucket"], "unproven")
