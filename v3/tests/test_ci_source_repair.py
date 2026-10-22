@@ -82,6 +82,7 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))", source)
         self.assertIn("$attempt -lt 120", source)
         self.assertIn("OwningProcess", source)
+        self.assertIn("$serviceListenerPids", source)
         self.assertIn("do not kill", source.lower())
 
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
