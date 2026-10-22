@@ -28,6 +28,9 @@ def repair_workflow(text: str) -> str:
     text = text.replace("'6^3'", "'6^6'").replace("-ne 216", "-ne 46656")
     if "unified-master-orchestrator-v3-clean" in text or "'6^3'" in text:
         raise ValueError("workflow: conflicting V3 master contract remains")
+    for required in ("shell: bash", "unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
+        if required not in text:
+            raise ValueError(f"workflow: required contract marker missing: {required}")
     return text
 
 
@@ -47,8 +50,12 @@ def repair_service_smoke(text: str) -> str:
             "from research_os_v3",
             1,
         )
-    if "PROJECT_ROOT = Path(__file__).resolve().parents[1]" not in text:
-        raise ValueError("service_smoke: package root bootstrap missing")
+    for required in (
+        "PROJECT_ROOT = Path(__file__).resolve().parents[1]",
+        "sys.path.insert(0, str(PROJECT_ROOT))",
+    ):
+        if required not in text:
+            raise ValueError(f"service_smoke: package root bootstrap missing: {required}")
     return text
 
 
@@ -66,6 +73,12 @@ def repair_storage_smoke(text: str) -> str:
         text = text.replace(old, new, 1)
     if "alice_again.root.relative_to(second.root)" in text or "bob_again.root.relative_to(second.root)" in text:
         raise ValueError("storage_smoke: unstable path.relative_to scope output remains")
+    for required in (
+        '"user_a_scope": "users/alice/profiles/default"',
+        '"user_b_scope": "users/bob/profiles/default"',
+    ):
+        if required not in text:
+            raise ValueError(f"storage_smoke: logical scope evidence missing: {required}")
     return text
 
 
@@ -74,6 +87,9 @@ def repair_candidate(text: str) -> str:
     text = text.replace("'6^3'", "'6^6'").replace("-ne 216", "-ne 46656")
     if "unified-master-orchestrator-v3-clean" in text or "'6^3'" in text:
         raise ValueError("candidate_validate: conflicting V3 master contract remains")
+    for required in ("unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
+        if required not in text:
+            raise ValueError(f"candidate_validate: required contract marker missing: {required}")
     return text
 
 
