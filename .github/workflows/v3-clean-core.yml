@@ -27,6 +27,9 @@ jobs:
     name: Core validation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -73,7 +76,6 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/v3
         run: |
           python -m unittest discover -s tests -v
-          if ($LASTEXITCODE -ne 0) { throw 'V3 Clean unit tests failed' }
           python scripts/evidence.py --output evidence/progress.json --stage unit_tests --status passed
 
       - name: Run provider adapter smoke
