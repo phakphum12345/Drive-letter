@@ -32,11 +32,14 @@ class V3CISourceRepairTests(unittest.TestCase):
     def test_workflow_audit_handles_windows_crlf_checkout(self) -> None:
         source = (
             "    timeout-minutes: 45\r\n    strategy:\r\n"
+            '$master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5\r\n'
             "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\r\n"
             "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\r\n"
         )
         repaired = repair_workflow(source)
         self.assertIn("        shell: bash", repaired)
+        self.assertIn('?tasks=217"', repaired)
+        self.assertNotIn('?tasks=30"', repaired)
         self.assertIn("\r\n", repaired)
         self.assertNotIn("\n", repaired.replace("\r\n", ""))
         self.assertEqual(repair_workflow(repaired), repaired)
