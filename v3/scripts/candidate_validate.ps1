@@ -72,6 +72,12 @@ function Invoke-Setup([string]$LogPath) {
         $diagnosticDir = Join-Path $v3Root 'evidence\installer-logs'
         New-Item -ItemType Directory -Path $diagnosticDir -Force | Out-Null
         $diagnosticPath = Join-Path $diagnosticDir "setup-$stage.log"
+        $lifecycleLog = Join-Path $dataDir 'logs\service-lifecycle.log'
+        if (Test-Path -LiteralPath $lifecycleLog -PathType Leaf) {
+            Write-Output '=== Service lifecycle diagnostics (sanitized) ==='
+            Get-Content -LiteralPath $lifecycleLog -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Output ([string]$_) }
+        }
         if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
             $sanitized = @(
                 Get-Content -LiteralPath $LogPath -ErrorAction Stop | ForEach-Object {
