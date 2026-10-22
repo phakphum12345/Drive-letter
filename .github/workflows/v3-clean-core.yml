@@ -267,7 +267,12 @@ jobs:
           $audit = Join-Path $dataDir 'logs\http-audit.jsonl'
           $env:RESEARCH_OS_V3_DATA_DIR = $dataDir
           $env:RESEARCH_OS_V3_HOST = '127.0.0.1'
-          $env:RESEARCH_OS_V3_PORT = '8788'
+          $portReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $portReservation.Start()
+          $testPort = ([System.Net.IPEndPoint]$portReservation.LocalEndpoint).Port
+          $portReservation.Stop()
+          $env:RESEARCH_OS_V3_PORT = [string]$testPort
+          $env:RESEARCH_OS_V3_BASE_URL = "http://127.0.0.1:$testPort"
 
           $service = $null
           $app = $null
@@ -281,7 +286,7 @@ jobs:
             $ready = $false
             for ($attempt = 0; $attempt -lt 40; $attempt++) {
               try {
-                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8788/health' -TimeoutSec 2
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$testPort/health" -TimeoutSec 2
                 if ($health.status -eq 'ok') { $ready = $true; break }
               } catch { }
               Start-Sleep -Milliseconds 250
@@ -348,10 +353,10 @@ jobs:
             if ($service -and -not $service.HasExited) {
               Stop-Process -Id $service.Id -Force -ErrorAction SilentlyContinue
             }
-            $leftovers = @(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue)
-            foreach ($connection in $leftovers) {
-              Stop-Process -Id $connection.OwningProcess -Force -ErrorAction SilentlyContinue
-            }
+          }
+
+          if (Get-NetTCPConnection -LocalPort $testPort -State Listen -ErrorAction SilentlyContinue) {
+            throw 'V3 E2E listener remained after owned process cleanup; unrelated processes were not terminated.'
           }
 
       - name: Run V3 Clean smoke test
