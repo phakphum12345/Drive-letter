@@ -290,7 +290,7 @@ jobs:
           New-Item -ItemType Directory -Path $work -Force | Out-Null
           Copy-Item (Join-Path $source '*') $work -Recurse -Force
           $packageSource = Join-Path $env:GITHUB_WORKSPACE 'packages\research_os_contracts'
-          $packageTarget = Join-Path (Split-Path (Split-Path $work -Parent) -Parent) 'packages\research_os_contracts'
+          $packageTarget = Join-Path (Split-Path $work -Parent) 'packages\research_os_contracts'
           if (-not (Test-Path (Join-Path $packageSource 'pubspec.yaml') -PathType Leaf)) { throw 'Shared Research OS contracts package is missing.' }
           New-Item -ItemType Directory -Path $packageTarget -Force | Out-Null
           Copy-Item "$packageSource\*" $packageTarget -Recurse -Force
