@@ -74,7 +74,7 @@ jobs:
             --paginate \
             --jq '.[] | select(.state == "open" or .state == "closed") | [.number, .state, .head.sha] | @tsv')"
           test -n "$rows" || { echo "PR_LOOKUP_EMPTY: commit=$HEAD repository=$GITHUB_REPOSITORY" >&2; exit 1; }
-          pr="$(python3 -c 'import sys; rows=[line.split("\\t") for line in sys.stdin.read().splitlines() if line.strip()]; open_rows=[r for r in rows if len(r)>=3 and r[1]=="open"]; exact=[r for r in open_rows if r[2] and r[2]==sys.argv[1]]; candidates=exact or open_rows or [r for r in rows if len(r)>=3]; nums=sorted({r[0] for r in candidates}); print(nums[0] if len(nums)==1 else "")' "$HEAD" <<< "$rows")"
+          pr="$(python3 -c 'import sys; rows=[line.split("\t") for line in sys.stdin.read().splitlines() if line.strip()]; open_rows=[r for r in rows if len(r)>=3 and r[1]=="open"]; exact=[r for r in open_rows if r[2] and r[2]==sys.argv[1]]; candidates=exact or open_rows or [r for r in rows if len(r)>=3]; nums=sorted({r[0] for r in candidates}); print(nums[0] if len(nums)==1 else "")' "$HEAD" <<< "$rows")"
           test -n "$pr" || { echo "PR_LOOKUP_AMBIGUOUS: commit=$HEAD rows=$rows" >&2; exit 1; }
 
           # workflow_run can refer to an earlier commit after the PR was synchronized.
