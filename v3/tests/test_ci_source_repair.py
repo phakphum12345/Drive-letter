@@ -83,6 +83,13 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("$attempt -lt 120", source)
         self.assertIn("OwningProcess", source)
         self.assertIn("$serviceListenerPids", source)
+        self.assertIn("$serviceHostPid", source)
+        self.assertIn("ParentProcessId", source)
+        self.assertIn("Get-CimInstance Win32_Process", source)
+        self.assertIn("$imagePath -ieq $expectedPython", source)
+        self.assertIn("$commandLine.IndexOf($scriptPath", source)
+        self.assertIn("Refusing to stop listener PID", source)
+        self.assertIn("Stop-Process -Id $pid -Force", source)
         self.assertIn("do not kill", source.lower())
 
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
