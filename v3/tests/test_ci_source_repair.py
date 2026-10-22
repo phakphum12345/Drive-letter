@@ -92,6 +92,23 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("Stop-Process -Id $listenerPid -Force", source)
         self.assertIn("do not kill", source.lower())
 
+    def test_windows_flutter_build_uses_valid_shared_package_target(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "v3-clean-core.yml").read_text(encoding="utf-8")
+        self.assertIn("$packageTarget = Join-Path (Split-Path $work -Parent) 'packages\\research_os_contracts'", source)
+        self.assertNotIn("Split-Path (Split-Path $work -Parent) -Parent", source)
+
+    def test_installer_waits_for_service_host_process_before_replacing_files(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
+        self.assertIn("$servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }", source)
+        self.assertIn("$serviceProcessExited", source)
+        self.assertIn("Win32_Process -Filter \"ProcessId=$servicePid\"", source)
+        self.assertIn("still holds the V3 ServiceHost image", source)
+        self.assertIn("$attempt -lt 120", source)
+
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
         source = "import os\nimport tempfile\nfrom pathlib import Path\n\nfrom research_os_v3 import DataLayout\n"
         repaired = repair_service_smoke(source)
