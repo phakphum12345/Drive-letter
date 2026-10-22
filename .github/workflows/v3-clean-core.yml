@@ -247,8 +247,8 @@ jobs:
             $remaining = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
               Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
             foreach ($listener in $remaining) {
-              $pid = [int]$listener.OwningProcess
-              $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$pid" -ErrorAction SilentlyContinue
+              $listenerPid = [int]$listener.OwningProcess
+              $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
               $imagePath = if ($processInfo.ExecutablePath) { [System.IO.Path]::GetFullPath($processInfo.ExecutablePath) } else { '' }
               $expectedPython = [System.IO.Path]::GetFullPath($python)
               $commandLine = [string]$processInfo.CommandLine
@@ -257,10 +257,10 @@ jobs:
                 $imagePath -ieq $expectedPython -and
                 $commandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
               if (-not $isOwnedChild) {
-                throw ("Refusing to stop listener PID $pid because ownership could not be proven; parent=$($processInfo.ParentProcessId), image=$imagePath, commandLine=$commandLine")
+                throw ("Refusing to stop listener PID $listenerPid because ownership could not be proven; parent=$($processInfo.ParentProcessId), image=$imagePath, commandLine=$commandLine")
               }
-              Write-Host "Stopping verified V3 child PID $pid (parent ServiceHost PID $serviceHostPid) after service shutdown."
-              Stop-Process -Id $pid -Force
+              Write-Host "Stopping verified V3 child PID $listenerPid (parent ServiceHost PID $serviceHostPid) after service shutdown."
+              Stop-Process -Id $listenerPid -Force
             }
             for ($attempt = 0; $attempt -lt 40; $attempt++) {
               $left = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
