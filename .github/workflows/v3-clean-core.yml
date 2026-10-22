@@ -2,6 +2,11 @@ name: Research OS V3 Clean Core
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'v3/**'
+      - 'packages/research_os_contracts/**'
+      - '.github/workflows/v3-clean-core.yml'
   push:
     branches:
       - architecture/v3-clean
