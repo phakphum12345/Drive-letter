@@ -86,7 +86,7 @@ class AppSimulatorContractTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node.js is not installed; JavaScript syntax check skipped")
     def test_inline_javascript_parses(self) -> None:
         for name, html in (("index.html", self.simulator), ("studio.html", self.studio)):
-            scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script\\s*>", html, re.I | re.S)
+            scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script\s*>", html, re.I | re.S)
             self.assertTrue(scripts, f"{name} should contain an inline script")
             for index, script in enumerate(scripts, start=1):
                 with self.subTest(file=name, script=index):
