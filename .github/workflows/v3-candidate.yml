@@ -73,6 +73,9 @@ jobs:
         working-directory: v3
         shell: pwsh
         run: |
+          # The V3 package needs the repo root for imports written as v3.*,
+          # while V3-local imports need the v3 directory itself.
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\\v3"
           python -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { throw 'V3 source unit tests failed' }
           python scripts/factory_execution_smoke.py
