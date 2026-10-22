@@ -182,9 +182,15 @@ sealed class V3ServiceWorker : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await StopChildProcessAsync(cancellationToken);
+        // Signal BackgroundService cancellation first. ExecuteAsync owns the
+        // child-process shutdown path and must observe cancellation before the
+        // service host disposes the child process or waits for its pumps.
+        _logger.LogInformation("Stopping Research OS V3 worker");
         await base.StopAsync(cancellationToken);
+
+        // Idempotent fallback in case ExecuteAsync did not finish child cleanup.
         await StopChildProcessAsync(CancellationToken.None);
+        _logger.LogInformation("Research OS V3 worker stopped");
     }
 
     public override void Dispose()
