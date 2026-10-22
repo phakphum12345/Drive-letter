@@ -15,6 +15,7 @@ class V3CISourceRepairTests(unittest.TestCase):
         source = (
             "    timeout-minutes: 45\n    strategy:\n"
             "          if ($LASTEXITCODE -ne 0) { throw 'V3 Clean unit tests failed' }\n"
+            '$master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5\n'
             "if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {}\n"
             "if ($master.scale -ne '6^3' -or $capacity -ne 216) {}\n"
         )
@@ -24,6 +25,8 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("unified-master-orchestrator-v3-full", repaired)
         self.assertIn("'6^6'", repaired)
         self.assertIn("-ne 46656", repaired)
+        self.assertIn('?tasks=217"', repaired)
+        self.assertNotIn('?tasks=30"', repaired)
         self.assertEqual(repair_workflow(repaired), repaired)
 
     def test_workflow_audit_handles_windows_crlf_checkout(self) -> None:
@@ -48,6 +51,15 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("/v3/master?tasks=217", repaired)
         self.assertIn("'6^6'", repaired)
         self.assertEqual(repair_candidate(repaired), repaired)
+
+    def test_candidate_installer_failure_emits_sanitized_log_diagnostics(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
+        self.assertIn("installer-logs", source)
+        self.assertIn("Select-Object -Last 80", source)
+        self.assertIn("[REDACTED]", source)
+        self.assertIn("setup-$stage.log", source)
 
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
         source = "import os\nimport tempfile\nfrom pathlib import Path\n\nfrom research_os_v3 import DataLayout\n"
