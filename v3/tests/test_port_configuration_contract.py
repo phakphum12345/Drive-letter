@@ -15,6 +15,7 @@ class FlexiblePortContractTests(unittest.TestCase):
         self.assertIn("host = '127.0.0.1'", service)
         self.assertIn("port = $selectedPort", service)
         self.assertIn("service.json", service)
+        self.assertIn("UTF8Encoding]::new($false)", service)
 
     def test_installer_never_kills_processes_by_port(self) -> None:
         paths = [
