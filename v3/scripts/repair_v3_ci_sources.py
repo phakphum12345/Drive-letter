@@ -19,6 +19,9 @@ TARGETS = (
 
 
 def repair_workflow(text: str) -> str:
+    # Windows checkouts may convert LF blobs to CRLF; audit normalized text but preserve the file's newline style.
+    newline = "\r\n" if "\r\n" in text else "\n"
+    text = text.replace("\r\n", "\n")
     if "    defaults:\n      run:\n        shell: bash\n" not in text:
         marker = "    timeout-minutes: 45\n    strategy:"
         if marker not in text:
@@ -32,7 +35,7 @@ def repair_workflow(text: str) -> str:
     for required in ("shell: bash", "unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
         if required not in text:
             raise ValueError(f"workflow: required contract marker missing: {required}")
-    return text
+    return text.replace("\n", "\r\n") if newline == "\r\n" else text
 
 
 def repair_service_smoke(text: str) -> str:
@@ -84,11 +87,12 @@ def repair_storage_smoke(text: str) -> str:
 
 
 def repair_candidate(text: str) -> str:
+    text = text.replace("/v3/master?tasks=30", "/v3/master?tasks=217")
     text = text.replace("unified-master-orchestrator-v3-clean", "unified-master-orchestrator-v3-full")
     text = text.replace("'6^3'", "'6^6'").replace("-ne 216", "-ne 46656")
     if "unified-master-orchestrator-v3-clean" in text or "'6^3'" in text:
         raise ValueError("candidate_validate: conflicting V3 master contract remains")
-    for required in ("unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
+    for required in ("/v3/master?tasks=217", "unified-master-orchestrator-v3-full", "'6^6'", "-ne 46656"):
         if required not in text:
             raise ValueError(f"candidate_validate: required contract marker missing: {required}")
     return text
