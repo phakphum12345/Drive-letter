@@ -99,6 +99,17 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("$packageTarget = Join-Path (Split-Path $work -Parent) 'packages\\research_os_contracts'", source)
         self.assertNotIn("Split-Path (Split-Path $work -Parent) -Parent", source)
 
+    def test_service_shutdown_failure_records_lifecycle_diagnostics(self) -> None:
+        from pathlib import Path
+
+        service = (Path(__file__).resolve().parents[1] / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
+        candidate = (Path(__file__).resolve().parents[1] / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
+        self.assertIn("service-lifecycle.log", service)
+        self.assertIn("Remove-V3Service FAILED", service)
+        self.assertIn("Service PID wait completed", service)
+        self.assertIn("$lifecycleLog", candidate)
+        self.assertIn("Service lifecycle diagnostics (sanitized)", candidate)
+
     def test_installer_waits_for_service_host_process_before_replacing_files(self) -> None:
         from pathlib import Path
 
