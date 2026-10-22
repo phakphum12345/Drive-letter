@@ -61,6 +61,24 @@ jobs:
           export RESEARCH_OS_CONVERSATION_STORE="$RUNNER_TEMP/ResearchOSData/sessions/conversations.json"
           python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
 
+      - name: Test App Simulator and Code Studio (exact SHA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          python -m unittest discover -s tools/app-simulator -p "test_*.py" -v
+          {
+            echo "### App Simulator / Code Studio contract"
+            echo "- TARGET_SHA: `$TARGET_SHA`"
+            echo "- CHECKED_OUT_SHA: `$actual`"
+            echo "- Result: PASS"
+            echo 'Source SHA-256:'
+            echo '```text'
+            sha256sum tools/app-simulator/index.html tools/app-simulator/studio.html tools/app-simulator/test_simulator_contract.py
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Record Flutter validation scope
         shell: bash
         run: |
