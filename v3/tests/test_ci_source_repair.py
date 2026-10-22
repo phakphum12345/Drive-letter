@@ -99,6 +99,16 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("$packageTarget = Join-Path (Split-Path $work -Parent) 'packages\\research_os_contracts'", source)
         self.assertNotIn("Split-Path (Split-Path $work -Parent) -Parent", source)
 
+    def test_service_host_signals_worker_cancellation_before_child_cleanup(self) -> None:
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "windows_service" / "Program.cs").read_text(encoding="utf-8")
+        stop = source.split("public override async Task StopAsync(CancellationToken cancellationToken)", 1)[1]
+        stop = stop.split("public override void Dispose()", 1)[0]
+        self.assertLess(stop.index("await base.StopAsync(cancellationToken)"), stop.index("await StopChildProcessAsync(CancellationToken.None)"))
+        self.assertIn("ExecuteAsync owns the", stop)
+        self.assertIn("worker stopped", stop)
+
     def test_service_shutdown_failure_records_lifecycle_diagnostics(self) -> None:
         from pathlib import Path
 
