@@ -319,8 +319,8 @@ def prove_flutter_scope_skip(
         return normalized
     flutter_scope = re.compile(
         r"^(v3/flutter_app/|packages/research_os_contracts/|"
-        r"\\.github/actions/flutter-setup/|"
-        r"\\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\\.yml$)"
+        r"\.github/actions/flutter-setup/|"
+        r"\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\.yml$)"
     )
     changed_names = [str(item.get("filename") or "") for item in files]
     if any(not name or flutter_scope.search(name) for name in changed_names):
