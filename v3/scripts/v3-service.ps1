@@ -67,6 +67,9 @@ function Remove-V3Service {
             }
             Start-Sleep -Milliseconds 250
         }
+        if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+            throw "Windows service $ServiceName remains registered after deletion"
+        }
     }
     # Never terminate a process merely because it owns the configured port.
     # A listener may belong to an unrelated application.
