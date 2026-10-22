@@ -151,6 +151,7 @@ jobs:
 
           $binaryPath = "`"$exe`" --root `"$root`" --python `"$python`" --port $port --data-dir `"$dataDir`" --service-name `"$serviceName`""
           $validated = $false
+          $serviceListenerPids = @()
           $marker = Join-Path $dataDir 'sessions\service-preservation.marker'
           try {
             New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Manual | Out-Null
@@ -190,6 +191,7 @@ jobs:
 
             $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop)
             if ($listeners.Count -lt 1) { throw 'V3 service has no listening socket' }
+            $serviceListenerPids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)
             $badListener = $listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }
             if ($badListener) { throw 'V3 Windows Service is not loopback-only' }
 
@@ -225,7 +227,9 @@ jobs:
           $listenerGone = $false
           for ($attempt = 0; $attempt -lt 120; $attempt++) {
             $serviceGone = -not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)
-            $listenerGone = -not (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+            $activeListeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+            $ownedListeners = @($activeListeners | Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+            $listenerGone = ($ownedListeners.Count -eq 0)
             if ($serviceGone -and $listenerGone) { break }
             Start-Sleep -Milliseconds 250
           }
@@ -233,8 +237,9 @@ jobs:
           if (-not $serviceGone) { throw 'V3 Windows Service was not removed after bounded cleanup wait' }
           if (-not $listenerGone) {
             $remaining = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+              Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess } |
               Select-Object LocalAddress, LocalPort, OwningProcess)
-            throw ("V3 service listener remained after 30-second cleanup wait: " + ($remaining | ConvertTo-Json -Compress))
+            throw ("V3 service-owned listener PIDs remained after 30-second cleanup wait: " + ($remaining | ConvertTo-Json -Compress))
           }
           if (-not (Test-Path $marker)) { throw 'V3 data was not preserved after service removal' }
           if ((Get-Content $marker -Raw).Trim() -ne 'preserve-me') { throw 'V3 preserved data changed during service lifecycle' }
