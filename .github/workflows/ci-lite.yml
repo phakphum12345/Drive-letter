@@ -64,15 +64,27 @@ jobs:
       - name: Run Recon concurrency regression test
         run: python -m unittest tools.test_recon_concurrency -v
 
+      - name: Record Flutter validation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "FLUTTER_VALIDATION=REQUIRED_PULL_REQUEST" | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ inputs.include_flutter }}" == "true" ]]; then
+            echo "FLUTTER_VALIDATION=REQUESTED_MANUAL_DISPATCH" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "FLUTTER_VALIDATION=SKIPPED_BY_MANUAL_DISPATCH_INPUT" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Set up Flutter
-        if: ${{ inputs.include_flutter == true }}
+        if: ${{ github.event_name == 'pull_request' || inputs.include_flutter == true }}
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
           channel: stable
           cache: true
 
       - name: Flutter analyze and tests
-        if: ${{ inputs.include_flutter == true }}
+        if: ${{ github.event_name == 'pull_request' || inputs.include_flutter == true }}
         working-directory: apps/research_os_flutter
         run: |
           flutter pub get

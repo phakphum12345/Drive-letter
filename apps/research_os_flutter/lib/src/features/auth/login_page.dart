@@ -151,7 +151,28 @@ class _LoginPageState extends State<LoginPage> {
           if (!mounted || generation != _pollingGeneration) return;
           final session = result['session']?.toString().trim() ?? '';
           if (result['connected'] == true && session.isNotEmpty) {
+            // A handoff token is not enough to change routes: confirm that the
+            // API accepts this exact session before entering the app shell.
             widget.apiClient.setSession(session);
+            final Map<String, dynamic> authStatus;
+            try {
+              authStatus = await widget.apiClient.getAuthStatus();
+            } on Object catch (error) {
+              widget.apiClient.clearSession();
+              throw ResearchOSApiException(
+                'Research OS session verification failed. Refresh the QR code and try again. ($error)',
+              );
+            }
+            if (!mounted || generation != _pollingGeneration) {
+              widget.apiClient.clearSession();
+              return;
+            }
+            if (authStatus['connected'] != true) {
+              widget.apiClient.clearSession();
+              throw const ResearchOSApiException(
+                'Research OS session could not be verified. Refresh the QR code and try again.',
+              );
+            }
             _pairingId = null;
             _pairingSecret = null;
             _qrPayload = null;

@@ -77,6 +77,13 @@ void main() {
                 200,
                 headers: {'content-type': 'application/json'},
               );
+            case '/v1/auth/status':
+              expect(request.headers['x-research-os-session'], 'session-secret-2');
+              return http.Response(
+                jsonEncode({'connected': true, 'account': {'user_id': 'github:123'}}),
+                200,
+                headers: {'content-type': 'application/json'},
+              );
             default:
               fail('Unexpected request: ${request.method} ${request.url}');
           }
@@ -186,6 +193,13 @@ void main() {
               200,
               headers: {'content-type': 'application/json'},
             );
+          case '/v1/auth/status':
+            expect(request.headers['x-research-os-session'], 'session-token');
+            return http.Response(
+              jsonEncode({'connected': true, 'account': {'user_id': 'github:123'}}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
           default:
             fail('Unexpected request: ${request.method} ${request.url}');
         }
@@ -227,4 +241,84 @@ void main() {
     expect(find.text('Custom'), findsNothing);
     expect(authenticated, 1);
   });
+  testWidgets('QR handoff does not enter the app when the API rejects its session', (tester) async {
+    var authenticated = 0;
+    final observedSessionHeaders = <String?>[];
+    final client = ResearchOSApiClient(
+      baseUrl: 'http://research-os.test',
+      client: MockClient((request) async {
+        switch (request.url.path) {
+          case '/v1/auth/pairing/start':
+            return http.Response(
+              jsonEncode({
+                'pairing_id': 'pair-invalid',
+                'pairing_secret': 'secret-invalid',
+                'expires_at': 9999999999,
+                'status': 'PENDING',
+                'qr_payload': 'https://research-os.test/v1/auth/pairing/open?pairing_id=pair-invalid&secret=secret-invalid',
+              }),
+              201,
+              headers: {'content-type': 'application/json'},
+            );
+          case '/v1/auth/pairing/status':
+            return http.Response(
+              jsonEncode({
+                'pairing_id': 'pair-invalid',
+                'status': 'CONNECTED',
+                'connected': true,
+                'handoff_ready': true,
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          case '/v1/auth/providers/handoff':
+            return http.Response(
+              jsonEncode({'connected': true, 'session': 'invalid-session'}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          case '/v1/auth/status':
+            observedSessionHeaders.add(request.headers['x-research-os-session']);
+            return http.Response(
+              jsonEncode({'connected': false, 'account': null}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          case '/v1/auth/pairing/cancel':
+            return http.Response(
+              jsonEncode({'cancelled': true}),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          default:
+            fail('Unexpected request: ${request.method} ${request.url}');
+        }
+      }),
+    );
+    addTearDown(client.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(
+          apiClient: client,
+          connectionProfile: 'research_os',
+          onConnectionChanged: (_) async {},
+          onAuthenticated: () => authenticated++,
+        ),
+      ),
+    );
+    for (var frame = 0; frame < 20 && observedSessionHeaders.isEmpty; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump();
+
+    expect(observedSessionHeaders, <String?>['invalid-session']);
+    expect(authenticated, 0);
+    expect(find.textContaining('session could not be verified'), findsOneWidget);
+
+    // A rejected session must be cleared, not retained for later API calls.
+    await client.getAuthStatus();
+    expect(observedSessionHeaders, <String?>['invalid-session', null]);
+  });
+
 }
