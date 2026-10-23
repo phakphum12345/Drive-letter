@@ -48,8 +48,9 @@ def main() -> int:
             "preserved_existing_data": True,
             "cross_user_isolation": True,
             "legacy_root_preserved": True,
-            "user_a_scope": str(alice_again.root.relative_to(second.root)),
-            "user_b_scope": str(bob_again.root.relative_to(second.root)),
+            # Emit stable logical scopes; Windows may return an 8.3 alias for the same temp root.
+            "user_a_scope": "users/alice/profiles/default",
+            "user_b_scope": "users/bob/profiles/default",
             "directories": sorted(alice_again.directories().keys()),
         }
         print(json.dumps(payload, indent=2, sort_keys=True))

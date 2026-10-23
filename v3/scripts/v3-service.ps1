@@ -4,7 +4,10 @@ param(
     [string]$Action,
 
     [string]$ServiceName = 'ResearchOSV3Service',
-    [int]$Port = 8788
+    [ValidateRange(1, 65535)]
+    [int]$Port = 8788,
+    [ValidateRange(0, 1000)]
+    [int]$PortScanCount = 100
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,35 +17,244 @@ $serviceExe = Join-Path $appRoot 'service\ResearchOS.V3.ServiceHost.exe'
 $v3Root = Join-Path $appRoot 'v3'
 $pythonExe = Join-Path $v3Root 'runtime\python\python.exe'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
+$configPath = Join-Path $dataDir 'service.json'
+$lifecycleLogPath = Join-Path $dataDir 'logs\service-lifecycle.log'
+
+function Write-ServiceLifecycleLog([string]$Message) {
+    try {
+        $logDir = Split-Path -Parent $lifecycleLogPath
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        $line = '[{0}] {1}' -f [DateTimeOffset]::UtcNow.ToString('O'), $Message
+        Add-Content -LiteralPath $lifecycleLogPath -Value $line -Encoding utf8
+    }
+    catch {
+        # Diagnostics must never replace the original service lifecycle error.
+    }
+}
+
+function Test-LoopbackPortAvailable([int]$CandidatePort) {
+    $listener = $null
+    try {
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $CandidatePort)
+        $listener.Start()
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($listener) {
+            try { $listener.Stop() } catch { }
+        }
+    }
+}
+
+function Find-AvailableLoopbackPort([int]$StartPort, [int]$ScanCount) {
+    $lastPort = [Math]::Min(65535, $StartPort + $ScanCount)
+    for ($candidate = $StartPort; $candidate -le $lastPort; $candidate++) {
+        if (Test-LoopbackPortAvailable $candidate) {
+            return $candidate
+        }
+    }
+    throw "No available loopback port found from $StartPort through $lastPort"
+}
 
 function Remove-V3Service {
-    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($service -and $service.Status -ne 'Stopped') {
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        try {
-            $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+    Write-ServiceLifecycleLog "Remove-V3Service started; service=$ServiceName"
+    $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+    $servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
+    $serviceExeFullPath = [System.IO.Path]::GetFullPath($serviceExe)
+    $pythonExeFullPath = [System.IO.Path]::GetFullPath($pythonExe)
+    $serviceEntrypointFullPath = [System.IO.Path]::GetFullPath((Join-Path $v3Root 'scripts\\run_service.py'))
+    $serviceProcessSnapshot = $null
+    $serviceChildSnapshots = @()
+    if ($servicePid -gt 0) {
+        $serviceProcessSnapshot = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+        if (-not $serviceProcessSnapshot -or -not $serviceProcessSnapshot.ExecutablePath -or
+            [System.IO.Path]::GetFullPath($serviceProcessSnapshot.ExecutablePath) -ine $serviceExeFullPath -or
+            -not $serviceProcessSnapshot.CreationDate) {
+            throw "Refusing to stop service '$ServiceName': PID $servicePid is not the expected identifiable V3 ServiceHost executable"
         }
-        catch { }
+
+        # Capture only the bundled Python process directly launched by this
+        # exact ServiceHost and running the expected service entrypoint. This
+        # allows cleanup of an orphaned child without killing by port or image name.
+        $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+        foreach ($candidate in $allProcesses) {
+            if ([int]$candidate.ParentProcessId -ne $servicePid -or
+                -not $candidate.ExecutablePath -or
+                [System.IO.Path]::GetFullPath($candidate.ExecutablePath) -ine $pythonExeFullPath -or
+                -not $candidate.CreationDate -or
+                -not $candidate.CommandLine -or
+                $candidate.CommandLine.IndexOf($serviceEntrypointFullPath, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                continue
+            }
+            $serviceChildSnapshots += [pscustomobject]@{
+                ProcessId = [int]$candidate.ProcessId
+                CreationDate = [string]$candidate.CreationDate
+                ExecutablePath = [string]$candidate.ExecutablePath
+                CommandLine = [string]$candidate.CommandLine
+            }
+        }
+        Write-ServiceLifecycleLog ("Captured verified service child processes: count={0}" -f $serviceChildSnapshots.Count)
+    }
+    $serviceProcessCreationDate = if ($serviceProcessSnapshot) { [string]$serviceProcessSnapshot.CreationDate } else { '' }
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+    Write-ServiceLifecycleLog ("Initial service state: status={0}; pid={1}" -f $(if ($service) { $service.Status } else { 'NotFound' }), $servicePid)
+    if ($service -and $service.Status -ne 'Stopped') {
+        Write-ServiceLifecycleLog "Requesting service stop"
+        Stop-Service -Name $ServiceName -Force
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($service) {
+            $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+            Write-ServiceLifecycleLog "Service Control Manager reports Stopped"
+        }
+    }
+
+    # SCM can report Stopped before the service process has released its image.
+    # Wait for the exact ServiceHost PID to exit before Inno Setup replaces files.
+    if ($servicePid -gt 0) {
+        Write-ServiceLifecycleLog "Waiting for captured service PID $servicePid to release ServiceHost image"
+        $serviceProcessExited = $false
+        for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+            if (-not $processInfo) {
+                $serviceProcessExited = $true
+                break
+            }
+            if ($processInfo.ExecutablePath -and
+                [System.IO.Path]::GetFullPath($processInfo.ExecutablePath) -ine $serviceExeFullPath) {
+                $serviceProcessExited = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        Write-ServiceLifecycleLog ("Service PID wait completed: exited={0}" -f $serviceProcessExited)
+        if (-not $serviceProcessExited) {
+            # SCM may report Stopped before the owned service-host process has
+            # fully exited. Escalate only after rechecking that the service is
+            # stopped, SCM no longer assigns a PID, and this is the same process
+            # (PID + creation time + executable path) captured before shutdown.
+            $serviceAfterStop = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            $serviceInfoAfterStop = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+            $currentProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+            $sameOwnedProcess = $currentProcess -and $currentProcess.ExecutablePath -and
+                ([string]$currentProcess.CreationDate -eq $serviceProcessCreationDate) -and
+                ([System.IO.Path]::GetFullPath($currentProcess.ExecutablePath) -ieq $serviceExeFullPath)
+            $serviceStopped = (-not $serviceAfterStop -or $serviceAfterStop.Status -eq 'Stopped') -and
+                (-not $serviceInfoAfterStop -or [int]$serviceInfoAfterStop.ProcessId -eq 0)
+            if (-not $serviceStopped -or -not $sameOwnedProcess) {
+                throw "Windows service host PID $servicePid did not exit and its stopped-state process identity could not be safely verified"
+            }
+
+            Write-ServiceLifecycleLog "SCM is stopped and PID identity is unchanged; terminating only the captured V3 ServiceHost process"
+            Stop-Process -Id $servicePid -Force -ErrorAction Stop
+            $serviceProcessExited = $false
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+                $currentProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+                if (-not $currentProcess -or
+                    [string]$currentProcess.CreationDate -ne $serviceProcessCreationDate -or
+                    -not $currentProcess.ExecutablePath -or
+                    [System.IO.Path]::GetFullPath($currentProcess.ExecutablePath) -ine $serviceExeFullPath) {
+                    $serviceProcessExited = $true
+                    break
+                }
+                Start-Sleep -Milliseconds 250
+            }
+            Write-ServiceLifecycleLog ("Targeted service-host cleanup completed: exited={0}" -f $serviceProcessExited)
+            if (-not $serviceProcessExited) {
+                throw "Verified V3 service host PID $servicePid remained after targeted cleanup"
+            }
+        }
+    }
+
+    # A force-stopped ServiceHost can leave its exact Python child alive on
+    # Windows. After SCM has stopped and the host PID is gone, clean up only
+    # child identities captured before shutdown and revalidated in full.
+    if ($serviceChildSnapshots.Count -gt 0) {
+        $scmFullyStopped = $false
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            $serviceAfterHostCleanup = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            $serviceInfoAfterHostCleanup = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+            if ((-not $serviceAfterHostCleanup -or $serviceAfterHostCleanup.Status -eq 'Stopped') -and
+                (-not $serviceInfoAfterHostCleanup -or [int]$serviceInfoAfterHostCleanup.ProcessId -eq 0)) {
+                $scmFullyStopped = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        if (-not $scmFullyStopped) {
+            throw "Refusing orphan-child cleanup: SCM did not settle to Stopped with ProcessId=0 for '$ServiceName'"
+        }
+    }
+
+    foreach ($snapshot in $serviceChildSnapshots) {
+        $currentChild = Get-CimInstance Win32_Process -Filter "ProcessId=$($snapshot.ProcessId)" -ErrorAction SilentlyContinue
+        if (-not $currentChild) { continue }
+        $sameChild = ([string]$currentChild.CreationDate -eq $snapshot.CreationDate) -and
+            $currentChild.ExecutablePath -and
+            ([System.IO.Path]::GetFullPath($currentChild.ExecutablePath) -ieq $pythonExeFullPath) -and
+            [string]::Equals([string]$currentChild.CommandLine, $snapshot.CommandLine, [StringComparison]::Ordinal) -and
+            $currentChild.CommandLine.IndexOf($serviceEntrypointFullPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $serviceAfterChildStop = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        $serviceInfoAfterChildStop = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+        $scmStopped = (-not $serviceAfterChildStop -or $serviceAfterChildStop.Status -eq 'Stopped') -and
+            (-not $serviceInfoAfterChildStop -or [int]$serviceInfoAfterChildStop.ProcessId -eq 0)
+        if (-not $scmStopped -or -not $sameChild) {
+            throw "Refusing to stop captured child PID $($snapshot.ProcessId): service state or process identity is not verified"
+        }
+
+        Write-ServiceLifecycleLog "Stopping captured orphaned V3 Python service child PID $($snapshot.ProcessId)"
+        Stop-Process -Id ([int]$snapshot.ProcessId) -Force -ErrorAction Stop
+        $childExited = $false
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            $currentChild = Get-CimInstance Win32_Process -Filter "ProcessId=$($snapshot.ProcessId)" -ErrorAction SilentlyContinue
+            if (-not $currentChild -or
+                [string]$currentChild.CreationDate -ne $snapshot.CreationDate -or
+                -not $currentChild.ExecutablePath -or
+                [System.IO.Path]::GetFullPath($currentChild.ExecutablePath) -ine $pythonExeFullPath) {
+                $childExited = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        Write-ServiceLifecycleLog ("Captured child PID {0} cleanup completed: exited={1}" -f $snapshot.ProcessId, $childExited)
+        if (-not $childExited) {
+            throw "Verified V3 Python service child PID $($snapshot.ProcessId) remained after targeted cleanup"
+        }
     }
 
     if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        Write-ServiceLifecycleLog "Requesting service registration deletion"
         sc.exe delete $ServiceName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to delete Windows service $ServiceName"
+        }
         for ($attempt = 0; $attempt -lt 40; $attempt++) {
             if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
                 break
             }
             Start-Sleep -Milliseconds 250
         }
+        if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+            Write-ServiceLifecycleLog "Service registration still exists after deletion wait"
+            throw "Windows service $ServiceName remains registered after deletion"
+        }
     }
-
-    $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
-    foreach ($listener in $listeners) {
-        Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-    }
+    Write-ServiceLifecycleLog "Remove-V3Service completed successfully"
+    # Never terminate a process merely because it owns the configured port.
+    # A listener may belong to an unrelated application.
 }
 
 if ($Action -eq 'uninstall') {
-    Remove-V3Service
+    try {
+        Remove-V3Service
+    }
+    catch {
+        Write-ServiceLifecycleLog ("Remove-V3Service FAILED: {0}" -f ($_ | Out-String).Trim())
+        throw
+    }
     Write-Host "Research OS V3 service removed. Data preserved at $dataDir"
     exit 0
 }
@@ -60,14 +272,15 @@ if (-not (Test-Path (Join-Path $v3Root 'scripts\run_service.py') -PathType Leaf)
 New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 Remove-V3Service
 
-$binaryPath = "`"$serviceExe`" --root `"$v3Root`" --python `"$pythonExe`" --port $Port --data-dir `"$dataDir`" --service-name `"$ServiceName`""
+$selectedPort = Find-AvailableLoopbackPort -StartPort $Port -ScanCount $PortScanCount
+$binaryPath = "`"$serviceExe`" --root `"$v3Root`" --python `"$pythonExe`" --port $selectedPort --data-dir `"$dataDir`" --service-name `"$ServiceName`""
 New-Service -Name $ServiceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName 'Research OS V3 Local Service' | Out-Null
 Start-Service -Name $ServiceName
 
 $ready = $false
 for ($attempt = 0; $attempt -lt 40; $attempt++) {
     try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 2
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$selectedPort/health" -TimeoutSec 2
         if ($health.status -eq 'ok') {
             $ready = $true
             break
@@ -78,15 +291,35 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {
 }
 
 if (-not $ready) {
-    throw 'Research OS V3 service did not become ready after installation'
+    throw "Research OS V3 service did not become ready on selected port $selectedPort"
 }
 
-$listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop)
+$listeners = @(Get-NetTCPConnection -LocalPort $selectedPort -State Listen -ErrorAction Stop)
 if ($listeners.Count -lt 1) {
     throw 'Research OS V3 service has no listening socket after installation'
 }
 if ($listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }) {
     throw 'Research OS V3 service is not loopback-only'
 }
+$serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
+if (-not $serviceInfo -or $serviceInfo.ProcessId -eq 0) {
+    throw 'Cannot establish ownership of the installed V3 Windows service process'
+}
+foreach ($listener in $listeners) {
+    $owner = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)"
+    if (-not $owner -or -not $owner.ExecutablePath -or
+        [System.IO.Path]::GetFullPath($owner.ExecutablePath) -ine [System.IO.Path]::GetFullPath($pythonExe)) {
+        throw "Selected port $selectedPort is not owned by the bundled V3 Python runtime"
+    }
+}
 
-Write-Host "Research OS V3 service installed and ready on 127.0.0.1:$Port"
+$config = [ordered]@{
+    schema_version = 1
+    service_name = $ServiceName
+    host = '127.0.0.1'
+    port = $selectedPort
+}
+$configJson = $config | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText($configPath, $configJson, [System.Text.UTF8Encoding]::new($false))
+Write-Host "Research OS V3 service installed and ready on 127.0.0.1:$selectedPort"
+Write-Host "Selected port saved to $configPath"

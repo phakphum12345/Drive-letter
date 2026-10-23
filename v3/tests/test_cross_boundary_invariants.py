@@ -92,6 +92,7 @@ class CrossBoundaryInvariantTests(unittest.TestCase):
                     ("2000-01-01T00:00:00+00:00", "delivery-cross-1"),
                 )
 
+            db.close()
             self.assertEqual(1, delivery.recover_expired())
             new = delivery.claim("delivery-cross-1")
             self.assertIsNotNone(new)

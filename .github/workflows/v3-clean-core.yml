@@ -2,6 +2,11 @@ name: Research OS V3 Clean Core
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'v3/**'
+      - 'packages/research_os_contracts/**'
+      - '.github/workflows/v3-clean-core.yml'
   push:
     branches:
       - architecture/v3-clean
@@ -22,6 +27,9 @@ jobs:
     name: Core validation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +70,15 @@ jobs:
         working-directory: v3
         run: python scripts/evidence.py --output evidence/progress.json --stage initialized --status passed --data '{"sha":"${{ github.sha }}","os":"${{ runner.os }}"}'
 
+      - name: Audit V3 CI source contracts
+        run: |
+          python v3/scripts/repair_v3_ci_sources.py --check --evidence-output v3/evidence/source_contract_audit.json
+          python v3/scripts/evidence.py --output v3/evidence/progress.json --stage source_contract_audit --status passed --data '{"sha":"${{ github.sha }}","mode":"read-only","files_checked":4,"evidence_file":"source_contract_audit.json"}'
+
       - name: Run V3 Clean unit tests
         working-directory: v3
+        env:
+          PYTHONPATH: ${{ github.workspace }}${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/v3
         run: |
           python -m unittest discover -s tests -v
           python scripts/evidence.py --output evidence/progress.json --stage unit_tests --status passed
@@ -136,6 +151,9 @@ jobs:
 
           $binaryPath = "`"$exe`" --root `"$root`" --python `"$python`" --port $port --data-dir `"$dataDir`" --service-name `"$serviceName`""
           $validated = $false
+          $serviceListenerPids = @()
+          $serviceHostPid = 0
+          $scriptPath = Join-Path $root 'scripts\run_service.py'
           $marker = Join-Path $dataDir 'sessions\service-preservation.marker'
           try {
             New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Manual | Out-Null
@@ -164,9 +182,9 @@ jobs:
             }
             Set-Content -Path $marker -Value 'preserve-me' -Encoding utf8
 
-            $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5
-            if ($master.contract -ne 'unified-master-orchestrator-v3-clean') { throw 'Unexpected V3 master contract' }
-            if ($master.scale -ne '6^3' -or [int]$master.maximum_leaf_capacity -ne 216) { throw 'Unexpected V3 adaptive scale result' }
+            $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=217" -TimeoutSec 5
+            if ($master.contract -ne 'unified-master-orchestrator-v3-full') { throw 'Unexpected V3 master contract' }
+            if ($master.scale -ne '6^6' -or [int]$master.maximum_leaf_capacity -ne 46656) { throw "Unexpected V3 adaptive scale result: scale=$($master.scale), capacity=$($master.maximum_leaf_capacity), tasks=217" }
 
             $providers = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/providers" -TimeoutSec 5
             if (-not $providers.providers -or $providers.providers[0].secret_exposed -ne $false) {
@@ -175,6 +193,10 @@ jobs:
 
             $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction Stop)
             if ($listeners.Count -lt 1) { throw 'V3 service has no listening socket' }
+            $serviceListenerPids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if (-not $serviceInfo -or [int]$serviceInfo.ProcessId -le 0) { throw 'Cannot establish the test ServiceHost PID' }
+            $serviceHostPid = [int]$serviceInfo.ProcessId
             $badListener = $listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }
             if ($badListener) { throw 'V3 Windows Service is not loopback-only' }
 
@@ -196,21 +218,63 @@ jobs:
             $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -ne 'Stopped') {
               Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-              try { $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15)) } catch { }
+              try { $svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30)) } catch { }
             }
             if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
               sc.exe delete $serviceName | Out-Null
-              Start-Sleep -Seconds 1
             }
-            $leftovers = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
-            foreach ($connection in $leftovers) {
-              Stop-Process -Id $connection.OwningProcess -Force -ErrorAction SilentlyContinue
-            }
+            # Service control and socket teardown are asynchronous on Windows.
+            # Wait for the exact test-owned service's port to drain; do not kill
+            # an arbitrary PID merely because it later binds the same port.
           }
 
+          $serviceGone = $false
+          $listenerGone = $false
+          for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            $serviceGone = -not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)
+            $activeListeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+            $ownedListeners = @($activeListeners | Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+            $listenerGone = ($ownedListeners.Count -eq 0)
+            if ($serviceGone -and $listenerGone) { break }
+            Start-Sleep -Milliseconds 250
+          }
           if (-not $validated) { throw 'V3 Windows Service lifecycle validation did not complete' }
-          if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { throw 'V3 Windows Service was not removed' }
-          if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { throw 'V3 service listener remained after cleanup' }
+          if (-not $serviceGone) { throw 'V3 Windows Service was not removed after bounded cleanup wait' }
+          if (-not $listenerGone) {
+            # Some Windows service wrappers can exit before their Python child.
+            # Terminate only a listener whose PID was captured during this test AND
+            # whose parent, executable, and command line prove it is this test's child.
+            $remaining = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+              Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+            foreach ($listener in $remaining) {
+              $listenerPid = [int]$listener.OwningProcess
+              $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+              $imagePath = if ($processInfo.ExecutablePath) { [System.IO.Path]::GetFullPath($processInfo.ExecutablePath) } else { '' }
+              $expectedPython = [System.IO.Path]::GetFullPath($python)
+              $commandLine = [string]$processInfo.CommandLine
+              $isOwnedChild = $processInfo -and $serviceHostPid -gt 0 -and
+                [int]$processInfo.ParentProcessId -eq $serviceHostPid -and
+                $imagePath -ieq $expectedPython -and
+                $commandLine.IndexOf($scriptPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+              if (-not $isOwnedChild) {
+                throw ("Refusing to stop listener PID $listenerPid because ownership could not be proven; parent=$($processInfo.ParentProcessId), image=$imagePath, commandLine=$commandLine")
+              }
+              Write-Host "Stopping verified V3 child PID $listenerPid (parent ServiceHost PID $serviceHostPid) after service shutdown."
+              Stop-Process -Id $listenerPid -Force
+            }
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+              $left = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess })
+              if ($left.Count -eq 0) { $listenerGone = $true; break }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $listenerGone) {
+              $left = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+                Where-Object { $serviceListenerPids -contains [int]$_.OwningProcess } |
+                Select-Object LocalAddress, LocalPort, OwningProcess)
+              throw ("Verified V3 child listener remained after targeted cleanup: " + ($left | ConvertTo-Json -Compress))
+            }
+          }
           if (-not (Test-Path $marker)) { throw 'V3 data was not preserved after service removal' }
           if ((Get-Content $marker -Raw).Trim() -ne 'preserve-me') { throw 'V3 preserved data changed during service lifecycle' }
           python v3/scripts/evidence.py --output v3/evidence/progress.json --stage windows_service_cleanup --status passed --data '{"service_removed":true,"listener_removed":true,"data_preserved":true}'
@@ -226,7 +290,7 @@ jobs:
           New-Item -ItemType Directory -Path $work -Force | Out-Null
           Copy-Item (Join-Path $source '*') $work -Recurse -Force
           $packageSource = Join-Path $env:GITHUB_WORKSPACE 'packages\research_os_contracts'
-          $packageTarget = Join-Path (Split-Path (Split-Path $work -Parent) -Parent) 'packages\research_os_contracts'
+          $packageTarget = Join-Path (Split-Path $work -Parent) 'packages\research_os_contracts'
           if (-not (Test-Path (Join-Path $packageSource 'pubspec.yaml') -PathType Leaf)) { throw 'Shared Research OS contracts package is missing.' }
           New-Item -ItemType Directory -Path $packageTarget -Force | Out-Null
           Copy-Item "$packageSource\*" $packageTarget -Recurse -Force
@@ -269,7 +333,12 @@ jobs:
           $audit = Join-Path $dataDir 'logs\http-audit.jsonl'
           $env:RESEARCH_OS_V3_DATA_DIR = $dataDir
           $env:RESEARCH_OS_V3_HOST = '127.0.0.1'
-          $env:RESEARCH_OS_V3_PORT = '8788'
+          $portReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $portReservation.Start()
+          $testPort = ([System.Net.IPEndPoint]$portReservation.LocalEndpoint).Port
+          $portReservation.Stop()
+          $env:RESEARCH_OS_V3_PORT = [string]$testPort
+          $env:RESEARCH_OS_V3_BASE_URL = "http://127.0.0.1:$testPort"
 
           $service = $null
           $app = $null
@@ -283,7 +352,7 @@ jobs:
             $ready = $false
             for ($attempt = 0; $attempt -lt 40; $attempt++) {
               try {
-                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8788/health' -TimeoutSec 2
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$testPort/health" -TimeoutSec 2
                 if ($health.status -eq 'ok') { $ready = $true; break }
               } catch { }
               Start-Sleep -Milliseconds 250
@@ -350,10 +419,10 @@ jobs:
             if ($service -and -not $service.HasExited) {
               Stop-Process -Id $service.Id -Force -ErrorAction SilentlyContinue
             }
-            $leftovers = @(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue)
-            foreach ($connection in $leftovers) {
-              Stop-Process -Id $connection.OwningProcess -Force -ErrorAction SilentlyContinue
-            }
+          }
+
+          if (Get-NetTCPConnection -LocalPort $testPort -State Listen -ErrorAction SilentlyContinue) {
+            throw 'V3 E2E listener remained after owned process cleanup; unrelated processes were not terminated.'
           }
 
       - name: Run V3 Clean smoke test
@@ -371,5 +440,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: v3-clean-evidence-${{ runner.os }}-${{ github.sha }}
-          path: v3/evidence/progress.json
+          path: |
+            v3/evidence/progress.json
+            v3/evidence/source_contract_audit.json
           if-no-files-found: warn

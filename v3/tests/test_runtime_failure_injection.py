@@ -40,6 +40,7 @@ class RuntimeFailureInjectionTests(unittest.TestCase):
                     ("2000-01-01T00:00:00+00:00", "task-1"),
                 )
 
+            db.close()
             self.assertEqual(1, queue.recover_expired_leases())
             recovered = queue.claim(worker_id="worker-b", lease_seconds=30)
             self.assertIsNotNone(recovered)
@@ -72,6 +73,7 @@ class RuntimeFailureInjectionTests(unittest.TestCase):
                     ("2000-01-01T00:00:00+00:00", "delivery-1"),
                 )
 
+            db.close()
             restarted = DurableEventDelivery(path, lease_seconds=30)
             self.assertEqual(1, restarted.recover_expired())
             recovered = restarted.claim("delivery-1")

@@ -15,7 +15,7 @@ $evidence = [System.IO.Path]::GetFullPath($EvidencePath)
 $installDir = Join-Path $env:ProgramFiles 'Research OS V3'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
 $serviceName = 'ResearchOSV3Service'
-$port = 8788
+$port = $null
 $appExe = Join-Path $installDir 'app\research_os_v3_flutter.exe'
 $auditPath = Join-Path $dataDir 'logs\http-audit.jsonl'
 $marker = Join-Path $dataDir 'sessions\candidate-preservation.marker'
@@ -68,7 +68,59 @@ function Invoke-Setup([string]$LogPath) {
         -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$LogPath") `
         -Wait -PassThru
     if ($process.ExitCode -ne 0) {
-        throw "Research OS V3 Setup failed with exit code $($process.ExitCode)"
+        $stage = if ($LogPath -match '(?i)upgrade') { 'upgrade' } else { 'install' }
+        $diagnosticDir = Join-Path $v3Root 'evidence\installer-logs'
+        New-Item -ItemType Directory -Path $diagnosticDir -Force | Out-Null
+        $diagnosticPath = Join-Path $diagnosticDir "setup-$stage.log"
+        $lifecycleLog = Join-Path $dataDir 'logs\service-lifecycle.log'
+        if (Test-Path -LiteralPath $lifecycleLog -PathType Leaf) {
+            Write-Output '=== Service lifecycle diagnostics (sanitized) ==='
+            Get-Content -LiteralPath $lifecycleLog -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Output ([string]$_) }
+        }
+        if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+            $sanitized = @(
+                Get-Content -LiteralPath $LogPath -ErrorAction Stop | ForEach-Object {
+                    $line = [string]$_
+                    $line = $line -replace '(?i)(password|token|secret|api[_-]?key|authorization)(\s*[:=]\s*)[^\s,;]+', '$1$2[REDACTED]'
+                    $line = $line -replace '(?i)(Bearer\s+)[A-Za-z0-9._~+/-]+=*', '$1[REDACTED]'
+                    $line
+                }
+            )
+            Set-Content -LiteralPath $diagnosticPath -Value $sanitized -Encoding utf8
+            Write-Output "Installer failure stage: $stage; exit code: $($process.ExitCode)"
+            Write-Output "Sanitized installer log saved to: $diagnosticPath"
+            $sanitized | Select-Object -Last 80 | ForEach-Object { Write-Output $_ }
+        }
+        else {
+            Write-Warning "Installer returned exit code $($process.ExitCode), but its log was not created: $LogPath"
+        }
+        throw "Research OS V3 Setup failed during $stage with exit code $($process.ExitCode)"
+    }
+}
+
+function Stop-CandidateApp([System.Diagnostics.Process]$Process) {
+    if ($null -eq $Process) { return }
+    try { $Process.Refresh() } catch { }
+    if ($Process.HasExited) { return }
+
+    # Ask the app to close normally before escalating. This PID came from the
+    # Start-Process call below; never terminate processes by port or image name.
+    try {
+        [void]$Process.CloseMainWindow()
+        if ($Process.WaitForExit(10000)) { return }
+    }
+    catch { }
+
+    $owned = Get-CimInstance Win32_Process -Filter "ProcessId = $($Process.Id)" -ErrorAction SilentlyContinue
+    if (-not $owned -or -not $owned.ExecutablePath -or
+        [System.IO.Path]::GetFullPath($owned.ExecutablePath) -ine [System.IO.Path]::GetFullPath($appExe)) {
+        throw "Refusing to stop app PID $($Process.Id): executable ownership could not be verified"
+    }
+
+    Stop-Process -Id $Process.Id -Force -ErrorAction Stop
+    if (-not $Process.WaitForExit(15000)) {
+        throw "Candidate app PID $($Process.Id) did not exit; refusing to run the upgrade against a locked app"
     }
 }
 
@@ -89,10 +141,6 @@ function Remove-StaleInstallation {
         Start-Sleep -Seconds 1
     }
 
-    $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
-    foreach ($listener in $listeners) {
-        Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-    }
     if (Test-Path $installDir) {
         Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -105,8 +153,42 @@ try {
     }
 
     $installLog = Join-Path $env:RUNNER_TEMP 'research-os-v3-install.log'
-    Invoke-Setup $installLog
-    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean' }
+    # Hold the default port during install when it is available to prove that
+    # the installer selects another loopback port instead of killing a listener.
+    $defaultPortReservation = $null
+    $defaultPortWasReserved = $false
+    try {
+        $defaultPortReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 8788)
+        $defaultPortReservation.Start()
+        $defaultPortWasReserved = $true
+    }
+    catch {
+        if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } }
+        $defaultPortReservation = $null
+    }
+
+    try {
+        Invoke-Setup $installLog
+    }
+    finally {
+        if ($defaultPortReservation) {
+            try { $defaultPortReservation.Stop() } catch { }
+        }
+    }
+
+    $serviceConfigPath = Join-Path $dataDir 'service.json'
+    if (-not (Test-Path $serviceConfigPath -PathType Leaf)) {
+        throw 'Installer did not write the selected service port configuration'
+    }
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
+    if ($port -lt 1 -or $port -gt 65535 -or $serviceConfig.host -ne '127.0.0.1') {
+        throw 'Installer wrote an invalid or non-loopback service configuration'
+    }
+    if ($defaultPortWasReserved -and $port -eq 8788) {
+        throw 'Installer did not select a fallback port while the default port was reserved'
+    }
+    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean'; selected_port = $port; default_port_fallback = ($port -ne 8788) }
 
     if (-not (Test-Path $appExe -PathType Leaf)) {
         throw "Installed V3 Flutter executable is missing: $appExe"
@@ -127,17 +209,26 @@ try {
     }
     Record-Evidence 'loopback_binding' @{ binding = '127.0.0.1'; port = $port }
 
-    $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=30" -TimeoutSec 5
-    if ($master.contract -ne 'unified-master-orchestrator-v3-clean') {
+    $master = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/master?tasks=217" -TimeoutSec 5
+    if ($master.contract -ne 'unified-master-orchestrator-v3-full') {
         throw 'Installed V3 master contract is invalid'
     }
-    if ($master.scale -ne '6^3' -or [int]$master.maximum_leaf_capacity -ne 216) {
+    if ($master.scale -ne '6^6' -or [int]$master.maximum_leaf_capacity -ne 46656) {
         throw 'Installed V3 adaptive master result is invalid'
+    }
+    if ($master.system_maximum_scale -ne '10^10' -or [int64]$master.system_maximum_logical_capacity -ne 10000000000) {
+        throw 'Installed V3 system capacity contract is invalid'
+    }
+    if ($master.capacity_policy -ne 'lazy-bounded-execution') {
+        throw 'Installed V3 capacity policy is invalid'
     }
     Record-Evidence 'installed_unified_master' @{
         contract = $master.contract
         scale = $master.scale
         capacity = [int]$master.maximum_leaf_capacity
+        system_scale = $master.system_maximum_scale
+        system_capacity = [int64]$master.system_maximum_logical_capacity
+        capacity_policy = $master.capacity_policy
     }
 
     $providers = Invoke-RestMethod -Uri "http://127.0.0.1:$port/v3/providers" -TimeoutSec 5
@@ -232,8 +323,8 @@ try {
     }
     Record-Evidence 'app_to_service_e2e' @{ health = 200; user = 200; providers = 200; installed_exe = $true; audit_secret_free = $true }
 
-    if ($app -and -not $app.HasExited) {
-        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+    if ($app) {
+        Stop-CandidateApp $app
     }
     $app = $null
 
@@ -241,6 +332,8 @@ try {
     Invoke-Setup $upgradeLog
     Record-Evidence 'in_place_upgrade' @{ exit_code = 0 }
 
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
     Wait-V3Health | Out-Null
     Assert-Marker $marker 'preserve-v3-candidate-data' 'V3 legacy-compatible data marker was not preserved by in-place upgrade'
     Assert-Marker $aliceDefaultMarker 'alice-default' 'Alice default user data was not preserved by in-place upgrade'
@@ -274,8 +367,13 @@ try {
     if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
         throw 'V3 Windows Service remained after uninstall'
     }
-    if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-        throw 'V3 listener remained after uninstall'
+    # Do not treat any listener on the old port as ours; other applications
+    # may legitimately bind it. The service lifecycle owns its child process.
+    if (Test-Path $serviceConfigPath -PathType Leaf) {
+        $savedConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+        if ([int]$savedConfig.port -ne $port) {
+            throw 'Selected port evidence changed unexpectedly during uninstall'
+        }
     }
     if (Test-Path $appExe -PathType Leaf) {
         throw 'V3 Flutter executable remained after uninstall'
@@ -289,7 +387,8 @@ try {
     Record-Evidence 'uninstall_data_preservation' @{ data_preserved = $true; user_scopes_preserved = $true; data_root = 'ProgramData\\ResearchOSV3' }
 }
 finally {
-    if ($app -and -not $app.HasExited) {
-        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+    if ($app) {
+        try { Stop-CandidateApp $app }
+        catch { Write-Warning "Candidate app cleanup did not complete: $($_.Exception.Message)" }
     }
 }

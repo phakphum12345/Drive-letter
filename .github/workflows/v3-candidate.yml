@@ -7,6 +7,11 @@ on:
         description: Exact commit SHA to validate
         required: false
         type: string
+  pull_request:
+    paths:
+      - 'v3/**'
+      - 'packages/research_os_contracts/**'
+      - '.github/workflows/v3-candidate.yml'
   push:
     branches:
       - architecture/v3-clean
@@ -24,7 +29,7 @@ concurrency:
 
 jobs:
   candidate:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[candidate]')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || contains(github.event.head_commit.message, '[candidate]')
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -68,6 +73,9 @@ jobs:
         working-directory: v3
         shell: pwsh
         run: |
+          # The V3 package needs the repo root for imports written as v3.*,
+          # while V3-local imports need the v3 directory itself.
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$(Join-Path $env:GITHUB_WORKSPACE 'v3')"
           python -m unittest discover -s tests -v
           if ($LASTEXITCODE -ne 0) { throw 'V3 source unit tests failed' }
           python scripts/factory_execution_smoke.py
@@ -198,12 +206,12 @@ jobs:
               sha256 = $hash
               size = [long]$setup.Length
             }
+            serviceConfigPath = (Join-Path $env:ProgramData 'ResearchOSV3\service.json')
             service = [ordered]@{
               name = 'ResearchOSV3Service'
               binding = '127.0.0.1'
-              port = 8788
+              port = [int]((Get-Content -LiteralPath (Join-Path $env:ProgramData 'ResearchOSV3\service.json') -Raw | ConvertFrom-Json).port)
             }
-            data_boundary = 'ProgramData\\ResearchOSV3'
             upgrade_policy = 'in-place-preserve-data'
             uninstall_policy = 'remove-app-and-service-preserve-data'
             stages = $progress['stages']
@@ -235,15 +243,16 @@ jobs:
           $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
           if ($service -and $service.Status -ne 'Stopped') { Stop-Service $serviceName -Force -ErrorAction SilentlyContinue }
           if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { sc.exe delete $serviceName | Out-Null }
-          foreach ($listener in @(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue)) {
-            Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
-          }
+          # The uninstall script owns service shutdown. Never terminate an
+          # unrelated process just because it listens on the default port.
 
       - name: Upload incremental V3 candidate evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: research-os-v3-candidate-progress-${{ env.TARGET_SHA }}-${{ github.run_id }}
-          path: v3/evidence/candidate-progress.json
+          path: |
+            v3/evidence/candidate-progress.json
+            v3/evidence/installer-logs/*.log
           if-no-files-found: warn
           retention-days: 30
