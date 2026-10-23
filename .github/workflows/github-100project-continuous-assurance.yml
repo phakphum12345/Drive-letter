@@ -18,7 +18,7 @@ permissions:
   deployments: read
 
 concurrency:
-  group: github-100project-assurance
+  group: github-100project-assurance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:

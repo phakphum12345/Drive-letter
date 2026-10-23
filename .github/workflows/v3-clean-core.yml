@@ -8,6 +8,9 @@ on:
       - 'packages/research_os_contracts/**'
       - '.github/workflows/v3-clean-core.yml'
       - 'tools/research_os_api/test_v3_lifecycle_safety.py'
+      - '.github/workflows/v3-candidate.yml'
+      - '.github/workflows/recon-continuous-reconciliation.yml'
+      - '.github/workflows/github-100project-continuous-assurance.yml'
   push:
     branches:
       - architecture/v3-clean

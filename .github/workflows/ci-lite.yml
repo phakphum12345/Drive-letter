@@ -69,6 +69,7 @@ jobs:
           python -m unittest discover -s tools/security -p "test_secret_scanner.py" -v
           python -m unittest tools.test_external_validation -v
           python -m unittest tools.test_validate_generate_orchestrator -v
+          python -m unittest tools.test_recon_concurrency -v
 
       - name: Record Flutter validation scope
         shell: bash
