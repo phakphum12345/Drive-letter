@@ -73,6 +73,15 @@ This document is an architecture proposal and an audit plan. It does **not** cla
 - Service lifecycle operations (`install`, `uninstall`, `start`, `stop`, `restart`) are writes and require a reviewed plan. A read-only status/health check must precede them.
 - Avoid exposing credentials in command lines, logs, PRs, or evidence artifacts.
 
+### Static source caveats (not a live host observation)
+
+At source SHA `bbda1508e5f2214f4a739aaa0fdcbce47750ea41` on 2026-10-23, read-only inspection of `scripts/start-research-os-local.ps1` found two implementation gaps against the target policy above:
+
+- The script parameter defaults `HostAddress` to `0.0.0.0`, which permits binding beyond loopback unless the caller overrides it.
+- `Stop-ProcessFromPidFile` stops the PID read from a file without first verifying process creation time, executable path, and command identity.
+
+These are static source findings, not proof that the script is running on any machine. This documentation-only PR does not change runtime behavior. Track remediation in a separate code PR: default to `127.0.0.1`, require an explicit opt-in for approved LAN ingress, and validate the recorded process identity before any PID-file-based stop. Until then, do not treat the target loopback policy as enforced by this launcher.
+
 ## 5. Artifact identity and promotion contract
 
 A candidate artifact is identifiable only by a linked evidence tuple:
