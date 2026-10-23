@@ -127,7 +127,11 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("$servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }", source)
         self.assertIn("$serviceProcessExited", source)
         self.assertIn("Win32_Process -Filter \"ProcessId=$servicePid\"", source)
-        self.assertIn("still holds the V3 ServiceHost image", source)
+        self.assertIn("$serviceProcessCreationDate", source)
+        self.assertIn("$sameOwnedProcess", source)
+        self.assertIn("$serviceStopped", source)
+        self.assertIn("Stop-Process -Id $servicePid -Force", source)
+        self.assertIn("stopped-state process identity could not be safely verified", source)
         self.assertIn("$attempt -lt 120", source)
 
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
