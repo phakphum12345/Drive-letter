@@ -61,6 +61,9 @@ jobs:
           export RESEARCH_OS_CONVERSATION_STORE="$RUNNER_TEMP/ResearchOSData/sessions/conversations.json"
           python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
 
+      - name: Run Recon concurrency regression test
+        run: python -m unittest tools.test_recon_concurrency -v
+
       - name: Set up Flutter
         if: ${{ inputs.include_flutter == true }}
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
