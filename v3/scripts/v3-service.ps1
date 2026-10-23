@@ -172,6 +172,23 @@ function Remove-V3Service {
     # A force-stopped ServiceHost can leave its exact Python child alive on
     # Windows. After SCM has stopped and the host PID is gone, clean up only
     # child identities captured before shutdown and revalidated in full.
+    if ($serviceChildSnapshots.Count -gt 0) {
+        $scmFullyStopped = $false
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            $serviceAfterHostCleanup = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            $serviceInfoAfterHostCleanup = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+            if ((-not $serviceAfterHostCleanup -or $serviceAfterHostCleanup.Status -eq 'Stopped') -and
+                (-not $serviceInfoAfterHostCleanup -or [int]$serviceInfoAfterHostCleanup.ProcessId -eq 0)) {
+                $scmFullyStopped = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        if (-not $scmFullyStopped) {
+            throw "Refusing orphan-child cleanup: SCM did not settle to Stopped with ProcessId=0 for '$ServiceName'"
+        }
+    }
+
     foreach ($snapshot in $serviceChildSnapshots) {
         $currentChild = Get-CimInstance Win32_Process -Filter "ProcessId=$($snapshot.ProcessId)" -ErrorAction SilentlyContinue
         if (-not $currentChild) { continue }
