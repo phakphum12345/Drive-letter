@@ -17,6 +17,19 @@ class FlexiblePortContractTests(unittest.TestCase):
         self.assertIn("service.json", service)
         self.assertIn("UTF8Encoding]::new($false)", service)
 
+    def test_stuck_service_host_cleanup_requires_stopped_service_and_same_process_identity(self) -> None:
+        service = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
+        self.assertIn("$serviceProcessCreationDate", service)
+        self.assertIn("$sameOwnedProcess", service)
+        self.assertIn("$serviceStopped", service)
+        self.assertIn("Stop-Process -Id $servicePid -Force", service)
+        self.assertIn("Win32_Service", service)
+        self.assertIn("Targeted service-host cleanup completed", service)
+
+        # The fallback may target only the captured service-host PID after the
+        # SCM stopped-state and process identity checks; never kill by port.
+        self.assertNotIn("Stop-Process -Id $listener.OwningProcess", service)
+
     def test_installer_never_kills_processes_by_port(self) -> None:
         paths = [
             ROOT / "v3" / "scripts" / "v3-service.ps1",
