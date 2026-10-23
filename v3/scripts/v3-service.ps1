@@ -64,6 +64,15 @@ function Remove-V3Service {
     $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
     $servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
     $serviceExeFullPath = [System.IO.Path]::GetFullPath($serviceExe)
+    $serviceProcessSnapshot = $null
+    if ($servicePid -gt 0) {
+        $serviceProcessSnapshot = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+        if (-not $serviceProcessSnapshot -or -not $serviceProcessSnapshot.ExecutablePath -or
+            [System.IO.Path]::GetFullPath($serviceProcessSnapshot.ExecutablePath) -ine $serviceExeFullPath) {
+            throw "Refusing to stop service '$ServiceName': PID $servicePid is not the expected V3 ServiceHost executable"
+        }
+    }
+    $serviceProcessCreationDate = if ($serviceProcessSnapshot) { [string]$serviceProcessSnapshot.CreationDate } else { '' }
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
     Write-ServiceLifecycleLog ("Initial service state: status={0}; pid={1}" -f $(if ($service) { $service.Status } else { 'NotFound' }), $servicePid)
@@ -97,7 +106,40 @@ function Remove-V3Service {
         }
         Write-ServiceLifecycleLog ("Service PID wait completed: exited={0}" -f $serviceProcessExited)
         if (-not $serviceProcessExited) {
-            throw "Windows service host PID $servicePid still holds the V3 ServiceHost image after bounded shutdown wait"
+            # SCM may report Stopped before the owned service-host process has
+            # fully exited. Escalate only after rechecking that the service is
+            # stopped, SCM no longer assigns a PID, and this is the same process
+            # (PID + creation time + executable path) captured before shutdown.
+            $serviceAfterStop = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            $serviceInfoAfterStop = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+            $currentProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+            $sameOwnedProcess = $currentProcess -and $currentProcess.ExecutablePath -and
+                ([string]$currentProcess.CreationDate -eq $serviceProcessCreationDate) -and
+                ([System.IO.Path]::GetFullPath($currentProcess.ExecutablePath) -ieq $serviceExeFullPath)
+            $serviceStopped = (-not $serviceAfterStop -or $serviceAfterStop.Status -eq 'Stopped') -and
+                (-not $serviceInfoAfterStop -or [int]$serviceInfoAfterStop.ProcessId -eq 0)
+            if (-not $serviceStopped -or -not $sameOwnedProcess) {
+                throw "Windows service host PID $servicePid did not exit and its stopped-state process identity could not be safely verified"
+            }
+
+            Write-ServiceLifecycleLog "SCM is stopped and PID identity is unchanged; terminating only the captured V3 ServiceHost process"
+            Stop-Process -Id $servicePid -Force -ErrorAction Stop
+            $serviceProcessExited = $false
+            for ($attempt = 0; $attempt -lt 40; $attempt++) {
+                $currentProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
+                if (-not $currentProcess -or
+                    [string]$currentProcess.CreationDate -ne $serviceProcessCreationDate -or
+                    -not $currentProcess.ExecutablePath -or
+                    [System.IO.Path]::GetFullPath($currentProcess.ExecutablePath) -ine $serviceExeFullPath) {
+                    $serviceProcessExited = $true
+                    break
+                }
+                Start-Sleep -Milliseconds 250
+            }
+            Write-ServiceLifecycleLog ("Targeted service-host cleanup completed: exited={0}" -f $serviceProcessExited)
+            if (-not $serviceProcessExited) {
+                throw "Verified V3 service host PID $servicePid remained after targeted cleanup"
+            }
         }
     }
 
