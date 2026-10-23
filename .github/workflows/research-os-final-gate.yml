@@ -78,33 +78,13 @@ jobs:
 
           changed="$(git diff --name-only "$base" "$head")"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/research-os-final-gate\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(tools/aeos/(verify_pr_checks|test_verify_pr_checks)\.py$|v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\.yml$)'; then
             echo "run_flutter=true" >> "$GITHUB_OUTPUT"
             echo "LEGACY_FLUTTER_WINDOWS=RUN_RELEVANT_CHANGES"
           else
             echo "run_flutter=false" >> "$GITHUB_OUTPUT"
             echo "LEGACY_FLUTTER_WINDOWS=SKIP_UNRELATED_CHANGES"
           fi
-
-
-  flutter-windows-scope-waiver:
-    name: Flutter Windows validation not applicable (scope-verified)
-    needs: detect-flutter-scope
-    if: ${{ needs.detect-flutter-scope.outputs.run_flutter != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.skip_legacy_flutter_windows) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Certify explicit non-applicability decision
-        shell: bash
-        env:
-          RUN_FLUTTER: ${{ needs.detect-flutter-scope.outputs.run_flutter }}
-        run: |
-          set -euo pipefail
-          test "$RUN_FLUTTER" = "false"
-          echo "SCOPE_WAIVER=VERIFIED"
-          echo "WAIVED_CHECK=Flutter Windows build analyze test"
-          echo "REASON=No changed paths matched the legacy V3 Flutter Windows compatibility scope."
-          echo "This job is evidence of non-applicability, not a Windows build pass."
 
   python-gate:
     name: Python build test analyze e2e
