@@ -182,7 +182,10 @@ sealed class V3ServiceWorker : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        await StopChildProcessAsync(cancellationToken);
+        // Cancel ExecuteAsync first so its WaitForExitAsync and output pumps can
+        // unwind through the normal shutdown path. Killing the child before
+        // cancellation can make ExecuteAsync report an unexpected exit while
+        // the SCM is waiting for this service to stop.
         await base.StopAsync(cancellationToken);
         await StopChildProcessAsync(CancellationToken.None);
     }

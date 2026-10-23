@@ -29,6 +29,21 @@ class WorkflowStateProjectorTests(unittest.TestCase):
             self.assertEqual("SUCCEEDED", projected.state)
             self.assertEqual(2, projected.sequence)
 
+    def test_projection_database_can_be_removed_after_use(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "projection.db"
+            events = DurableWorkflowEventStore(Path(tmp) / "events.db")
+            projection = WorkflowStateProjector(path)
+            event = events.append(
+                "task.queued", workflow_id="workflow-1", task_id="task-1",
+                correlation_id="corr-1", causation_id="root", producer="queue",
+            )
+            projection.apply(event)
+
+            # On Windows this fails with WinError 32 if a connection is still open.
+            path.unlink()
+            self.assertFalse(path.exists())
+
     def test_terminal_state_rejects_later_transition(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             events = DurableWorkflowEventStore(Path(tmp) / "events.db")

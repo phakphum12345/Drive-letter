@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,7 +87,7 @@ class CrossBoundaryInvariantTests(unittest.TestCase):
             self.assertIsNotNone(old)
 
             import sqlite3
-            with sqlite3.connect(delivery.path) as db:
+            with closing(sqlite3.connect(delivery.path)) as db, db:
                 db.execute(
                     "UPDATE deliveries SET lease_until=? WHERE delivery_id=?",
                     ("2000-01-01T00:00:00+00:00", "delivery-cross-1"),
