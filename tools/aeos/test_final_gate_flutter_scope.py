@@ -13,28 +13,29 @@ class FinalGateFlutterScopeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW.read_text(encoding="utf-8")
         cls.verifier = VERIFIER.read_text(encoding="utf-8")
-        start = cls.workflow.index("  flutter-windows-scope-waiver:\n")
+        start = cls.workflow.index("  detect-flutter-scope:\n")
         end = cls.workflow.index("  python-gate:\n", start)
-        cls.waiver_job = cls.workflow[start:end]
+        cls.scope_job = cls.workflow[start:end]
         start = cls.workflow.index("  flutter-gate:\n")
         end = cls.workflow.index("  source_integrity:\n", start)
         cls.flutter_job = cls.workflow[start:end]
 
-    def test_scope_detector_covers_all_authoritative_flutter_inputs(self):
+    def test_scope_detector_covers_authoritative_flutter_inputs(self):
         self.assertIn("tools/aeos/(verify_pr_checks|test_verify_pr_checks)", self.workflow)
         self.assertIn("v3/flutter_app/", self.workflow)
         self.assertIn("packages/research_os_contracts/", self.workflow)
         self.assertIn(".github/actions/flutter-setup/", self.workflow)
         self.assertIn("research-os-final-gate|v3-candidate|v3-clean-core", self.workflow)
 
-    def test_scope_waiver_is_explicit_and_not_a_windows_build_pass(self):
-        self.assertIn("needs: detect-flutter-scope", self.waiver_job)
-        self.assertIn("outputs.run_flutter != 'true'", self.waiver_job)
-        self.assertIn("SCOPE_WAIVER=VERIFIED", self.waiver_job)
-        self.assertIn("This job is evidence of non-applicability, not a Windows build pass.", self.waiver_job)
-        self.assertIn("SKIP_LEGACY_FLUTTER", self.waiver_job)
+    def test_scope_detector_records_skip_as_a_decision_not_a_pass(self):
+        self.assertIn("name: Decide whether legacy Flutter Windows validation is relevant", self.scope_job)
+        self.assertIn("outputs:", self.scope_job)
+        self.assertIn("run_flutter:", self.scope_job)
+        self.assertIn("LEGACY_FLUTTER_WINDOWS=SKIP_UNRELATED_CHANGES", self.scope_job)
+        self.assertIn("SKIP_LEGACY_FLUTTER:", self.scope_job)
+        self.assertNotIn("SCOPE_WAIVER=VERIFIED", self.scope_job)
 
-    def test_flutter_job_remains_skipped_when_scope_is_irrelevant(self):
+    def test_flutter_job_is_skipped_only_when_scope_says_not_relevant(self):
         header = self.flutter_job.split("    steps:\n", 1)[0]
         self.assertIn("needs: detect-flutter-scope", header)
         self.assertIn("if: needs.detect-flutter-scope.outputs.run_flutter == 'true'", header)
