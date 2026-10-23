@@ -132,6 +132,11 @@ class V3CISourceRepairTests(unittest.TestCase):
         self.assertIn("$serviceStopped", source)
         self.assertIn("Stop-Process -Id $servicePid -Force", source)
         self.assertIn("stopped-state process identity could not be safely verified", source)
+        self.assertIn("$serviceChildSnapshots", source)
+        self.assertIn("$serviceEntrypointFullPath", source)
+        self.assertIn("Stop-Process -Id ([int]$snapshot.ProcessId) -Force", source)
+        self.assertIn("Refusing to stop captured child PID", source)
+        self.assertIn("Captured child PID", source)
         self.assertIn("$attempt -lt 120", source)
 
     def test_service_smoke_bootstraps_v3_package_root(self) -> None:
