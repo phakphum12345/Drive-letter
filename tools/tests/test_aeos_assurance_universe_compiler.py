@@ -4,6 +4,7 @@ import unittest
 
 from tools.aeos_assurance_universe_compiler import (
     ASSURANCE_FAMILIES,
+    ASSURANCE_FAMILY_ALIASES,
     DIMENSIONS,
     LIFECYCLE,
     NEVER_PASS,
@@ -21,6 +22,24 @@ class AssuranceUniverseCompilerTests(unittest.TestCase):
         self.assertEqual(len(DIMENSIONS), 100)
         self.assertEqual(len(set(DIMENSIONS)), 100)
         self.assertTrue(LIFECYCLE)
+
+    def test_extra_assurance_concepts_are_preserved_as_explicit_aliases(self):
+        expected = {
+            "common_mode_resistance",
+            "assurance_completeness",
+            "assurance_of_assurance",
+            "constitutional_integrity",
+            "knowledge_lifecycle_integrity",
+        }
+        self.assertEqual(set(ASSURANCE_FAMILY_ALIASES), expected)
+        self.assertEqual(len(ASSURANCE_FAMILIES), 100)
+        for mapping in ASSURANCE_FAMILY_ALIASES.values():
+            self.assertTrue(mapping["families"])
+            self.assertLessEqual(set(mapping["families"]), set(ASSURANCE_FAMILIES))
+            self.assertTrue(mapping["dimensions"])
+            self.assertLessEqual(set(mapping["dimensions"]), set(DIMENSIONS))
+        self.assertEqual(ASSURANCE_FAMILY_ALIASES["assurance_of_assurance"]["domains"], ("D113",))
+        self.assertEqual(ASSURANCE_FAMILY_ALIASES["knowledge_lifecycle_integrity"]["domains"], ("D120",))
 
     def test_assertion_id_is_deterministic_and_domain_bound(self):
         first = assertion_id("api", "source_integrity", "source_sha", "VERIFY")

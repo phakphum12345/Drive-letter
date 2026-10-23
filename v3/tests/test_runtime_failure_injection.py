@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import tempfile
 import unittest
@@ -34,7 +35,7 @@ class RuntimeFailureInjectionTests(unittest.TestCase):
             self.assertIsNotNone(crashed)
 
             # Failure injection: the process disappears before ACK.
-            with __import__("sqlite3").connect(queue.path) as db:
+            with closing(__import__("sqlite3").connect(queue.path)) as db, db:
                 db.execute(
                     "UPDATE research_queue SET lease_until=? WHERE task_id=?",
                     ("2000-01-01T00:00:00+00:00", "task-1"),
@@ -66,7 +67,7 @@ class RuntimeFailureInjectionTests(unittest.TestCase):
             self.assertIsNotNone(crashed)
 
             # Failure injection: process dies while delivery is leased.
-            with __import__("sqlite3").connect(path) as db:
+            with closing(__import__("sqlite3").connect(path)) as db, db:
                 db.execute(
                     "UPDATE deliveries SET lease_until=? WHERE delivery_id=?",
                     ("2000-01-01T00:00:00+00:00", "delivery-1"),
