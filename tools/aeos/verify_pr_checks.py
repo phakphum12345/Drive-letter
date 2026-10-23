@@ -87,6 +87,25 @@ def paginate(url: str, item_key: str) -> list[dict[str, Any]]:
     return items
 
 
+def paginate_array(url: str) -> list[dict[str, Any]]:
+    """Paginate GitHub endpoints that return a JSON array rather than an object."""
+    items: list[dict[str, Any]] = []
+    next_url: str | None = url
+    while next_url:
+        payload, response_headers = request_json(next_url)
+        if not isinstance(payload, list):
+            raise RuntimeError("GitHub returned invalid array payload")
+        items.extend(item for item in payload if isinstance(item, dict))
+        next_url = None
+        for part in response_headers.get("Link", "").split(","):
+            if 'rel="next"' in part:
+                start, end = part.find("<"), part.find(">", part.find("<") + 1)
+                if start != -1 and end != -1:
+                    next_url = part[start + 1:end]
+                    break
+    return items
+
+
 def current_pr_head(repository: str, pr_number: str) -> str:
     repo_path = urllib.parse.quote(repository, safe="/")
     pr_path = urllib.parse.quote(str(pr_number), safe="")
@@ -220,41 +239,123 @@ def reconcile_pending_job_check(
     return reconciled
 
 
-def fetch_external_checks(repository: str, head_sha: str, current_run_id: str) -> list[dict[str, Any]]:
+def prove_flutter_scope_skip(
+    check: dict[str, Any],
+    normalized: dict[str, Any],
+    repository: str,
+    pr_number: str,
+    expected_head_sha: str,
+) -> dict[str, Any]:
+    """Mark Flutter skipped as non-applicable only with exact-SHA scope evidence.
+
+    Fail closed unless the skipped check belongs to a successful pull_request run
+    of the trusted Research OS Final Gate workflow, the exact Flutter job really
+    completed as skipped, the scope-decision job succeeded, and every changed PR
+    file is outside the workflow's declared Flutter validation paths.
+    """
+    if not (
+        normalized.get("bucket") == "unproven"
+        and normalized.get("state") == "SKIPPED"
+        and str(check.get("name") or "").strip() == "Flutter Windows build analyze test"
+    ):
+        return normalized
+    if not pr_number:
+        return normalized
+
+    details_url = str(check.get("details_url") or check.get("html_url") or "")
+    parsed = urllib.parse.urlparse(details_url)
+    match = re.fullmatch(
+        rf"/{re.escape(repository)}/actions/runs/([0-9]+)/job/([0-9]+)/?",
+        parsed.path,
+    )
+    if parsed.scheme != "https" or parsed.netloc.casefold() != "github.com" or not match:
+        return normalized
+    run_id, job_id = match.groups()
+    repo_path = urllib.parse.quote(repository, safe="/")
+    run, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}")
+    if not isinstance(run, dict):
+        return normalized
+    if (
+        run.get("name") != "Research OS Final Gate"
+        or run.get("path") != ".github/workflows/research-os-final-gate.yml"
+        or run.get("event") != "pull_request"
+        or run.get("head_sha") != expected_head_sha
+        or run.get("conclusion") != "success"
+    ):
+        return normalized
+
+    skipped_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
+    if not isinstance(skipped_job, dict) or (
+        str(skipped_job.get("run_id") or "") != run_id
+        or str(skipped_job.get("name") or "").strip() != "Flutter Windows build analyze test"
+        or skipped_job.get("status") != "completed"
+        or skipped_job.get("conclusion") != "skipped"
+    ):
+        return normalized
+
+    jobs = paginate(f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}/jobs?per_page=100", "jobs")
+    scope_jobs = [
+        job for job in jobs
+        if job.get("name") == "Decide whether legacy Flutter Windows validation is relevant"
+        and str(job.get("run_id") or "") == run_id
+    ]
+    if len(scope_jobs) != 1 or scope_jobs[0].get("conclusion") != "success":
+        return normalized
+
+    pr_path = urllib.parse.quote(str(pr_number), safe="")
+    pr, _ = request_json(f"https://api.github.com/repos/{repo_path}/pulls/{pr_path}")
+    if not isinstance(pr, dict):
+        return normalized
+    head = pr.get("head")
+    base = pr.get("base")
+    if (
+        not isinstance(head, dict) or head.get("sha") != expected_head_sha
+        or not isinstance(base, dict) or not isinstance(base.get("sha"), str) or not base["sha"]
+    ):
+        return normalized
+
+    files = paginate_array(
+        f"https://api.github.com/repos/{repo_path}/pulls/{pr_path}/files?per_page=100"
+    )
+    if not files:
+        return normalized
+    flutter_scope = re.compile(
+        r"^(v3/flutter_app/|packages/research_os_contracts/|"
+        r"\.github/actions/flutter-setup/|"
+        r"\.github/workflows/(research-os-final-gate|v3-candidate|v3-clean-core)\.yml$)"
+    )
+    changed_names = [str(item.get("filename") or "") for item in files]
+    if any(not name or flutter_scope.search(name) for name in changed_names):
+        return normalized
+
+    result = dict(normalized)
+    result.update({
+        "bucket": "not_applicable",
+        "reason_code": (
+            "NOT_APPLICABLE: exact-SHA Research OS Final Gate passed; "
+            "scope job passed and all PR files are outside Flutter validation scope"
+        ),
+        "source": "check_run+exact_scope_evidence",
+    })
+    return result
+
+
+def fetch_external_checks(repository: str, head_sha: str, current_run_id: str, pr_number: str = "") -> list[dict[str, Any]]:
     repo_path = urllib.parse.quote(repository, safe="/")
     ref = urllib.parse.quote(head_sha, safe="")
     check_runs = paginate(f"https://api.github.com/repos/{repo_path}/commits/{ref}/check-runs?per_page=100", "check_runs")
     statuses = paginate(f"https://api.github.com/repos/{repo_path}/commits/{ref}/status?per_page=100", "statuses")
     external: list[dict[str, Any]] = []
-    # A skipped Windows compatibility job is non-applicable only when a
-    # separate scope-waiver job completed successfully on this exact HEAD.
-    # The waiver job is emitted by the trusted workflow only when its scope
-    # detector explicitly outputs run_flutter=false. A missing, skipped,
-    # failed, or stale-SHA waiver must leave the Windows check unproven.
-    windows_scope_waiver_verified = any(
-        str(item.get("name") or "").strip()
-        == "Flutter Windows validation not applicable (scope-verified)"
-        and str(item.get("status") or "").lower() == "completed"
-        and str(item.get("conclusion") or "").lower() == "success"
-        and item.get("head_sha") == head_sha
-        for item in check_runs
-    )
     for item in check_runs:
         normalized = normalize_check_run(item, current_run_id)
         if normalized:
+            if pr_number:
+                normalized = prove_flutter_scope_skip(
+                    item, normalized, repository, pr_number, head_sha
+                )
             normalized = reconcile_pending_job_check(
                 item, normalized, repository, head_sha, current_run_id
             )
-            if (
-                normalized.get("name") == "Flutter Windows build analyze test"
-                and normalized.get("bucket") == "unproven"
-                and normalized.get("state") == "SKIPPED"
-                and windows_scope_waiver_verified
-            ):
-                normalized["bucket"] = "not_applicable"
-                normalized["reason_code"] = (
-                    "SCOPE_VERIFIED_NOT_APPLICABLE: exact-HEAD waiver check succeeded"
-                )
             external.append(normalized)
     for item in statuses:
         normalized = normalize_status_context(item, current_run_id)
@@ -293,7 +394,7 @@ def main() -> int:
         live_head = current_pr_head(args.repository, args.pr_number)
         if live_head != args.head_sha:
             raise SystemExit(f"PR HEAD changed during verification: expected {args.head_sha}, got {live_head}")
-        checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id)
+        checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id, args.pr_number)
         pending, bad, unproven = classify(checks)
         if bad:
             print(json.dumps({"status":"EXTERNAL_CI_FAILED","result_state":"FAIL","failing_checks":summarize(bad)}, indent=2))
@@ -305,7 +406,7 @@ def main() -> int:
             final_head = current_pr_head(args.repository, args.pr_number)
             if final_head != args.head_sha:
                 raise SystemExit(f"PR HEAD changed during final verification: expected {args.head_sha}, got {final_head}")
-            final_checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id)
+            final_checks = fetch_external_checks(args.repository, args.head_sha, args.current_run_id, args.pr_number)
             final_pending, final_bad, final_unproven = classify(final_checks)
             if final_bad or final_pending or not final_checks:
                 continue
