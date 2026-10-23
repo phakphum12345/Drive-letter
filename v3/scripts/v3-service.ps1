@@ -64,13 +64,39 @@ function Remove-V3Service {
     $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
     $servicePid = if ($serviceInfo) { [int]$serviceInfo.ProcessId } else { 0 }
     $serviceExeFullPath = [System.IO.Path]::GetFullPath($serviceExe)
+    $pythonExeFullPath = [System.IO.Path]::GetFullPath($pythonExe)
+    $serviceEntrypointFullPath = [System.IO.Path]::GetFullPath((Join-Path $v3Root 'scripts\\run_service.py'))
     $serviceProcessSnapshot = $null
+    $serviceChildSnapshots = @()
     if ($servicePid -gt 0) {
         $serviceProcessSnapshot = Get-CimInstance Win32_Process -Filter "ProcessId=$servicePid" -ErrorAction SilentlyContinue
         if (-not $serviceProcessSnapshot -or -not $serviceProcessSnapshot.ExecutablePath -or
-            [System.IO.Path]::GetFullPath($serviceProcessSnapshot.ExecutablePath) -ine $serviceExeFullPath) {
-            throw "Refusing to stop service '$ServiceName': PID $servicePid is not the expected V3 ServiceHost executable"
+            [System.IO.Path]::GetFullPath($serviceProcessSnapshot.ExecutablePath) -ine $serviceExeFullPath -or
+            -not $serviceProcessSnapshot.CreationDate) {
+            throw "Refusing to stop service '$ServiceName': PID $servicePid is not the expected identifiable V3 ServiceHost executable"
         }
+
+        # Capture only the bundled Python process directly launched by this
+        # exact ServiceHost and running the expected service entrypoint. This
+        # allows cleanup of an orphaned child without killing by port or image name.
+        $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+        foreach ($candidate in $allProcesses) {
+            if ([int]$candidate.ParentProcessId -ne $servicePid -or
+                -not $candidate.ExecutablePath -or
+                [System.IO.Path]::GetFullPath($candidate.ExecutablePath) -ine $pythonExeFullPath -or
+                -not $candidate.CreationDate -or
+                -not $candidate.CommandLine -or
+                $candidate.CommandLine.IndexOf($serviceEntrypointFullPath, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+                continue
+            }
+            $serviceChildSnapshots += [pscustomobject]@{
+                ProcessId = [int]$candidate.ProcessId
+                CreationDate = [string]$candidate.CreationDate
+                ExecutablePath = [string]$candidate.ExecutablePath
+                CommandLine = [string]$candidate.CommandLine
+            }
+        }
+        Write-ServiceLifecycleLog ("Captured verified service child processes: count={0}" -f $serviceChildSnapshots.Count)
     }
     $serviceProcessCreationDate = if ($serviceProcessSnapshot) { [string]$serviceProcessSnapshot.CreationDate } else { '' }
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -140,6 +166,45 @@ function Remove-V3Service {
             if (-not $serviceProcessExited) {
                 throw "Verified V3 service host PID $servicePid remained after targeted cleanup"
             }
+        }
+    }
+
+    # A force-stopped ServiceHost can leave its exact Python child alive on
+    # Windows. After SCM has stopped and the host PID is gone, clean up only
+    # child identities captured before shutdown and revalidated in full.
+    foreach ($snapshot in $serviceChildSnapshots) {
+        $currentChild = Get-CimInstance Win32_Process -Filter "ProcessId=$($snapshot.ProcessId)" -ErrorAction SilentlyContinue
+        if (-not $currentChild) { continue }
+        $sameChild = ([string]$currentChild.CreationDate -eq $snapshot.CreationDate) -and
+            $currentChild.ExecutablePath -and
+            ([System.IO.Path]::GetFullPath($currentChild.ExecutablePath) -ieq $pythonExeFullPath) -and
+            [string]::Equals([string]$currentChild.CommandLine, $snapshot.CommandLine, [StringComparison]::Ordinal) -and
+            $currentChild.CommandLine.IndexOf($serviceEntrypointFullPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $serviceAfterChildStop = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        $serviceInfoAfterChildStop = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'" -ErrorAction SilentlyContinue
+        $scmStopped = (-not $serviceAfterChildStop -or $serviceAfterChildStop.Status -eq 'Stopped') -and
+            (-not $serviceInfoAfterChildStop -or [int]$serviceInfoAfterChildStop.ProcessId -eq 0)
+        if (-not $scmStopped -or -not $sameChild) {
+            throw "Refusing to stop captured child PID $($snapshot.ProcessId): service state or process identity is not verified"
+        }
+
+        Write-ServiceLifecycleLog "Stopping captured orphaned V3 Python service child PID $($snapshot.ProcessId)"
+        Stop-Process -Id ([int]$snapshot.ProcessId) -Force -ErrorAction Stop
+        $childExited = $false
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            $currentChild = Get-CimInstance Win32_Process -Filter "ProcessId=$($snapshot.ProcessId)" -ErrorAction SilentlyContinue
+            if (-not $currentChild -or
+                [string]$currentChild.CreationDate -ne $snapshot.CreationDate -or
+                -not $currentChild.ExecutablePath -or
+                [System.IO.Path]::GetFullPath($currentChild.ExecutablePath) -ine $pythonExeFullPath) {
+                $childExited = $true
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+        Write-ServiceLifecycleLog ("Captured child PID {0} cleanup completed: exited={1}" -f $snapshot.ProcessId, $childExited)
+        if (-not $childExited) {
+            throw "Verified V3 Python service child PID $($snapshot.ProcessId) remained after targeted cleanup"
         }
     }
 
