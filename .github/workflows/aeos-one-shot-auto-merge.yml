@@ -12,12 +12,13 @@ on:
         required: true
         type: string
   workflow_run:
+    # One trusted PR-gate completion is enough to start a review. The verifier
+    # waits for all checks on the exact current PR HEAD; listening to every
+    # upstream workflow multiplied long-running reviews for the same SHA.
     workflows:
-      - Owner Special Friend Complete
-      - Research OS Unified Windows Distribution
-      - Research OS Gate
-      - Research OS Final Gate
       - AEOS Master Assurance Gate
+    branches-ignore:
+      - main
     types: [completed]
 
 permissions:
@@ -26,6 +27,12 @@ permissions:
   checks: read
   statuses: read
   actions: read
+
+# Collapse duplicate review requests for the same immutable target SHA.
+# This does not cancel a running review and never changes check conclusions.
+concurrency:
+  group: aeos-one-shot-review-${{ github.event.workflow_run.head_sha || inputs.expected_head_sha || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   comprehensive-review:
