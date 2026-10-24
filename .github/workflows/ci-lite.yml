@@ -51,6 +51,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install validation dependency
+        run: python -m pip install --disable-pip-version-check pyyaml
+
       - name: Compile API modules
         run: |
           python -m compileall -q tools/research_os_api tools/research_curator
@@ -78,6 +81,13 @@ jobs:
             sha256sum tools/app-simulator/index.html tools/app-simulator/studio.html tools/app-simulator/test_simulator_contract.py
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run platform assurance regression tests
+        run: |
+          python -m unittest discover -s tools/security -p "test_secret_scanner.py" -v
+          python -m unittest tools.test_external_validation -v
+          python -m unittest tools.test_validate_generate_orchestrator -v
+          python -m unittest tools.test_recon_concurrency -v
 
       - name: Record Flutter validation scope
         shell: bash
