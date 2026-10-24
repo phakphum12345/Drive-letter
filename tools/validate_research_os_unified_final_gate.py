@@ -277,6 +277,18 @@ def main() -> None:
             "Capability convergence validation failed: "
             + (capability_convergence.stdout or capability_convergence.stderr).strip()
         )
+    feature_colors = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "validate_research_os_feature_color_system.py")],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if feature_colors.returncode != 0:
+        fail(
+            "Feature color system validation failed: "
+            + (feature_colors.stdout or feature_colors.stderr).strip()
+        )
+    print("FEATURE_COLOR_SYSTEM=BOUND_TO_FINAL_GATE")
     governance = subprocess.run([sys.executable, str(ROOT / "tools" / "validate_platform_governance.py")], cwd=ROOT, text=True, capture_output=True)
     if governance.returncode != 0:
         fail("platform governance validation failed: " + (governance.stdout or governance.stderr).strip())

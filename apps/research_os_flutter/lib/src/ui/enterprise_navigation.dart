@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'research_os_feature_color_system.dart';
+
 class ResearchNavItem {
   const ResearchNavItem(
     this.section,
@@ -221,7 +223,12 @@ class ResearchMobileDrawer extends StatelessWidget {
           child: ListTile(
             key: Key('mobile-nav-${item.index}'),
             selected: selectedIndex == item.index,
-            leading: Icon(item.icon),
+            leading: Icon(
+              item.icon,
+              color: ResearchOSFeatureColorSystem
+                  .forDestination(item.destinationId)
+                  .color,
+            ),
             title: Text(
               item.label,
               key: Key('mobile-nav-label-${item.index}'),
@@ -405,7 +412,9 @@ class _SidebarDestination extends StatelessWidget {
                     width: expanded ? 44 : 58,
                     child: Icon(
                       item.icon,
-                      color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+                      color: ResearchOSFeatureColorSystem
+                          .forDestination(item.destinationId)
+                          .color,
                     ),
                   ),
                   if (expanded)
