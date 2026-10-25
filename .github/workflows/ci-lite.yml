@@ -60,12 +60,15 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
           import yaml
 
           path = Path(".github/workflows/ci-lite.yml")
           source = path.read_text(encoding="utf-8")
-          markers = ("<<<<<<<", "=======", ">>>>>>>")
-          found = [marker for marker in markers if marker in source]
+          found = [
+              line for line in source.splitlines()
+              if re.match(r"^\\s*(?:<<<<<<<|=======|>>>>>>>)", line)
+          ]
           if found:
               raise SystemExit(f"Conflict markers found in {path}: {found}")
           yaml.safe_load(source)
