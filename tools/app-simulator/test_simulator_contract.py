@@ -48,6 +48,9 @@ class AppSimulatorContractTests(unittest.TestCase):
         for scenario in ('value="happy"', 'value="expired"', 'value="offline"', 'value="denied"'):
             self.assertIn(scenario, self.simulator)
 
+    def test_evidence_download_defers_object_url_revocation(self) -> None:
+        self.assertIn("a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)", self.simulator)
+
     def test_simulator_evidence_never_claims_a_bound_source_sha(self) -> None:
         self.assertRegex(self.simulator, r"source_sha\s*:\s*null")
         self.assertIn("UNBOUND", self.simulator)
