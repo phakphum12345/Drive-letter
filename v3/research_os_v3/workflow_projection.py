@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
+from typing import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +23,17 @@ _EVENT_STATES = {
 _TERMINAL = {"SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELLED"}
 
 
+@contextmanager
+def _connection(path: Path) -> Iterator[sqlite3.Connection]:
+    """Commit or roll back one transaction, then always close the handle."""
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
 @dataclass(frozen=True)
 class ProjectedTask:
     workflow_id: str
@@ -36,7 +49,7 @@ class WorkflowStateProjector:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.path) as db:
+        with _connection(self.path) as db:
             db.execute(
                 """CREATE TABLE IF NOT EXISTS workflow_task_state (
                     workflow_id TEXT NOT NULL,
@@ -60,7 +73,7 @@ class WorkflowStateProjector:
         state = _EVENT_STATES.get(event.event_type)
         if state is None:
             return False
-        with sqlite3.connect(self.path) as db:
+        with _connection(self.path) as db:
             if db.execute(
                 "SELECT 1 FROM projected_events WHERE event_id=?", (event.event_id,)
             ).fetchone():
@@ -86,7 +99,7 @@ class WorkflowStateProjector:
         return True
 
     def get(self, workflow_id: str, task_id: str) -> ProjectedTask | None:
-        with sqlite3.connect(self.path) as db:
+        with _connection(self.path) as db:
             row = db.execute(
                 "SELECT workflow_id,task_id,state,sequence,last_event_id FROM workflow_task_state WHERE workflow_id=? AND task_id=?",
                 (workflow_id, task_id),

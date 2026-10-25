@@ -10,14 +10,17 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools.platform_graph import PlatformGraph
 from tools.project_registry import PROJECT_001, ProjectRegistry, validate_registry
 from tools.research_os_m2_platform import M2Platform
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def canonical_sha() -> str:

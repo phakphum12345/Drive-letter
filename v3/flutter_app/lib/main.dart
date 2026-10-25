@@ -10,10 +10,17 @@ import 'src/startup_probe.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const baseUrl = String.fromEnvironment(
+  const configuredBaseUrl = String.fromEnvironment(
     'RESEARCH_OS_V3_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8788',
+    defaultValue: '',
   );
+  final runtimeBaseUrl = Platform.environment['RESEARCH_OS_V3_BASE_URL'];
+  final runtimePort = Platform.environment['RESEARCH_OS_V3_PORT'];
+  final baseUrl = configuredBaseUrl.isNotEmpty
+      ? configuredBaseUrl
+      : (runtimeBaseUrl != null && runtimeBaseUrl.isNotEmpty
+          ? runtimeBaseUrl
+          : 'http://127.0.0.1:${runtimePort != null && runtimePort.isNotEmpty ? runtimePort : '8788'}');
   final rawUser = Platform.environment['RESEARCH_OS_V3_USER_ID'] ??
       Platform.environment['USERNAME'] ??
       Platform.environment['USER'] ??

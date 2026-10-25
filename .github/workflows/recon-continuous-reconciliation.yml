@@ -16,7 +16,7 @@ permissions:
   checks: read
 
 concurrency:
-  group: recon-continuous-reconciliation
+  group: recon-continuous-reconciliation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
