@@ -54,6 +54,28 @@ jobs:
       - name: Install validation dependency
         run: python -m pip install --disable-pip-version-check pyyaml
 
+      - name: Validate CI Lite workflow file
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import yaml
+
+          path = Path(".github/workflows/ci-lite.yml")
+          source = path.read_text(encoding="utf-8")
+          found = [
+              line for line in source.splitlines()
+              if re.match(r"^\s*(?:<<<<<<<|=======|>>>>>>>)", line)
+          ]
+          if found:
+              raise SystemExit(f"Conflict markers found in {path}: {found}")
+          yaml.safe_load(source)
+          print(f"PASS: {path} has no merge-conflict markers and parses as YAML")
+          PY
+
+
       - name: Compile API modules
         run: |
           python -m compileall -q tools/research_os_api tools/research_curator
@@ -63,6 +85,24 @@ jobs:
           export RESEARCH_OS_DATA_DIR="$RUNNER_TEMP/ResearchOSData"
           export RESEARCH_OS_CONVERSATION_STORE="$RUNNER_TEMP/ResearchOSData/sessions/conversations.json"
           python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
+
+      - name: Test App Simulator and Code Studio (exact SHA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          python -m unittest discover -s tools/app-simulator -p "test_*.py" -v
+          {
+            echo "### App Simulator / Code Studio contract"
+            echo "- TARGET_SHA: `$TARGET_SHA`"
+            echo "- CHECKED_OUT_SHA: `$actual`"
+            echo "- Result: PASS"
+            echo 'Source SHA-256:'
+            echo '```text'
+            sha256sum tools/app-simulator/index.html tools/app-simulator/studio.html tools/app-simulator/test_simulator_contract.py
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run platform assurance regression tests
         run: |
