@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'enterprise_navigation.dart';
+import 'research_os_feature_color_system.dart';
 
 /// Shared desktop navigation for the Research OS application surface.
 /// All destinations are sourced from the same registry used by the mobile drawer.
@@ -175,9 +176,9 @@ class ResearchOSSidebarV2 extends StatelessWidget {
                         width: expanded ? 44 : 58,
                         child: Icon(
                           item.icon,
-                          color: selectedIndex == item.index
-                              ? scheme.onSecondaryContainer
-                              : scheme.onSurfaceVariant,
+                          color: ResearchOSFeatureColorSystem
+                              .forDestination(item.destinationId)
+                              .color,
                           size: 21,
                         ),
                       ),
