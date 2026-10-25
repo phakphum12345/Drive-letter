@@ -120,6 +120,9 @@ jobs:
       - name: Verify exact-SHA scope skip evidence contract
         run: python -m unittest tools.aeos.test_verify_pr_checks_scope_waiver -v
 
+      - name: Verify Flutter scope gate contract
+        run: python tools/aeos/test_final_gate_flutter_scope.py
+
   flutter-gate:
     name: Flutter Windows build analyze test
     needs: detect-flutter-scope
