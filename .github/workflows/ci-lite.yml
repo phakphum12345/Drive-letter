@@ -67,7 +67,7 @@ jobs:
           source = path.read_text(encoding="utf-8")
           found = [
               line for line in source.splitlines()
-              if re.match(r"^\\s*(?:<<<<<<<|=======|>>>>>>>)", line)
+              if re.match(r"^\s*(?:<<<<<<<|=======|>>>>>>>)", line)
           ]
           if found:
               raise SystemExit(f"Conflict markers found in {path}: {found}")
