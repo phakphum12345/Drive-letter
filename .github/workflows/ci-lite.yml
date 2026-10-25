@@ -46,6 +46,24 @@ jobs:
           echo "TARGET_SHA=$TARGET_SHA"
           echo "CHECKED_OUT_SHA=$actual"
 
+      - name: Validate CI Lite workflow file
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path(".github/workflows/ci-lite.yml")
+          source = path.read_text(encoding="utf-8")
+          markers = ("<<<<<<<", "=======", ">>>>>>>")
+          found = [marker for marker in markers if marker in source]
+          if found:
+              raise SystemExit(f"Conflict markers found in {path}: {found}")
+          yaml.safe_load(source)
+          print(f"PASS: {path} has no merge-conflict markers and parses as YAML")
+          PY
+
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
