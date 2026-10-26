@@ -44,7 +44,7 @@ Future<String> _resolveBaseUrl() async {
   }
 
   final programData = Platform.environment['PROGRAMDATA'] ?? r'C:\ProgramData';
-  final config = File('${programData}\\ResearchOSV3\\service.json');
+  final config = File('$programData\\\\ResearchOSV3\\\\service.json');
   try {
     final decoded = jsonDecode(await config.readAsString());
     if (decoded is Map<String, dynamic>) {
