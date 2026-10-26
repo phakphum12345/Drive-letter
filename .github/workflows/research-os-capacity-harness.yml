@@ -7,6 +7,7 @@ on:
       - 'tools/research_os_capacity_metrics.py'
       - 'tools/research_os_capacity_harness.py'
       - 'tools/test_research_os_capacity_metrics.py'
+      - 'tools/test_research_os_capacity_harness.py'
       - 'docs/RESEARCH_OS_CAPACITY_HARNESS.md'
       - '.github/workflows/research-os-capacity-harness.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'tools/research_os_capacity_metrics.py'
       - 'tools/research_os_capacity_harness.py'
       - 'tools/test_research_os_capacity_metrics.py'
+      - 'tools/test_research_os_capacity_harness.py'
       - 'docs/RESEARCH_OS_CAPACITY_HARNESS.md'
       - '.github/workflows/research-os-capacity-harness.yml'
   workflow_dispatch:
@@ -56,9 +58,11 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile candidate
-        run: python -m py_compile tools/research_os_capacity_metrics.py tools/research_os_capacity_harness.py tools/test_research_os_capacity_metrics.py
-      - name: Run deterministic metrics tests
-        run: python -m unittest tools.test_research_os_capacity_metrics -v
+        run: python -m py_compile tools/research_os_capacity_metrics.py tools/research_os_capacity_harness.py tools/test_research_os_capacity_metrics.py tools/test_research_os_capacity_harness.py
+      - name: Run deterministic metrics and local-server integration tests
+        run: |
+          python -m unittest tools.test_research_os_capacity_metrics -v
+          python -m unittest tools.test_research_os_capacity_harness -v
       - name: Validate CLI safety bounds
         shell: bash
         run: |
