@@ -1,0 +1,64 @@
+name: Recon Back Box Config Snapshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "current/recon-back-box/config/**"
+      - "platform/recon-back-box/Export-ReconBackBoxConfig.ps1"
+      - ".github/workflows/recon-back-box-config.yml"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "current/recon-back-box/config/**"
+      - "platform/recon-back-box/Export-ReconBackBoxConfig.ps1"
+      - ".github/workflows/recon-back-box-config.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recon-back-box-config
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Checkout, validate and export config to Back Box artifact
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify checkout and open PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -cne $env:GITHUB_SHA) {
+            throw "Exact-SHA checkout failed: expected=$env:GITHUB_SHA actual=$actual"
+          }
+          Write-Output "CHECKOUT_SHA=$actual"
+          $PSVersionTable | Out-String | Write-Output
+
+      - name: Validate and copy versioned config into Back Box snapshot
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:GITHUB_WORKSPACE 'recon-back-box-output'
+          if (Test-Path -LiteralPath $out) { throw "Refusing to overwrite existing snapshot path: $out" }
+          & "$env:GITHUB_WORKSPACE/platform/recon-back-box/Export-ReconBackBoxConfig.ps1" -RepoRoot $env:GITHUB_WORKSPACE -OutputRoot $out -ExpectedSha $env:GITHUB_SHA -RunId $env:GITHUB_RUN_ID -RunAttempt $env:GITHUB_RUN_ATTEMPT
+          if ($LASTEXITCODE -ne 0) { throw "Config export failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path -LiteralPath (Join-Path $out 'recon-back-box-manifest.json') -PathType Leaf)) { throw 'Back Box manifest was not produced.' }
+
+      - name: Upload verified Back Box config snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: recon-back-box-config
+          path: recon-back-box-output/
+          if-no-files-found: error
+          retention-days: 30
