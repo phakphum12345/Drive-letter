@@ -130,11 +130,13 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_configKey, JsonEncoder.withIndent('  ').convert(decoded));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Saved locally only; repository unchanged.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saved locally only; repository unchanged.')),
+        );
+      }
     } on Object catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid config: ' + e.toString())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid config: $e')));
     }
   }
 
@@ -235,8 +237,8 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       const SizedBox(height: 12),
       Card(child: ListTile(
         leading: Icon(_github == null ? Icons.help_outline : Icons.fact_check_outlined),
-        title: Text(_githubError ?? 'Repository: ' + repository),
-        subtitle: Text(_observedAt == null ? 'Observation time UNKNOWN' : 'Observed at ' + _observedAt!.toIso8601String()),
+        title: Text(_githubError ?? 'Repository: $repository'),
+        subtitle: Text(_observedAt == null ? 'Observation time UNKNOWN' : 'Observed at ${_observedAt!.toIso8601String()}'),
       )),
       Card(child: Padding(
         padding: const EdgeInsets.all(16),
@@ -244,9 +246,9 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
           Text('Evidence-aware status', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
-            Chip(label: Text('Success: ' + successes.toString())),
-            Chip(label: Text('Skipped: ' + skipped.toString())),
-            Chip(label: Text('Failed: ' + failures.toString())),
+            Chip(label: Text('Success: $successes')),
+            Chip(label: Text('Skipped: $skipped')),
+            Chip(label: Text('Failed: $failures')),
           ]),
           const SizedBox(height: 8),
           const Text('Skipped, missing, stale and unknown evidence are not PASS. FINAL_GATE remains the only authority.'),
@@ -261,7 +263,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         Card(child: ListTile(
           leading: const Icon(Icons.info_outline),
           title: const Text('Some sources are unavailable'),
-          subtitle: Text((_githubError ?? '') + '\n' + (_artifactError ?? '')),
+          subtitle: Text('${_githubError ?? ''}\n${_artifactError ?? ''}'),
         )),
     ]);
   }
@@ -277,7 +279,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         return Card(child: ListTile(
           leading: Icon(icon),
           title: Text((item['name'] ?? item['display_title'] ?? 'Workflow').toString()),
-          subtitle: Text('SHA: ' + (item['head_sha'] ?? item['sha'] ?? 'UNKNOWN').toString() + '\nStatus: ' + result),
+          subtitle: Text('SHA: ${item['head_sha'] ?? item['sha'] ?? 'UNKNOWN'}\nStatus: $result'),
           isThreeLine: true,
         ));
       }),
@@ -286,8 +288,8 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       if (pulls.isEmpty) _notice('UNKNOWN', 'No PR records returned.'),
       ...pulls.map((item) => Card(child: ListTile(
         leading: const Icon(Icons.merge_type_outlined),
-        title: Text('#' + (item['number'] ?? '?').toString() + ' ' + (item['title'] ?? 'Pull request').toString()),
-        subtitle: Text('State: ' + (item['state'] ?? 'UNKNOWN').toString() + ' • Draft: ' + (item['draft'] ?? 'UNKNOWN').toString()),
+        title: Text('#${item['number'] ?? '?'} ${item['title'] ?? 'Pull request'}'),
+        subtitle: Text('State: ${item['state'] ?? 'UNKNOWN'} • Draft: ${item['draft'] ?? 'UNKNOWN'}'),
       ))),
     ]);
   }
@@ -301,7 +303,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     ..._artifacts.map((item) => Card(child: ListTile(
       leading: const Icon(Icons.description_outlined),
       title: Text((item['title'] ?? item['artifact_id'] ?? 'Artifact').toString()),
-      subtitle: Text('ID: ' + (item['artifact_id'] ?? 'UNKNOWN').toString() + '\nStatus: ' + (item['status'] ?? 'UNKNOWN').toString() + '\nPath: ' + (item['path'] ?? 'UNKNOWN').toString()),
+      subtitle: Text('ID: ${item['artifact_id'] ?? 'UNKNOWN'}\nStatus: ${item['status'] ?? 'UNKNOWN'}\nPath: ${item['path'] ?? 'UNKNOWN'}'),
       isThreeLine: true,
     ))),
   ]);
@@ -357,12 +359,12 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       ),
     ]),
     const SizedBox(height: 16),
-    Text('Local ledger (' + _learning.length.toString() + ')', style: Theme.of(context).textTheme.titleMedium),
+    Text('Local ledger (${_learning.length})', style: Theme.of(context).textTheme.titleMedium),
     if (_learning.isEmpty) _notice('No entries yet', 'Add a source URL, topic and notes.'),
     ..._learning.map((item) => Card(child: ListTile(
       leading: const Icon(Icons.school_outlined),
       title: Text((item['topic'] ?? 'Untitled').toString()),
-      subtitle: Text((item['level'] ?? 'general').toString() + ' • ' + (item['source_url'] ?? 'No source').toString() + '\n' + (item['notes'] ?? '').toString() + '\n' + (item['verification'] ?? 'UNKNOWN').toString()),
+      subtitle: Text('${item['level'] ?? 'general'} • ${item['source_url'] ?? 'No source'}\n${item['notes'] ?? ''}\n${item['verification'] ?? 'UNKNOWN'}'),
       isThreeLine: true,
     ))),
     const SizedBox(height: 18),
