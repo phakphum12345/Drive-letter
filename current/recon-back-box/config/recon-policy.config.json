@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "config_id": "recon-policy",
+  "authority": "FINAL_GATE",
+  "permissions": {
+    "private_domains_allowed": false,
+    "authenticated_crawl_allowed": false,
+    "external_writes_require_approval": true,
+    "merge_authority_mutation_allowed": false,
+    "canonical_history_rewrite_allowed": false
+  },
+  "security": {
+    "redact_secrets": true,
+    "reject_path_traversal": true,
+    "reject_symlinks_for_evidence": true,
+    "immutable_evidence_by_default": true
+  },
+  "safety": {
+    "config_validation_fail_closed": true,
+    "overwrite_without_approval": false,
+    "delete_without_approval": false
+  }
+}

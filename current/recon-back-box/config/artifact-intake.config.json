@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "config_id": "artifact-intake",
+  "enabled": true,
+  "require_repository": true,
+  "require_commit_sha": true,
+  "require_workflow_run_id": true,
+  "verify_sha256": true,
+  "preserve_failure_evidence": true,
+  "preserve_skipped_status": true,
+  "reject_unverified_artifacts": true,
+  "max_artifact_size_mb": 500,
+  "include_patterns": [
+    "*.json",
+    "*.txt",
+    "*.log",
+    "*.xml",
+    "*.sarif",
+    "*.zip"
+  ],
+  "exclude_patterns": [
+    "**/*secret*",
+    "**/*credential*",
+    "**/.env",
+    "**/id_rsa*"
+  ],
+  "source_artifact_retention_is_not_permanent_storage": true
+}
