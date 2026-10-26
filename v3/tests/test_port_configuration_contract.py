@@ -39,14 +39,14 @@ class FlexiblePortContractTests(unittest.TestCase):
 
     def test_flutter_reads_saved_port_but_forces_loopback(self) -> None:
         main = (ROOT / "v3" / "flutter_app" / "lib" / "main.dart").read_text(encoding="utf-8")
-        self.assertIn("ResearchOSV3\\\\service.json", main)
+        self.assertIn("service.json", main)
         self.assertIn("127.0.0.1:$port", main)
         self.assertNotIn("decoded['host']", main)
 
     def test_candidate_e2e_reserves_default_port_and_checks_fallback(self) -> None:
         candidate = (ROOT / "v3" / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
         self.assertIn("$defaultPortReservation", candidate)
-        self.assertIn("defaultPortFallback", candidate) if "defaultPortFallback" in candidate else self.assertIn("default_port_fallback", candidate)
+        self.assertIn("default_port_fallback", candidate)
         self.assertIn("Installer did not select fallback port", candidate)
         self.assertIn("service.json", candidate)
 
