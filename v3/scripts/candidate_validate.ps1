@@ -179,8 +179,26 @@ try {
     Assert-Marker $marker 'preserve-v3-candidate-data' 'Existing V3 data was not preserved by stale-install cleanup'
 
     $installLog = Join-Path $tempRoot 'research-os-v3-install.log'
-    Invoke-Setup $installLog
-    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean' }
+    $defaultPortReservation = $null
+    $defaultPortWasReserved = $false
+    try {
+        $defaultPortReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 8788)
+        $defaultPortReservation.Start()
+        $defaultPortWasReserved = $true
+    }
+    catch {
+        if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } }
+        $defaultPortReservation = $null
+    }
+    try { Invoke-Setup $installLog }
+    finally { if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } } }
+    $serviceConfigPath = Join-Path $dataDir 'service.json'
+    if (-not (Test-Path $serviceConfigPath -PathType Leaf)) { throw 'Installer did not write selected service port configuration' }
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
+    if ($port -lt 1 -or $port -gt 65535 -or $serviceConfig.host -ne '127.0.0.1') { throw 'Installer wrote invalid/non-loopback service configuration' }
+    if ($defaultPortWasReserved -and $port -eq 8788) { throw 'Installer did not select fallback port while default was reserved' }
+    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean'; selected_port = $port; default_port_fallback = ($port -ne 8788) }
 
     if (-not (Test-Path $appExe -PathType Leaf)) {
         throw "Installed V3 Flutter executable is missing: $appExe"
@@ -315,7 +333,9 @@ try {
 
     $upgradeLog = Join-Path $tempRoot 'research-os-v3-upgrade.log'
     Invoke-Setup $upgradeLog
-    Record-Evidence 'in_place_upgrade' @{ exit_code = 0 }
+    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    $port = [int]$serviceConfig.port
+    Record-Evidence 'in_place_upgrade' @{ exit_code = 0; selected_port = $port }
 
     Wait-V3Health | Out-Null
     Assert-V3OwnedLoopbackListener
@@ -351,8 +371,11 @@ try {
     if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
         throw 'V3 Windows Service remained after uninstall'
     }
-    if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-        throw 'V3 listener remained after uninstall'
+    # The service owns listener cleanup. Do not fail if a foreign process
+    # acquires the released port after uninstall.
+    if (Test-Path $serviceConfigPath -PathType Leaf) {
+        $savedConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+        if ([int]$savedConfig.port -ne $port) { throw 'Selected port evidence changed unexpectedly during uninstall' }
     }
     if (Test-Path $appExe -PathType Leaf) {
         throw 'V3 Flutter executable remained after uninstall'

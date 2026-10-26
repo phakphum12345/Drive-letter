@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -7,20 +8,10 @@ import 'src/api/v3_api.dart';
 import 'src/research_os_v3_app.dart';
 import 'src/startup_probe.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const configuredBaseUrl = String.fromEnvironment(
-    'RESEARCH_OS_V3_BASE_URL',
-    defaultValue: '',
-  );
-  final runtimeBaseUrl = Platform.environment['RESEARCH_OS_V3_BASE_URL'];
-  final runtimePort = Platform.environment['RESEARCH_OS_V3_PORT'];
-  final baseUrl = configuredBaseUrl.isNotEmpty
-      ? configuredBaseUrl
-      : (runtimeBaseUrl != null && runtimeBaseUrl.isNotEmpty
-          ? runtimeBaseUrl
-          : 'http://127.0.0.1:${runtimePort != null && runtimePort.isNotEmpty ? runtimePort : '8788'}');
+  final baseUrl = await _resolveBaseUrl();
   final rawUser = Platform.environment['RESEARCH_OS_V3_USER_ID'] ??
       Platform.environment['USERNAME'] ??
       Platform.environment['USER'] ??
@@ -38,6 +29,34 @@ void main() {
 
   // Paint first, then prove loopback connectivity and user isolation context.
   unawaited(StartupProbe(api).run());
+}
+
+Future<String> _resolveBaseUrl() async {
+  const configuredBaseUrl = String.fromEnvironment('RESEARCH_OS_V3_BASE_URL', defaultValue: '');
+  final runtimeBaseUrl = Platform.environment['RESEARCH_OS_V3_BASE_URL']?.trim() ?? '';
+  if (runtimeBaseUrl.isNotEmpty) return runtimeBaseUrl;
+  if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
+
+  final runtimePort = Platform.environment['RESEARCH_OS_V3_PORT']?.trim() ?? '';
+  final parsedRuntimePort = int.tryParse(runtimePort);
+  if (parsedRuntimePort != null && parsedRuntimePort >= 1 && parsedRuntimePort <= 65535) {
+    return 'http://127.0.0.1:$parsedRuntimePort';
+  }
+
+  final programData = Platform.environment['PROGRAMDATA'] ?? r'C:\ProgramData';
+  final config = File('${programData}\\ResearchOSV3\\service.json');
+  try {
+    final decoded = jsonDecode(await config.readAsString());
+    if (decoded is Map<String, dynamic>) {
+      final port = decoded['port'];
+      if (port is int && port >= 1 && port <= 65535) return 'http://127.0.0.1:$port';
+    }
+  } on FileSystemException {
+    // Development builds without an installed service use the stable default.
+  } on FormatException {
+    // Ignore incomplete configuration and use the stable default.
+  }
+  return 'http://127.0.0.1:8788';
 }
 
 String _safeIdentifier(String raw, {required String fallbackPrefix}) {

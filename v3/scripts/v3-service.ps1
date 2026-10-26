@@ -4,20 +4,40 @@ param(
     [string]$Action,
 
     [string]$ServiceName = 'ResearchOSV3Service',
-    [int]$Port = 8788
+    [ValidateRange(1, 65535)]
+    [int]$Port = 8788,
+    [ValidateRange(0, 1000)]
+    [int]$PortScanCount = 100
 )
 
 $ErrorActionPreference = 'Stop'
-
-if ($Port -lt 1 -or $Port -gt 65535) {
-    throw "Port must be between 1 and 65535: $Port"
-}
 
 $appRoot = Split-Path -Parent $PSScriptRoot
 $serviceExe = Join-Path $appRoot 'service\ResearchOS.V3.ServiceHost.exe'
 $v3Root = Join-Path $appRoot 'v3'
 $pythonExe = Join-Path $v3Root 'runtime\python\python.exe'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
+$configPath = Join-Path $dataDir 'service.json'
+$requestedPort = $Port
+
+function Test-LoopbackPortAvailable([int]$CandidatePort) {
+    $listener = $null
+    try {
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $CandidatePort)
+        $listener.Start()
+        return $true
+    }
+    catch { return $false }
+    finally { if ($listener) { try { $listener.Stop() } catch { } } }
+}
+
+function Find-AvailableLoopbackPort([int]$StartPort, [int]$ScanCount) {
+    $lastPort = [Math]::Min(65535, $StartPort + $ScanCount)
+    for ($candidate = $StartPort; $candidate -le $lastPort; $candidate++) {
+        if (Test-LoopbackPortAvailable $candidate) { return $candidate }
+    }
+    throw "No available loopback port found from $StartPort through $lastPort"
+}
 
 function Get-V3ServiceRecord {
     $escapedName = $ServiceName.Replace("'", "''")
@@ -148,10 +168,25 @@ function Remove-V3Service {
     }
 
     # A port may belong to an unrelated process. Never kill by port alone.
-    $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
-    if ($listeners.Count -gt 0) {
-        $pids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ','
-        throw "Port $Port remains occupied by process(es) $pids; refusing to terminate unrelated listeners"
+    # Only inspect a port after a matching service existed; a stale config or an
+    # unrelated listener must not block a safe uninstall.
+    if ($serviceRecord) {
+        $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+        if ($listeners.Count -gt 0) {
+            $pids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ','
+            throw "Port $Port remains occupied by process(es) $pids; refusing to terminate unrelated listeners"
+        }
+    }
+}
+
+if (Test-Path $configPath -PathType Leaf) {
+    try {
+        $savedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        $savedPort = [int]$savedConfig.port
+        if ($savedPort -ge 1 -and $savedPort -le 65535) { $Port = $savedPort }
+    }
+    catch {
+        if ($Action -eq 'uninstall') { throw "Cannot safely determine the configured V3 service port from $configPath" }
     }
 }
 
@@ -172,7 +207,9 @@ if (-not (Test-Path (Join-Path $v3Root 'scripts\run_service.py') -PathType Leaf)
 }
 
 New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+# Remove any previous service using its saved port, then choose a free loopback port.
 Remove-V3Service
+$Port = Find-AvailableLoopbackPort -StartPort $requestedPort -ScanCount $PortScanCount
 
 $binaryPath = "`"$serviceExe`" --root `"$v3Root`" --python `"$pythonExe`" --port $Port --data-dir `"$dataDir`" --service-name `"$ServiceName`""
 New-Service -Name $ServiceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName 'Research OS V3 Local Service' | Out-Null
@@ -200,6 +237,8 @@ try {
     # A successful HTTP response is insufficient: prove the listener belongs to
     # the service process tree, and reject any non-loopback or foreign listener.
     Assert-V3OwnedLoopbackListener
+    $config = [ordered]@{ service_name = $ServiceName; host = '127.0.0.1'; port = $Port }
+    [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
     Write-Host "Research OS V3 service installed and ready on 127.0.0.1:$Port"
 }
 catch {
