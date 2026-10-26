@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "config_id": "recon-back-box",
+  "authority": "FINAL_GATE",
+  "mode": "observe",
+  "source_of_truth": "GitHub repository at exact checked-out SHA",
+  "storage": {
+    "mode": "content_addressed",
+    "checksum": "sha256",
+    "deduplicate": true,
+    "overwrite_existing": false,
+    "delete_without_approval": false,
+    "snapshot_destination": "recon-back-box-artifact",
+    "retention_days": 30
+  },
+  "index": {
+    "enabled": true,
+    "exact_source_sha_required": true,
+    "include_relationship_metadata": true,
+    "unknown_is_not_pass": true,
+    "skipped_is_not_pass": true
+  }
+}

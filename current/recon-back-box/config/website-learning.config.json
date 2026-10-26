@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "config_id": "website-learning",
+  "enabled": true,
+  "learning_levels": [
+    "general",
+    "structured",
+    "advanced",
+    "validation"
+  ],
+  "discovery": {
+    "allowed_domains": [],
+    "respect_robots_txt": true,
+    "max_depth": 2,
+    "max_pages_per_run": 100,
+    "max_requests_per_minute": 30,
+    "follow_external_links": false
+  },
+  "extraction": {
+    "require_source_url": true,
+    "require_retrieved_at": true,
+    "require_content_hash": true,
+    "require_citations_for_claims": true,
+    "retain_original_content": false
+  },
+  "validation": {
+    "detect_stale_content": true,
+    "detect_conflicting_claims": true,
+    "mark_unverified_as_unknown": true
+  }
+}
