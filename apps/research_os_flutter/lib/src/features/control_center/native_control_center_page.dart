@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../api/research_os_api_client.dart';
 import 'native_control_audit_view.dart';
+import 'recon_back_box_view.dart';
 
 class NativeControlCenterPage extends StatefulWidget {
   const NativeControlCenterPage({
@@ -53,7 +54,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 10, vsync: this);
+    _tabs = TabController(length: 11, vsync: this);
     _load();
   }
 
@@ -254,6 +255,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
               Tab(text: 'Failures', icon: Icon(Icons.warning_amber_outlined)),
               Tab(text: 'History', icon: Icon(Icons.history_outlined)),
               Tab(text: 'Simulation', icon: Icon(Icons.science_outlined)),
+              Tab(text: 'Recon Back Box', icon: Icon(Icons.inventory_2_outlined)),
             ],
           ),
           Expanded(
@@ -312,6 +314,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
                     );
                   }),
                 ),
+                ReconBackBoxView(apiClient: widget.apiClient),
               ],
             ),
           ),
