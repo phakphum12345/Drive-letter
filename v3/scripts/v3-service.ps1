@@ -12,6 +12,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if ($Port -lt 1 -or $Port -gt 65535) {
+    throw "Port must be between 1 and 65535: $Port"
+}
+
 $appRoot = Split-Path -Parent $PSScriptRoot
 $serviceExe = Join-Path $appRoot 'service\ResearchOS.V3.ServiceHost.exe'
 $v3Root = Join-Path $appRoot 'v3'

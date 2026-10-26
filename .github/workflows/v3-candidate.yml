@@ -270,7 +270,9 @@ jobs:
           if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
             throw 'V3 service remains after cleanup; refusing to report cleanup as successful'
           }
-          # The service script verifies and cleans only its own process tree.
+          # The service script verifies and cleans only its own process tree. If
+          # its recorded port remains occupied, it fails closed with "refusing
+          # to terminate unrelated listeners"; this workflow never kills by port.
           # Do not mistake a foreign process that reuses the released port for a leak.
 
       - name: Upload incremental V3 candidate evidence
