@@ -17,6 +17,8 @@ class CapacityMetricsTests(unittest.TestCase):
     def test_invalid_percentile_is_rejected(self):
         with self.assertRaises(ValueError):
             nearest_rank_percentile([1, 2], 0)
+        with self.assertRaises(ValueError):
+            nearest_rank_percentile([], 0)
 
     def test_summary_counts_failures_and_throughput(self):
         samples = [
