@@ -39,9 +39,9 @@ def main() -> int:
     }
     fd, temp_path = tempfile.mkstemp(prefix=".service-", suffix=".json.tmp", dir=registry_path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\\n") as stream:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(registry, stream, sort_keys=True)
-            stream.write("\\n")
+            stream.write(chr(10))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temp_path, registry_path)
