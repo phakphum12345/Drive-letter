@@ -37,7 +37,7 @@ sealed record ServiceOptions(
         var portText = ReadOption(args, "--port")
             ?? Environment.GetEnvironmentVariable("RESEARCH_OS_V3_PORT")
             ?? "8788";
-        if (!int.TryParse(portText, out var port) || port is < 1 or > 65535)
+        if (!int.TryParse(portText, out var port) || port is < 0 or > 65535)
         {
             throw new ArgumentOutOfRangeException(nameof(args), $"Invalid V3 service port: {portText}");
         }
@@ -127,7 +127,7 @@ sealed class V3ServiceWorker : BackgroundService
 
         _logger.LogInformation("Research OS V3 root: {Root}", _options.Root);
         _logger.LogInformation("Research OS V3 data: {DataDir}", _options.DataDir);
-        _logger.LogInformation("Research OS V3 endpoint: http://127.0.0.1:{Port}", _options.Port);
+        _logger.LogInformation("Research OS V3 requested port: {Port} (0 means OS-assigned)", _options.Port);
 
         var startInfo = new ProcessStartInfo
         {
@@ -141,6 +141,7 @@ sealed class V3ServiceWorker : BackgroundService
         };
         startInfo.Environment["RESEARCH_OS_V3_HOST"] = "127.0.0.1";
         startInfo.Environment["RESEARCH_OS_V3_PORT"] = _options.Port.ToString();
+        startInfo.Environment["RESEARCH_OS_V3_SERVICE_NAME"] = _options.ServiceName;
         startInfo.Environment["RESEARCH_OS_V3_DATA_DIR"] = _options.DataDir;
         startInfo.Environment["PYTHONUNBUFFERED"] = "1";
 
