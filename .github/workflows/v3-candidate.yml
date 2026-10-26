@@ -218,6 +218,11 @@ jobs:
 
           $setup = Get-Item $env:V3_SETUP_EXE
           $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $serviceConfigPath = Join-Path $env:ProgramData 'ResearchOSV3\service.json'
+          $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+          if ([int]$serviceConfig.port -lt 1 -or [int]$serviceConfig.port -gt 65535 -or $serviceConfig.host -ne '127.0.0.1') {
+            throw 'Candidate service configuration is invalid or not loopback-only'
+          }
           $manifest = [ordered]@{
             schema_version = 1
             target_sha = $env:RESEARCH_OS_V3_TARGET_SHA
@@ -230,8 +235,6 @@ jobs:
               sha256 = $hash
               size = [long]$setup.Length
             }
-            $serviceConfigPath = Join-Path $env:ProgramData 'ResearchOSV3\service.json'
-            $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
             service = [ordered]@{
               name = 'ResearchOSV3Service'
               binding = '127.0.0.1'
