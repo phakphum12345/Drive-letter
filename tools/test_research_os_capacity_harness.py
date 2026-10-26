@@ -46,8 +46,8 @@ class CapacityHarnessIntegrationTests(unittest.TestCase):
         self.thread.join(timeout=2)
         self.temp.cleanup()
 
-    def invoke(self, requests=3, concurrency=2):
-        url = f"http://127.0.0.1:{self.server.server_port}/health?probe=1"
+    def invoke(self, requests=3, concurrency=2, query="probe=1"):
+        url = f"http://127.0.0.1:{self.server.server_port}/health?{query}"
         return subprocess.run(
             [
                 sys.executable, str(HARNESS), "--url", url,
@@ -71,6 +71,15 @@ class CapacityHarnessIntegrationTests(unittest.TestCase):
         self.assertEqual("NOT_COLLECTED", report["resource_observation"]["server_process_cpu_memory"])
         self.assertEqual(3, len(_Handler.paths))
         self.assertTrue(all(path == "/health?probe=1" for path in _Handler.paths))
+
+    def test_evidence_redacts_sensitive_query_values(self):
+        result = self.invoke(query="token=topsecret&probe=1&api_key=hidden")
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertNotIn("topsecret", report["target_url"])
+        self.assertNotIn("hidden", report["target_url"])
+        self.assertIn("probe=1", report["target_url"])
+        self.assertIn("%5BREDACTED%5D", report["target_url"])
 
     def test_http_error_returns_nonzero_and_is_recorded(self):
         _Handler.status_code = 503
