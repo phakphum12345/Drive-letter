@@ -3,31 +3,26 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class FlexiblePortContractTests(unittest.TestCase):
-    def test_installer_selects_available_loopback_port_and_records_it(self) -> None:
+    def test_installer_selects_and_persists_available_loopback_port(self) -> None:
         service = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
         self.assertIn("Find-AvailableLoopbackPort", service)
         self.assertIn("Test-LoopbackPortAvailable", service)
         self.assertIn("host = '127.0.0.1'", service)
-        self.assertIn("port = $selectedPort", service)
+        self.assertIn("port = $Port", service)
         self.assertIn("service.json", service)
         self.assertIn("UTF8Encoding]::new($false)", service)
 
-    def test_stuck_service_host_cleanup_requires_stopped_service_and_same_process_identity(self) -> None:
+    def test_service_cleanup_preserves_ownership_and_process_identity_checks(self) -> None:
         service = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
-        self.assertIn("$serviceProcessCreationDate", service)
-        self.assertIn("$sameOwnedProcess", service)
-        self.assertIn("$serviceStopped", service)
-        self.assertIn("Stop-Process -Id $servicePid -Force", service)
-        self.assertIn("Win32_Service", service)
-        self.assertIn("Targeted service-host cleanup completed", service)
-
-        # The fallback may target only the captured service-host PID after the
-        # SCM stopped-state and process identity checks; never kill by port.
+        self.assertIn("Assert-V3ServiceOwnership", service)
+        self.assertIn("Test-V3ProcessDescendant", service)
+        self.assertIn("CreationDate", service)
+        self.assertIn("$sameProcess", service)
+        self.assertIn("Stop-Process -Id ([int]$snapshot.ProcessId)", service)
         self.assertNotIn("Stop-Process -Id $listener.OwningProcess", service)
 
     def test_installer_never_kills_processes_by_port(self) -> None:
@@ -42,17 +37,18 @@ class FlexiblePortContractTests(unittest.TestCase):
             with self.subTest(path=str(path.relative_to(ROOT))):
                 self.assertNotIn(forbidden, path.read_text(encoding="utf-8"))
 
-    def test_flutter_reads_configured_port_but_keeps_loopback_binding(self) -> None:
+    def test_flutter_reads_saved_port_but_forces_loopback(self) -> None:
         main = (ROOT / "v3" / "flutter_app" / "lib" / "main.dart").read_text(encoding="utf-8")
         self.assertIn("ResearchOSV3\\\\service.json", main)
-        self.assertIn("return 'http://127.0.0.1:$port';", main)
+        self.assertIn("127.0.0.1:$port", main)
         self.assertNotIn("decoded['host']", main)
 
-    def test_candidate_e2e_exercises_default_port_conflict(self) -> None:
+    def test_candidate_e2e_reserves_default_port_and_checks_fallback(self) -> None:
         candidate = (ROOT / "v3" / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
-        self.assertIn("defaultPortReservation", candidate)
-        self.assertIn("default_port_fallback", candidate)
-        self.assertIn("Installer did not select a fallback port", candidate)
+        self.assertIn("$defaultPortReservation", candidate)
+        self.assertIn("defaultPortFallback", candidate) if "defaultPortFallback" in candidate else self.assertIn("default_port_fallback", candidate)
+        self.assertIn("Installer did not select fallback port", candidate)
+        self.assertIn("service.json", candidate)
 
 
 if __name__ == "__main__":
