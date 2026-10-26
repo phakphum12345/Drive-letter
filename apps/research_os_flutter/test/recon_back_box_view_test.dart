@@ -53,6 +53,6 @@ void main() {
     await tester.tap(find.text('Learning & Evidence'));
     await tester.pumpAndSettle();
     expect(find.text('Website Learning'), findsOneWidget);
-    expect(find.text('Evidence & Provenance'), findsOneWidget);
+    expect(find.text('Source URL (HTTPS)'), findsOneWidget);
   });
 }
