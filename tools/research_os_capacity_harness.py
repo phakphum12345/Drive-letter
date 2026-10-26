@@ -8,7 +8,7 @@ import platform
 import sys
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Direct script execution places the tools directory, not the repository root,
 # on sys.path. This import therefore also works in the CI CLI smoke test.
@@ -41,6 +41,16 @@ def request_once(target, timeout):
     return result
 
 
+def redact_target_url(target):
+    """Redact common secret-bearing query values before persisting evidence."""
+    sensitive_markers = ("token", "key", "password", "passwd", "secret", "auth", "session", "signature", "credential")
+    query = urlencode([
+        (name, "[REDACTED]" if any(marker in name.lower() for marker in sensitive_markers) else value)
+        for name, value in parse_qsl(target.query, keep_blank_values=True)
+    ])
+    return urlunsplit((target.scheme, target.netloc, target.path or "/", query, ""))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", required=True, help="Explicit safe GET endpoint")
@@ -70,7 +80,7 @@ def main():
         "schema_version": 1,
         "started_at_utc": started_at,
         "source_sha": os.environ.get("TARGET_SHA") or os.environ.get("GITHUB_SHA", "not-provided"),
-        "target_url": urlunsplit((target.scheme, target.netloc, target.path or "/", target.query, "")),
+        "target_url": redact_target_url(target),
         "method": "GET",
         "workload": {
             "requests": args.requests,
