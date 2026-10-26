@@ -187,10 +187,17 @@ if (Test-Path $configPath -PathType Leaf) {
     try {
         $savedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
         $savedPort = [int]$savedConfig.port
-        if ($savedPort -ge 1 -and $savedPort -le 65535) { $Port = $savedPort }
+        if ($savedPort -lt 1 -or $savedPort -gt 65535) {
+            throw "Invalid configured V3 service port in $configPath"
+        }
+        $Port = $savedPort
     }
     catch {
-        if ($Action -eq 'uninstall') { throw "Cannot safely determine the configured V3 service port from $configPath" }
+        # If a service exists, an unreadable port means its listener cannot be
+        # safely identified. Fail closed instead of cleaning up against 8788.
+        if ($Action -eq 'uninstall' -or (Get-V3ServiceRecord)) {
+            throw "Cannot safely determine the configured V3 service port from $configPath"
+        }
     }
 }
 
