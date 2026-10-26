@@ -1,0 +1,79 @@
+name: Research OS Developer Environment Manager
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/developer_environment.py'
+      - 'tools/test_developer_environment.py'
+      - 'docs/RESEARCH_OS_DEVELOPER_ENVIRONMENT_MANAGER.md'
+      - '.github/workflows/research-os-developer-environment.yml'
+  push:
+    branches:
+      - 'feat/research-os-developer-environment-manager'
+    paths:
+      - 'tools/developer_environment.py'
+      - 'tools/test_developer_environment.py'
+      - 'docs/RESEARCH_OS_DEVELOPER_ENVIRONMENT_MANAGER.md'
+      - '.github/workflows/research-os-developer-environment.yml'
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact commit SHA to validate (defaults to this workflow event SHA)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-os-developer-environment-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  developer-environment:
+    name: Exact-SHA compile and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_SHA: ${{ github.event.pull_request.head.sha || inputs.target_sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$TARGET_SHA"
+          echo "CHECKED_OUT_SHA=$actual"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Compile candidate
+        run: python -m py_compile tools/developer_environment.py tools/test_developer_environment.py
+
+      - name: Run regression tests
+        run: python -m unittest tools.test_developer_environment -v
+
+      - name: Emit read-only inventory smoke evidence
+        run: |
+          python tools/developer_environment.py > "$RUNNER_TEMP/developer-environment.json"
+          python - "$RUNNER_TEMP/developer-environment.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert report["mode"] == "READ_ONLY"
+          assert report["schema_version"] == 1
+          assert report["summary"]["checked"] == len(report["tools"])
+          assert all(item["status"] in {"PASS", "SKIPPED"} for item in report["tools"])
+          print(json.dumps(report["summary"], sort_keys=True))
+          PY
