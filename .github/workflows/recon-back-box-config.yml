@@ -1,6 +1,12 @@
 name: Recon Back Box Config Snapshot
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "current/recon-back-box/config/**"
+      - "platform/recon-back-box/Export-ReconBackBoxConfig.ps1"
+      - ".github/workflows/recon-back-box-config.yml"
   workflow_dispatch:
   push:
     branches: [main]
