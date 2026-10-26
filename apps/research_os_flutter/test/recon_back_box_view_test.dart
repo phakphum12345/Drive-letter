@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../lib/src/api/research_os_api_client.dart';
-import '../lib/src/features/control_center/recon_back_box_view.dart';
+import 'package:research_os_flutter/src/api/research_os_api_client.dart';
+import 'package:research_os_flutter/src/features/control_center/recon_back_box_view.dart';
 
 class _FakeApiClient extends ResearchOSApiClient {
   _FakeApiClient() : super(baseUrl: 'http://127.0.0.1:8787');
