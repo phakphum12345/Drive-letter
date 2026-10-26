@@ -13,11 +13,11 @@ from typing import Any, Iterable
 
 def nearest_rank_percentile(values: Iterable[float], percentile: float) -> float | None:
     """Calculate a nearest-rank percentile; return None when no samples exist."""
+    if not 0 < percentile <= 100:
+        raise ValueError("percentile must be in the interval (0, 100]")
     ordered = sorted(float(value) for value in values)
     if not ordered:
         return None
-    if not 0 < percentile <= 100:
-        raise ValueError("percentile must be in the interval (0, 100]")
     rank = max(1, math.ceil(percentile * len(ordered) / 100))
     return round(ordered[rank - 1], 3)
 
