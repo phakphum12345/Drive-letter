@@ -76,12 +76,6 @@ def main() -> int:
         pass
     finally:
         service.shutdown()
-        try:
-            current = json.loads(registry_path.read_text(encoding="utf-8"))
-            if current.get("process_id") == os.getpid() and current.get("service_name") == service_name:
-                registry_path.unlink(missing_ok=True)
-        except (OSError, ValueError, TypeError):
-            pass
     return 0
 
 
