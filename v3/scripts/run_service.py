@@ -50,7 +50,7 @@ def main() -> int:
             os.unlink(temp_path)
         except OSError:
             pass
-        service.shutdown()
+        server.server_close()
         raise
     print(
         json.dumps(
