@@ -69,7 +69,7 @@ def main():
     evidence = {
         "schema_version": 1,
         "started_at_utc": started_at,
-        "source_sha": os.environ.get("GITHUB_SHA", "not-provided"),
+        "source_sha": os.environ.get("TARGET_SHA") or os.environ.get("GITHUB_SHA", "not-provided"),
         "target_url": urlunsplit((target.scheme, target.netloc, target.path or "/", target.query, "")),
         "method": "GET",
         "workload": {
