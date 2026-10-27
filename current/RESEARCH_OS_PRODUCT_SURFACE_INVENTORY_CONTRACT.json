@@ -124,6 +124,12 @@
       17,
       "apps/research_os_flutter/lib/src/features/owner/owner_experience_page.dart",
       "apps/research_os_flutter/lib/src/app_shell.dart"
+    ],
+    [
+      "Localization Center",
+      18,
+      "apps/research_os_flutter/lib/src/features/localization/localization_center_page.dart",
+      "apps/research_os_flutter/lib/src/app_shell.dart"
     ]
   ],
   "non_surface_bindings": {
