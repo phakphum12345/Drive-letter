@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.mcp_engine.engine import (
     EngineError, copy_apply, copy_preview, diff_files, inspect_file,
@@ -60,6 +61,24 @@ class NativeEngineTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             copy_apply(self.src, "hello.txt", self.dst, "hello.txt")
         self.assertEqual((self.dst / "hello.txt").read_bytes(), before)
+
+    def test_copy_apply_preserves_destination_created_during_exclusive_open(self):
+        target = self.dst / "racing.txt"
+        original_open = Path.open
+
+        def create_competing_file(path, mode="r", *args, **kwargs):
+            if path == target and mode == "xb":
+                # Simulate another process winning the race after the pre-check.
+                with open(target, "wb") as competing:
+                    competing.write(b"owned by another process")
+                raise FileExistsError(str(target))
+            return original_open(path, mode, *args, **kwargs)
+
+        with patch.object(Path, "open", autospec=True, side_effect=create_competing_file):
+            with self.assertRaises(FileExistsError):
+                copy_apply(self.src, "hello.txt", self.dst, "racing.txt")
+
+        self.assertEqual(target.read_bytes(), b"owned by another process")
 
     def test_destination_traversal_is_rejected(self):
         with self.assertRaises(EngineError):
