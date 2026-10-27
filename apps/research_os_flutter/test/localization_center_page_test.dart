@@ -45,8 +45,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
-    await tester.pumpAndSettle();
+    await pumpLocalizationCenter(tester);
 
     await tester.enterText(find.byKey(const Key('localization-search')), 'evidence');
     await tester.pump();
@@ -62,8 +61,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
-    await tester.pumpAndSettle();
+    await pumpLocalizationCenter(tester);
 
     await tester.enterText(
       find.byKey(const Key('localization-value-th-nav.research')),
@@ -74,8 +72,7 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     await tester.pump();
-    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
-    await tester.pumpAndSettle();
+    await pumpLocalizationCenter(tester);
 
     final localePicker = find.byKey(const Key('localization-locale-picker'));
     await tester.tap(localePicker);
@@ -91,8 +88,7 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     await tester.pump();
-    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
-    await tester.pumpAndSettle();
+    await pumpLocalizationCenter(tester);
 
     expect(tester.widget<DropdownButton<String>>(localePicker).value, 'en');
     expect(find.text('Research work'), findsOneWidget);
