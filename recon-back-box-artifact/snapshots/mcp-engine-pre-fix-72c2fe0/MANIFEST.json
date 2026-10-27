@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "artifact_type": "immutable-source-snapshot",
+  "purpose": "Preserve exact pre-fix MCP Engine files before security repair",
+  "repository": "phakphum12345/Drive-letter",
+  "source_commit": "72c2fe00e61a773c64691bda81f97052e146e003",
+  "source_pr": 50,
+  "created_from_branch": "feat/native-mcp-engine-integration",
+  "snapshot_branch": "backbox/mcp-engine-pre-fix-72c2fe0",
+  "status": "PRESERVED_IN_GIT_BRANCH",
+  "warning": "This is a source snapshot only, not a verified runtime backup or permanent artifact-store record.",
+  "files": [
+    {
+      "source_path": "tools/mcp_engine/engine.py",
+      "snapshot_path": "recon-back-box-artifact/snapshots/mcp-engine-pre-fix-72c2fe0/engine.py",
+      "source_blob_sha": "638564ffbf6dfef122e2f416ef3f5e8203aa691e",
+      "encoding": "utf-8"
+    },
+    {
+      "source_path": "tests/test_native_mcp_engine.py",
+      "snapshot_path": "recon-back-box-artifact/snapshots/mcp-engine-pre-fix-72c2fe0/test_native_mcp_engine.py",
+      "source_blob_sha": "f0581923b83ef316005fcca9dc4988d43071de22",
+      "encoding": "utf-8"
+    },
+    {
+      "source_path": "docs/native-mcp-engine.md",
+      "snapshot_path": "recon-back-box-artifact/snapshots/mcp-engine-pre-fix-72c2fe0/native-mcp-engine.md",
+      "source_blob_sha": "25a80bb6ebde2f7291d072399f3d3faa3ddda5ba",
+      "encoding": "utf-8"
+    },
+    {
+      "source_path": "docs/native-mcp-engine-test-plan.md",
+      "snapshot_path": "recon-back-box-artifact/snapshots/mcp-engine-pre-fix-72c2fe0/native-mcp-engine-test-plan.md",
+      "source_blob_sha": "d03d0b661e931f3ec1fc43d42f49184a4cc84077",
+      "encoding": "utf-8"
+    },
+    {
+      "source_path": "tools/mcp_engine/__init__.py",
+      "snapshot_path": "recon-back-box-artifact/snapshots/mcp-engine-pre-fix-72c2fe0/__init__.py",
+      "source_blob_sha": "9825cae56559ee9695db8401f9ecffd2967f5b68",
+      "encoding": "utf-8"
+    }
+  ],
+  "final_snapshot_commit": "092ae482db18670d9450a74c7c585750a5237a91"
+}
