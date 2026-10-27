@@ -22,8 +22,19 @@ PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
 MAX_LINE_BYTES = 1024 * 1024
 
 
-def _response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
+def _response(
+    request_id: Any,
+    result: dict[str, Any],
+    *,
+    modern: bool = False,
+    cacheable: bool = False,
+) -> dict[str, Any]:
     result.setdefault("_meta", {SERVER_INFO_META_KEY: SERVER_INFO})
+    if modern:
+        result.setdefault("resultType", "complete")
+    if modern and cacheable:
+        result.setdefault("ttlMs", 0)
+        result.setdefault("cacheScope", "public")
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
@@ -88,10 +99,7 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
         return _response(request_id, {
             "supportedVersions": [PROTOCOL_VERSION],
             "capabilities": {"tools": {"listChanged": False}},
-            "resultType": "complete",
-            "ttlMs": 0,
-            "cacheScope": "public",
-        })
+        }, modern=True, cacheable=True)
 
     # Retain compatibility with existing pre-2026 hosts, but never label their
     # handshake as 2026-07-28.
@@ -122,7 +130,7 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
     if method == "ping":
         return _response(request_id, {})
     if method == "tools/list":
-        return _response(request_id, {"tools": _tool_specs()})
+        return _response(request_id, {"tools": _tool_specs()}, modern=modern_request, cacheable=modern_request)
     if method == "tools/call":
         params = message.get("params")
         if not isinstance(params, dict) or not isinstance(params.get("name"), str):
@@ -139,7 +147,7 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
             return _response(request_id, {
                 "isError": True,
                 "content": [{"type": "text", "text": "Unknown tool."}],
-            })
+            }, modern=modern_request)
         if set(arguments) != allowed[name] or any(not isinstance(v, str) or not v for v in arguments.values()):
             return _error(request_id, -32602, "Invalid tool arguments.")
         try:
@@ -147,13 +155,13 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
                 value = inspect_file(root, arguments["path"])
             else:
                 value = diff_files(root, arguments["left_path"], root, arguments["right_path"])
-            return _response(request_id, _text_result(value))
+            return _response(request_id, _text_result(value), modern=modern_request)
         except (EngineError, OSError, ValueError) as exc:
             safe_message = str(exc) if isinstance(exc, EngineError) else "Unable to inspect the requested file."
             return _response(request_id, {
                 "content": [{"type": "text", "text": json.dumps({"status": "FAIL", "error": safe_message}, ensure_ascii=False)}],
                 "isError": True,
-            })
+            }, modern=modern_request)
     if is_notification:
         return None
     return _error(request_id, -32601, "Method not found.")
