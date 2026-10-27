@@ -6,7 +6,7 @@ import threading
 from urllib.parse import urlparse
 from http.server import BaseHTTPRequestHandler
 
-from google_oauth import GoogleOAuthBroker, IDENTITY_SCOPES
+from google_oauth import GoogleOAuthBroker, GoogleOAuthError, IDENTITY_SCOPES
 from rbac import RoleStore
 from auth_session import clear_cookie_header, cookie_header, issue_session, revoke_session
 from oauth_handoff import create_handoff
@@ -102,6 +102,8 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
     def complete(self, *, code: str, state: str) -> dict[str, object]:
         result = super().complete(code=code, state=state)
         account = result.get("account") if isinstance(result.get("account"), dict) else {}
+        if not str(account.get("sub") or "").strip() or account.get("email_verified") is not True:
+            raise GoogleOAuthError("Google identity must include a subject and verified email")
         account = self._with_role(account)
         result["account"] = account
         session = issue_session(account)
