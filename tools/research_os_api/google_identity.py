@@ -92,6 +92,12 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
         port = int(os.environ.get("RESEARCH_OS_API_PORT", "8787"))
         return f"http://127.0.0.1:{port}/v1/auth/google/callback"
 
+    def _fetch_userinfo(self, access_token: str) -> dict[str, object]:
+        account = super()._fetch_userinfo(access_token)
+        if not str(account.get("sub") or "").strip() or account.get("email_verified") is not True:
+            raise GoogleOAuthError("Google identity must include a subject and verified email")
+        return account
+
     def _with_role(self, account: dict[str, object]) -> dict[str, object]:
         email = str(account.get("email") or "").strip()
         if not email:
