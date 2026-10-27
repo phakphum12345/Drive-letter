@@ -336,7 +336,7 @@ class _LocalizationCenterPageState extends State<LocalizationCenterPage> {
                         style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 10),
                     TextFormField(
-                      key: Key('localization-value-$key'),
+                      key: Key('localization-value-$_locale-$key'),
                       initialValue: target[key] ?? '',
                       decoration: InputDecoration(
                         labelText: 'Translation',
