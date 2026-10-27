@@ -77,6 +77,20 @@ class McpStdioServerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(json.loads(result.stdout)["error"]["code"], -32700)
 
+    def test_oversized_message_is_rejected_and_server_recovers(self):
+        payload = ("x" * (1024 * 1024 + 32)) + "\n" + json.dumps(
+            {"jsonrpc": "2.0", "id": 9, "method": "ping"}
+        ) + "\n"
+        result = subprocess.run(
+            [sys.executable, "-m", "tools.mcp_engine.server", "--root", str(self.root)],
+            input=payload, text=True, capture_output=True, timeout=10,
+        )
+        replies = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(replies[0]["error"]["code"], -32700)
+        self.assertEqual(replies[1]["id"], 9)
+        self.assertEqual(replies[1]["result"], {})
+
     def test_no_write_side_effects(self):
         before = sorted(p.name for p in self.root.iterdir())
         self.request([{"jsonrpc": "2.0", "id": 8, "method": "tools/call",
