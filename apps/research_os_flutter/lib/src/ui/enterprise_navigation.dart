@@ -58,6 +58,13 @@ const researchNavigationItems = <ResearchNavItem>[
     capabilityId: 'owner',
     destinationId: 'owner',
   ),
+  ResearchNavItem(
+    'Developer',
+    'Localization Center',
+    Icons.translate_outlined,
+    18,
+    destinationId: 'localization_center',
+  ),
 ];
 
 class ResearchSidebar extends StatelessWidget {
