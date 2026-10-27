@@ -27,7 +27,9 @@ class GoogleIdentitySessionTests(unittest.TestCase):
             return_value={
                 "connected": True,
                 "account": {
+                    "sub": "google-sub-123",
                     "email": "owner@example.com",
+                    "email_verified": True,
                     "name": "Owner",
                 },
                 "has_refresh_token": False,
