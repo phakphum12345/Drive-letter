@@ -3,7 +3,7 @@
 - **Status:** protocol-aligned prototype; release certification is still pending
 - **Transport:** STDIO only
 - **Modern protocol:** `2026-07-28` using `server/discover` and per-request `_meta`
-- **Legacy compatibility:** handshake revisions up to `2025-11-25`; the server responds with `2025-11-25`, never labels the legacy handshake as modern
+- **Legacy compatibility:** `2025-11-25` initialize handshake only; unsupported older revisions are rejected rather than incorrectly negotiated
 - **Tools exposed:** `inspect_file`, `diff_files`
 - **Writes / HTTP / OAuth:** not exposed or implemented
 
@@ -37,7 +37,7 @@ Example MCP client configuration (adjust the absolute paths for the host):
 
 ## Protocol behavior
 
-The modern path handles `server/discover` and advertises `2026-07-28`. Modern requests carry the protocol version in `params._meta["io.modelcontextprotocol/protocolVersion"]`; responses include server identity in the result `_meta`. The adapter also retains a legacy `initialize` path for clients from earlier protocol revisions and returns `2025-11-25` for that handshake.
+The modern path handles `server/discover` and advertises `2026-07-28`. Modern requests carry the protocol version in `params._meta["io.modelcontextprotocol/protocolVersion"]`; responses include server identity in the result `_meta`. The adapter also retains a legacy `initialize` path for clients proposing `2025-11-25`; other legacy revisions are rejected rather than responding with a version the client may not support.
 
 The official MCP Python SDK v2 client is used in CI through its real STDIO subprocess transport. That integration test must demonstrate modern discovery, tool listing, a read-only tool call, traversal denial, and no filesystem side effects. A green CI run is evidence for that exact tested SHA only; it is not release certification or proof of compatibility with every MCP host.
 
