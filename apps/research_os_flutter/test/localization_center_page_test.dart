@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:research_os_flutter/src/features/localization/localization_center_page.dart';
+import 'package:research_os_flutter/src/features/localization/localization_catalog_store.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
@@ -81,4 +82,15 @@ void main() {
     expect(find.text('Research work'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  test('catalog store rejects unsupported locales', () async {
+    await expectLater(
+      const LocalizationCatalogStore().loadCatalog('fr'),
+      throwsArgumentError,
+    );
+    await expectLater(
+      const LocalizationCatalogStore().savePreferredLocale('fr'),
+      throwsArgumentError,
+    );
+  });
+
 }
