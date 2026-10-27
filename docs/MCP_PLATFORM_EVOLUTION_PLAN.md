@@ -219,3 +219,17 @@ This document does not authorize runtime changes by itself. Implementation must 
 ## Revision history
 
 - **0.1.0 — 2026-10-28:** Initial research baseline and phased platform-level upgrade plan.
+
+## 9. Protocol alignment follow-up — 2026-10-28
+
+The stdio adapter was updated to address a discovered protocol-era mismatch:
+
+- Modern `2026-07-28` discovery is implemented through `server/discover`, with `supportedVersions`, capabilities, cache metadata, and server identity under result `_meta`.
+- Modern tool requests are handled with the per-request protocol version in `params._meta`.
+- Legacy `initialize` remains available for existing clients, but the response now identifies the negotiated legacy revision as `2025-11-25`; it does not claim that a legacy handshake is the modern protocol.
+- Only `inspect_file` and `diff_files` remain exposed. HTTP, OAuth, write tools, shell/process execution, merge and deploy remain out of scope.
+- CI Lite now installs the official MCP Python SDK v2 line and runs a subprocess STDIO interoperability test for discovery, tool listing, a read-only inspection, traversal denial, and no-write side effects.
+
+**Evidence status after the source changes:** the official-client test and all regression gates must run on the new exact head SHA before interoperability can be marked PASS. Until those runs finish, SDK interoperability is **UNKNOWN**. SDK dependency resolution is currently specified as `mcp>=2,<3`; exact version pinning/lockfile remains a follow-up. MCP Inspector, cross-host conformance, symlink/race/output-boundary hardening, central Research OS policy integration, remote auth, release certification and deployment remain **NOT IMPLEMENTED / UNKNOWN**.
+
+Keep PR #53 Draft and do not merge or deploy based solely on these source edits.
