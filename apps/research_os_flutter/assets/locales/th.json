@@ -1,0 +1,19 @@
+{
+  "app.title": "Research OS",
+  "nav.research": "งานวิจัย",
+  "nav.evidence": "หลักฐาน",
+  "nav.workspace": "พื้นที่ทำงาน",
+  "nav.providers": "ผู้ให้บริการ",
+  "action.new_research": "เริ่มงานวิจัยใหม่",
+  "action.start": "เริ่มงาน",
+  "action.save": "บันทึก",
+  "action.cancel": "ยกเลิก",
+  "status.ready": "พร้อมใช้งาน",
+  "status.running": "กำลังทำงาน",
+  "auth.sign_in": "เข้าสู่ระบบ",
+  "auth.sign_out": "ออกจากระบบ",
+  "research.prompt": "อธิบายหัวข้อวิจัยที่ต้องการตรวจสอบ...",
+  "research.result_count": "{count} รายการ",
+  "error.network": "ไม่สามารถเชื่อมต่อบริการได้ กรุณาลองอีกครั้ง",
+  "settings.language": "ภาษา"
+}
