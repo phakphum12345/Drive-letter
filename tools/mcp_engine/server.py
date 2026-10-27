@@ -1,24 +1,29 @@
-"""Minimal read-only MCP stdio adapter for the DCP native engine.
+"""Read-only MCP stdio adapter for the DCP native engine.
 
-This intentionally implements only the JSON-RPC methods needed for a small
-stdio MCP server. It does not expose HTTP, authentication, shell execution, or
-write-capable engine functions.
+Supports the MCP 2026-07-28 stateless request envelope and the 2025-11-25
+legacy initialize handshake for existing hosts. No HTTP, auth, shell, or
+write-capable engine function is exposed.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 from tools.mcp_engine.engine import EngineError, diff_files, inspect_file
 
 PROTOCOL_VERSION = "2026-07-28"
-SERVER_INFO = {"name": "dcp-native-mcp", "version": "0.1.0"}
+LEGACY_PROTOCOL_VERSION = "2025-11-25"
+SERVER_INFO = {"name": "dcp-native-mcp", "version": "0.2.0"}
+SERVER_INFO_META_KEY = "io.modelcontextprotocol/serverInfo"
+PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
 MAX_LINE_BYTES = 1024 * 1024
 
 
 def _response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
+    result.setdefault("_meta", {SERVER_INFO_META_KEY: SERVER_INFO})
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
@@ -69,23 +74,51 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
     method = message["method"]
     request_id = message.get("id")
     is_notification = "id" not in message
+    params = message.get("params")
+    params = params if isinstance(params, dict) else {}
+    envelope = params.get("_meta")
+    envelope = envelope if isinstance(envelope, dict) else {}
+    requested_version = envelope.get(PROTOCOL_VERSION_META_KEY)
+    modern_request = requested_version == PROTOCOL_VERSION
 
-    if method == "notifications/initialized":
-        return None
-    if method == "notifications/cancelled":
-        return None
-    if method == "initialize":
-        params = message.get("params")
-        if not isinstance(params, dict):
-            return _error(request_id, -32602, "Invalid initialize params.")
-        requested = params.get("protocolVersion")
-        # Negotiate to the one version this adapter explicitly implements.
-        version = requested if requested == PROTOCOL_VERSION else PROTOCOL_VERSION
+    # 2026-07-28 discovery is a regular request, not an initialize handshake.
+    if method == "server/discover":
+        if not modern_request:
+            return _error(request_id, -32022, "Unsupported protocol version.")
         return _response(request_id, {
-            "protocolVersion": version,
+            "supportedVersions": [PROTOCOL_VERSION],
+            "capabilities": {"tools": {"listChanged": False}},
+            "resultType": "complete",
+            "ttlMs": 0,
+            "cacheScope": "public",
+        })
+
+    # Retain compatibility with existing pre-2026 hosts, but never label their
+    # handshake as 2026-07-28.
+    if method == "initialize":
+        init_params = message.get("params")
+        if not isinstance(init_params, dict):
+            return _error(request_id, -32602, "Invalid initialize params.")
+        requested = init_params.get("protocolVersion")
+        if requested not in (LEGACY_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"):
+            return _error(request_id, -32022, "Unsupported protocol version.")
+        return _response(request_id, {
+            "protocolVersion": LEGACY_PROTOCOL_VERSION,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": SERVER_INFO,
         })
+    if method == "notifications/initialized" or method == "notifications/cancelled":
+        return None
+
+    if not modern_request:
+        # Non-discovery requests must be versioned either by the modern
+        # per-request envelope or by the legacy initialize flow.
+        if method not in ("ping", "tools/list", "tools/call"):
+            return None if is_notification else _error(request_id, -32601, "Method not found.")
+    elif method == "ping":
+        # ping was removed from the modern protocol.
+        return _error(request_id, -32601, "Method not found.")
+
     if method == "ping":
         return _response(request_id, {})
     if method == "tools/list":
@@ -127,8 +160,6 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
 
 
 def serve(root: str) -> int:
-    # Validate the root before accepting protocol requests.
-    from pathlib import Path
     try:
         resolved = Path(root).expanduser().resolve(strict=True)
         if not resolved.is_dir():
@@ -142,7 +173,6 @@ def serve(root: str) -> int:
         if not raw:
             break
         if len(raw) > MAX_LINE_BYTES:
-            # Drain the remainder of this line in bounded chunks before resuming.
             while raw and not raw.endswith(bytes([10])):
                 raw = sys.stdin.buffer.readline(MAX_LINE_BYTES + 1)
             print(json.dumps(_error(None, -32700, "Message exceeds the size limit.")), flush=True)
