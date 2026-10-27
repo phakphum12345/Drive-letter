@@ -108,7 +108,7 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
         if not isinstance(init_params, dict):
             return _error(request_id, -32602, "Invalid initialize params.")
         requested = init_params.get("protocolVersion")
-        if requested not in (LEGACY_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"):
+        if requested != LEGACY_PROTOCOL_VERSION:
             return _error(request_id, -32022, "Unsupported protocol version.")
         return _response(request_id, {
             "protocolVersion": LEGACY_PROTOCOL_VERSION,
