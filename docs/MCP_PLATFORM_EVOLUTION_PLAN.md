@@ -9,7 +9,7 @@
 
 ## 1. Executive decision
 
-Extend the existing Native MCP Engine rather than replace it. The current engine is a local-first Python inspection/diff/copy-preview library and CLI; its own documentation explicitly says it is **not yet an MCP wire-protocol server**. Keep that engine as a domain library and place any MCP protocol adapter around it, with server-side policy and authorization enforced before each operation.
+Extend the existing Native MCP Engine rather than replace it. The engine remains the local-first Python inspection/diff/copy-preview domain library and CLI. This branch adds a small STDIO JSON-RPC adapter prototype around it; that prototype is not yet certified against an official MCP SDK/client and does not implement HTTP/OAuth or remote authorization. Keep policy and authorization server-side before each operation.
 
 The initial implementation target is a **read-only, local-first MCP adapter** for bounded source inspection, SHA-256 evidence, and diff preview. Keep copy-apply outside the initial tool catalogue; it remains an explicit local CLI operation until a separately reviewed approval and authorization contract exists. Do not add a public listener, secrets, remote repository mutation, automatic merge/deploy, shell/process execution, or implicit trust in model/tool descriptions.
 
@@ -31,9 +31,9 @@ Source files inspected on the `main` branch:
 
 ### Missing capabilities (not assumed to exist)
 
-- MCP JSON-RPC wire-protocol server/client adapter and protocol-version negotiation.
-- MCP tool/resource/prompt discovery and tool-schema validation.
-- Transport lifecycle and interoperability tests against an MCP client/Inspector.
+- Official MCP SDK/client interoperability and protocol conformance evidence (a minimal STDIO server prototype now exists on this branch).
+- Resources/prompts discovery and any capabilities beyond the two initial read-only tools.
+- Production transport lifecycle, cancellation/timeout behavior, and interoperability tests against an MCP client/Inspector.
 - Server-side identity, policy, authorization, per-tool scopes, and revocation.
 - Remote HTTP deployment, OAuth authorization, request-level rate/size/time budgets, and operational audit storage.
 - Formal threat model and adversarial tests for prompt injection, tool poisoning, confused-deputy behavior, secret exposure, and untrusted server metadata.
@@ -113,18 +113,21 @@ The UI, model, tool metadata, adapter, and worker are not policy authorities. Re
 ### Phase A — Inventory and contract freeze
 - [x] Inspect existing engine, tests, and design notes.
 - [x] Review official protocol, SDK, authorization, OpenAI, and GitHub references.
-- [ ] Inventory Python version, dependency policy, current CI, and any existing MCP adapter in the complete repository.
-- [ ] Record the chosen protocol version and SDK version in a machine-readable contract.
-- **Gate:** no new server or dependency until the existing integration surface is mapped.
+- [x] Inspect current CI workflow and verify the existing engine has no third-party runtime dependency manifest at the repository root.
+- [x] Pin the prototype protocol target to `2026-07-28` in the adapter and document it.
+- [ ] Record official SDK/client interoperability and compatibility range in a machine-readable contract.
+- **Gate:** prototype uses Python standard library only; do not add a remote server or third-party dependency until compatibility and policy are reviewed.
 
 ### Phase B — Read-only adapter prototype
-- [ ] Add a thin adapter around existing engine functions; no duplicated file-processing logic.
-- [ ] Expose only `inspect_file` and `diff_files` initially; expose copy preview only after schema and output limits are tested.
-- [ ] Validate all arguments with strict schemas; reject unknown fields, absolute paths, traversal, invalid roots, and over-limit inputs.
+- [x] Add a thin STDIO adapter around existing engine functions; no duplicated file-processing logic.
+- [x] Expose only `inspect_file` and `diff_files`; copy preview remains out of the tool catalogue.
+- [x] Validate allowed tool names and exact argument keys; reject traversal through the existing engine and reject invalid roots/over-limit messages.
+- [ ] Add additional output-size limits and adversarial symlink/race coverage.
 - [ ] Keep configured roots server-owned; callers may select only a relative path inside an allowlisted root.
 - [ ] Return bounded structured results with explicit `PASS/FAIL/SKIPPED/UNKNOWN`, operation type, SHA-256, and truncation indicators.
-- [ ] Add protocol-level tests with an official compatible client/Inspector and test invalid JSON/schema, cancellation, timeout, oversized output, and transport disconnects.
-- **Gate:** no write tools, public listener, or secrets.
+- [x] Add basic JSON-RPC initialize, tool discovery/call, malformed JSON, extra-argument, unknown-tool, traversal, no-write, and oversized-message tests; wire them into CI Lite.
+- [ ] Add protocol-level tests with an official compatible client/Inspector and test cancellation, timeout, oversized output, and transport disconnects.
+- **Gate:** prototype has no write tools, public listener, or secrets; keep Draft until official-client interoperability and remaining negative tests are evidenced.
 
 ### Phase C — Security and governance
 - [ ] Write a threat model for prompt injection, tool poisoning, confused deputy, path races/symlinks, SSRF, secret leakage, replay, and denial-of-service.
