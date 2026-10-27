@@ -53,6 +53,7 @@ class ResearchOSCapabilityConvergenceTests(unittest.TestCase):
             "developer_access",
             "google_sign_in",
             "projects",
+            "localization_center",
         })
 
 
