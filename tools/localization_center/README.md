@@ -29,8 +29,8 @@ python -m unittest discover -s tools -p 'test_validate_localization_catalogs.py'
 ## Current limits
 
 - This is an MVP prototype, not a production translation management service.
-- Edits stay in the current browser session until exported; there is no server-side persistence.
-- The example catalogs are not yet wired into the Research OS runtime UI.
+- Browser editor edits stay in the current browser session until exported. The Flutter editor stores drafts in device-local SharedPreferences; neither editor writes to GitHub or production.
+- The Flutter Localization Center now loads bundled English/Thai runtime catalog assets and persists per-locale drafts locally. The broader Research OS shell and product pages are not yet localized.
 - No GitHub API integration, accounts, multi-user review, AI translation, or automatic deployment.
 - Export validation checks JSON keys, string values, non-empty translations, and simple `{placeholder}` tokens. Plural rules, ICU messages, HTML safety, and locale-specific formatting need dedicated design before production use.
 - Serve over localhost rather than opening `index.html` directly because the app loads catalog files using fetch.
