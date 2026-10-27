@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - "tools/localization_center/**"
+      - "apps/research_os_flutter/assets/locales/**"
+      - "apps/research_os_flutter/lib/src/features/localization/**"
+      - "apps/research_os_flutter/test/localization_center_page_test.dart"
+      - "apps/research_os_flutter/pubspec.yaml"
       - "tools/validate_localization_catalogs.py"
       - "tools/test_validate_localization_catalogs.py"
       - ".github/workflows/localization-center-ci.yml"
