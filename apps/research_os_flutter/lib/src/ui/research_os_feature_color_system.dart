@@ -88,6 +88,7 @@ class ResearchOSFeatureColorSystem {
     'workflows': execution,
     'control_center': assurance,
     'owner': ownerExperience,
+    'localization_center': workspace,
   };
 
   static ResearchOSFeatureStyle forDestination(String destinationId) =>
