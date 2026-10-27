@@ -4,6 +4,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:research_os_flutter/src/features/localization/localization_center_page.dart';
 import 'package:research_os_flutter/src/features/localization/localization_catalog_store.dart';
 
+Future<void> pumpLocalizationCenter(WidgetTester tester) async {
+  await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
+  for (var attempt = 0;
+      attempt < 20 &&
+          find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+      attempt++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  expect(
+    find.byType(CircularProgressIndicator),
+    findsNothing,
+    reason: 'Localization catalogs should finish loading within the bounded test window.',
+  );
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
@@ -13,8 +28,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
-    await tester.pumpAndSettle();
+    await pumpLocalizationCenter(tester);
 
     expect(find.byKey(const Key('localization-center-page')), findsOneWidget);
     expect(find.text('Localization Center'), findsOneWidget);
@@ -55,7 +69,8 @@ void main() {
       find.byKey(const Key('localization-value-th-nav.research')),
       'การค้นคว้า',
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     await tester.pump();
@@ -71,7 +86,8 @@ void main() {
       find.byKey(const Key('localization-value-en-nav.research')),
       'Research work',
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     await tester.pump();
