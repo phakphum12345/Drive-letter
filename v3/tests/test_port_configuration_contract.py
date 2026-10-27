@@ -7,14 +7,26 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class FlexiblePortContractTests(unittest.TestCase):
-    def test_installer_selects_and_persists_available_loopback_port(self) -> None:
-        service = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
-        self.assertIn("Find-AvailableLoopbackPort", service)
-        self.assertIn("Test-LoopbackPortAvailable", service)
-        self.assertIn("host = '127.0.0.1'", service)
-        self.assertIn("port = $Port", service)
-        self.assertIn("service.json", service)
-        self.assertIn("UTF8Encoding]::new($false)", service)
+    def test_service_binds_os_assigned_port_and_publishes_atomic_registry(self) -> None:
+        service = (ROOT / "v3" / "research_os_v3" / "service.py").read_text(encoding="utf-8")
+        runner = (ROOT / "v3" / "scripts" / "run_service.py").read_text(encoding="utf-8")
+        host = (ROOT / "v3" / "windows_service" / "Program.cs").read_text(encoding="utf-8")
+        installer = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("ThreadingHTTPServer((self.host, self.port), Handler)", service)
+        self.assertIn("self.port = int(server.server_address[1])", service)
+        self.assertIn("tempfile.mkstemp", runner)
+        self.assertIn("os.replace(temp_path, registry_path)", runner)
+        self.assertIn('"schema_version": 1', runner)
+        self.assertIn('"process_id": os.getpid()', runner)
+        self.assertIn("port is < 0 or > 65535", host)
+        self.assertIn('RESEARCH_OS_V3_SERVICE_NAME', host)
+        self.assertIn("$Port = 0", installer)
+        self.assertIn("$registryReady", installer)
+        self.assertIn("registry.host -eq '127.0.0.1'", installer)
+        self.assertIn("Test-V3ProcessDescendant", installer)
+        self.assertNotIn("Find-AvailableLoopbackPort -StartPort", installer)
+        self.assertNotIn("Test-LoopbackPortAvailable", installer)
 
     def test_service_cleanup_preserves_ownership_and_process_identity_checks(self) -> None:
         service = (ROOT / "v3" / "scripts" / "v3-service.ps1").read_text(encoding="utf-8")
@@ -43,7 +55,7 @@ class FlexiblePortContractTests(unittest.TestCase):
         self.assertIn("127.0.0.1:$port", main)
         self.assertNotIn("decoded['host']", main)
 
-    def test_candidate_e2e_reserves_default_port_and_checks_fallback(self) -> None:
+    def test_candidate_e2e_reserves_default_port_and_checks_os_assignment(self) -> None:
         candidate = (ROOT / "v3" / "scripts" / "candidate_validate.ps1").read_text(encoding="utf-8")
         self.assertIn("$defaultPortReservation", candidate)
         self.assertIn("default_port_fallback", candidate)

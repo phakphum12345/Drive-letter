@@ -32,7 +32,8 @@ class V3LifecycleSafetyTests(unittest.TestCase):
         source = SERVICE.read_text(encoding="utf-8")
         self.assertNotIn("Stop-Process -Id $listener.OwningProcess", source)
         self.assertIn("refusing to terminate unrelated listeners", source)
-        self.assertIn("Port must be between 1 and 65535", source)
+        self.assertIn("Port must be between 0 and 65535", source)
+        self.assertIn("0 requests OS-assigned port", source)
         self.assertIn("WaitForStatus('Stopped'", source)
 
     def test_candidate_cleanup_fails_instead_of_killing_unowned_listener(self):

@@ -4,7 +4,7 @@ param(
     [string]$Action,
 
     [string]$ServiceName = 'ResearchOSV3Service',
-    [ValidateRange(1, 65535)]
+    [ValidateRange(0, 65535)]
     [int]$Port = 8788,
     [ValidateRange(0, 1000)]
     [int]$PortScanCount = 100
@@ -12,8 +12,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if ($Port -lt 1 -or $Port -gt 65535) {
-    throw "Port must be between 1 and 65535: $Port"
+if ($Port -lt 0 -or $Port -gt 65535) {
+    throw "Port must be between 0 and 65535: $Port (0 requests OS-assigned port)"
 }
 
 $appRoot = Split-Path -Parent $PSScriptRoot
@@ -23,25 +23,6 @@ $pythonExe = Join-Path $v3Root 'runtime\python\python.exe'
 $dataDir = Join-Path $env:ProgramData 'ResearchOSV3'
 $configPath = Join-Path $dataDir 'service.json'
 $requestedPort = $Port
-
-function Test-LoopbackPortAvailable([int]$CandidatePort) {
-    $listener = $null
-    try {
-        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $CandidatePort)
-        $listener.Start()
-        return $true
-    }
-    catch { return $false }
-    finally { if ($listener) { try { $listener.Stop() } catch { } } }
-}
-
-function Find-AvailableLoopbackPort([int]$StartPort, [int]$ScanCount) {
-    $lastPort = [Math]::Min(65535, $StartPort + $ScanCount)
-    for ($candidate = $StartPort; $candidate -le $lastPort; $candidate++) {
-        if (Test-LoopbackPortAvailable $candidate) { return $candidate }
-    }
-    throw "No available loopback port found from $StartPort through $lastPort"
-}
 
 function Get-V3ServiceRecord {
     $escapedName = $ServiceName.Replace("'", "''")
@@ -218,15 +199,42 @@ if (-not (Test-Path (Join-Path $v3Root 'scripts\run_service.py') -PathType Leaf)
 }
 
 New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-# Remove any previous service using its saved port, then choose a free loopback port.
+# Remove any previous owned service using its recorded port, then ask the OS to bind port 0.
 Remove-V3Service
-$Port = Find-AvailableLoopbackPort -StartPort $requestedPort -ScanCount $PortScanCount
+if (Test-Path $configPath -PathType Leaf) { Remove-Item -LiteralPath $configPath -Force -ErrorAction Stop }
+$Port = 0
 
 $binaryPath = "`"$serviceExe`" --root `"$v3Root`" --python `"$pythonExe`" --port $Port --data-dir `"$dataDir`" --service-name `"$ServiceName`""
 New-Service -Name $ServiceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName 'Research OS V3 Local Service' | Out-Null
 
 try {
     Start-Service -Name $ServiceName
+
+    $registryReady = $false
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        try {
+            if (Test-Path $configPath -PathType Leaf) {
+                $registry = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+                $registryPort = [int]$registry.port
+                $serviceRecord = Get-V3ServiceRecord
+                if ($registry.schema_version -eq 1 -and $registry.service_name -eq $ServiceName -and
+                    $registry.host -eq '127.0.0.1' -and $registry.health_path -eq '/health' -and
+                    $registryPort -ge 1 -and $registryPort -le 65535 -and
+                    [int]$registry.process_id -gt 0 -and $serviceRecord -and
+                    (Test-V3ProcessDescendant -ProcessId ([int]$registry.process_id) -AncestorProcessId ([int]$serviceRecord.ProcessId))) {
+                    $Port = $registryPort
+                    $registryReady = $true
+                    break
+                }
+            }
+        }
+        catch { }
+        Start-Sleep -Milliseconds 250
+    }
+
+    if (-not $registryReady) {
+        throw 'Research OS V3 service did not publish a valid, owned endpoint registry'
+    }
 
     $ready = $false
     for ($attempt = 0; $attempt -lt 40; $attempt++) {
@@ -248,8 +256,6 @@ try {
     # A successful HTTP response is insufficient: prove the listener belongs to
     # the service process tree, and reject any non-loopback or foreign listener.
     Assert-V3OwnedLoopbackListener
-    $config = [ordered]@{ service_name = $ServiceName; host = '127.0.0.1'; port = $Port }
-    [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
     Write-Host "Research OS V3 service installed and ready on 127.0.0.1:$Port"
 }
 catch {
