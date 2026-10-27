@@ -1,8 +1,9 @@
 # DCP Native MCP stdio adapter (prototype)
 
-- **Status:** local prototype; not release-certified
+- **Status:** protocol-aligned prototype; release certification is still pending
 - **Transport:** STDIO only
-- **Protocol target:** `2026-07-28`
+- **Modern protocol:** `2026-07-28` using `server/discover` and per-request `_meta`
+- **Legacy compatibility:** handshake revisions up to `2025-11-25`; the server responds with `2025-11-25`, never labels the legacy handshake as modern
 - **Tools exposed:** `inspect_file`, `diff_files`
 - **Writes / HTTP / OAuth:** not exposed or implemented
 
@@ -33,6 +34,12 @@ Example MCP client configuration (adjust the absolute paths for the host):
   }
 }
 ```
+
+## Protocol behavior
+
+The modern path handles `server/discover` and advertises `2026-07-28`. Modern requests carry the protocol version in `params._meta["io.modelcontextprotocol/protocolVersion"]`; responses include server identity in the result `_meta`. The adapter also retains a legacy `initialize` path for clients from earlier protocol revisions and returns `2025-11-25` for that handshake.
+
+The official MCP Python SDK v2 client is used in CI through its real STDIO subprocess transport. That integration test must demonstrate modern discovery, tool listing, a read-only tool call, traversal denial, and no filesystem side effects. A green CI run is evidence for that exact tested SHA only; it is not release certification or proof of compatibility with every MCP host.
 
 ## Tool contract
 
@@ -66,14 +73,15 @@ python -m compileall -q tools/mcp_engine
 python -m unittest discover -s tests -p "test_native_mcp_*.py" -v
 ```
 
-These tests cover basic JSON-RPC initialize/discovery/calls, strict arguments, unknown-tool rejection, traversal denial and no-write behavior. They are not a substitute for interoperability testing with an official MCP SDK/client or MCP Inspector. Until that test is recorded, **real MCP client interoperability remains UNKNOWN**.
+CI Lite installs the official SDK v2 line (`mcp>=2,<3`) to run the interoperability test. The SDK version resolved by a given CI run should be recorded from that run's logs before making a reproducibility claim. The adapter's own protocol tests still cover strict arguments, unknown-tool rejection, traversal denial, malformed JSON, oversized messages, and no-write behavior.
 
 ## Not yet implemented
 
-- Official SDK/Inspector interoperability and conformance validation.
+- MCP Inspector and cross-host interoperability / conformance validation.
+- A pinned SDK lockfile and a recorded exact dependency version for reproducible local runs.
 - HTTP Streamable transport, OAuth, issuer/audience/scope validation, revocation and remote authorization.
-- Resources, prompts, sampling, elicitation, cancellation/timeouts and production observability.
+- Resources, prompts, sampling, elicitation, production cancellation/timeouts and observability.
 - Integration with Research OS identity/capability/policy/entitlement authorities.
 - Release certification, cross-platform verification and deployment.
 
-Do not mark the adapter production-ready, merge it, or deploy it based only on the prototype unit tests.
+Do not mark the adapter production-ready, merge it, or deploy it based only on unit tests or a single official-client integration test.
