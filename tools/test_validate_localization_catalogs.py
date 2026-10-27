@@ -8,6 +8,13 @@ from validate_localization_catalogs import DuplicateKeyError, load_catalog, vali
 
 
 class LocalizationCatalogTests(unittest.TestCase):
+    def test_runtime_assets_match_editor_catalogs(self):
+        root = Path(__file__).resolve().parents[1]
+        for locale in ("en", "th"):
+            editor = load_catalog(root / "tools" / "localization_center" / "locales" / f"{locale}.json")
+            runtime = load_catalog(root / "apps" / "research_os_flutter" / "assets" / "locales" / f"{locale}.json")
+            self.assertEqual(runtime, editor, f"runtime asset drift for locale {locale}")
+
     def test_matching_catalogs_pass(self):
         source = {"title": "Hello", "count": "{count} results"}
         target = {"title": "สวัสดี", "count": "{count} รายการ"}
