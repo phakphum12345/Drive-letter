@@ -9,7 +9,7 @@
   "action.save": "Save",
   "action.cancel": "Cancel",
   "status.ready": "Ready",
-  "status.running": "Running",
+  "status.running": "Researching…",
   "auth.sign_in": "Sign in",
   "auth.sign_out": "Sign out",
   "research.prompt": "Describe the research you want to investigate...",
@@ -39,5 +39,8 @@
   "stage.synthesize": "Synthesize",
   "stage.remember": "Remember",
   "principle.label": "RESEARCH PRINCIPLE",
-  "principle.text": "Claim → Evidence → Verification → Confidence → Conclusion."
+  "principle.text": "Claim → Evidence → Verification → Confidence → Conclusion.",
+  "status.off": "OFF",
+  "status.complete": "Complete",
+  "status.error": "Error"
 }
