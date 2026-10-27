@@ -41,6 +41,38 @@ Status: **Started as test/quality work; product-wide language switching is not c
 
 Acceptance: all required CI checks pass on the exact PR head SHA; locale changes affect the shared app UI consistently; fallback behavior is documented; no merge or deployment occurs until separately approved.
 
+## Platform-level upgrade plan
+
+This is the next implementation scope; it is not a claim that the platform-wide migration is already complete.
+
+### Platform architecture
+
+- [ ] Introduce one app-level localization state/controller as the single source of truth for the selected locale.
+- [ ] Load locale catalogs through a typed, validated runtime interface with deterministic fallback to the source locale.
+- [ ] Connect the locale controller to the shared Research OS shell and navigation without changing existing destination indexes or route/capability bindings.
+- [ ] Keep translation authoring/drafts separate from the active runtime catalog. Draft edits must not silently change the app's production strings.
+- [ ] Preserve the existing Resource Translator and use explicit catalog export/import as the handoff boundary; no automatic GitHub writes or deployment.
+- [ ] Define a stable key naming convention and catalog schema, including interpolation placeholders, plural/select behavior where needed, and accessibility strings.
+- [ ] Add a coverage report that compares required source keys against each supported locale and fails on missing keys, empty values, duplicate JSON keys, invalid value types, or placeholder drift.
+
+### Delivery sequence
+
+1. **Runtime foundation:** typed catalog service, locale state, persistence, fallback, error handling, and unit tests.
+2. **Shared shell:** app-level language selector, navigation/sidebar/status surfaces, and locale propagation across retained pages.
+3. **Product surfaces:** migrate screens in small, reviewable groups, starting with authentication, home/research, settings, errors/empty states, and common actions; maintain an explicit coverage inventory rather than claiming untranslated screens are complete.
+4. **Editor lifecycle:** reset to bundled catalog, inspect current draft, save named local revisions, restore a revision, discard a draft with confirmation, and surface storage/import/export errors accessibly.
+5. **Quality gates:** catalog schema/parity/coverage checks, placeholder and fallback tests, widget tests for locale switching, and build/test jobs for supported platforms.
+6. **Release evidence:** verify the exact final SHA, inspect every required workflow, conduct responsive and accessibility review, and record device/manual checks separately from CI. Only then consider removing Draft status.
+
+### Safety and compatibility invariants
+
+- No secrets, credentials, translation-provider calls, telemetry, or network persistence are introduced by the localization layer.
+- Locale preference and authoring drafts remain device-local unless a separately reviewed storage design is approved.
+- Invalid or incomplete drafts cannot replace the active bundled catalog.
+- Existing navigation indexes, routes, capability bindings, authentication boundaries, and product surfaces remain intact.
+- No automatic commit, pull-request merge, release, or deployment is performed by the editor.
+- Do not label platform coverage complete while any required screen or platform is unverified.
+
 ## Evidence policy
 
 Use PASS, FAIL, SKIPPED, or UNKNOWN based on the actual check output. A queued workflow is not a pass. A build or widget test does not prove a manual UI review. This PR remains Draft and is not merged or deployed by this roadmap.
