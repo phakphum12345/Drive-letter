@@ -29,7 +29,7 @@ The existing 19 product destinations are present and wired:
 
 Home, AI Chat, Agent Center, Library, Knowledge Graph, GitHub,
 Google Workspace, Local API & Service, System Monitor, Settings,
-Developer Access, Brain Skills, Google Sign-In, Friend Connect, and
+Developer Access, Brain Skills, Google Sign-In, Friend Connect, Projects,
 Control Center, Workflows, Owner, and Localization Center.
 
 Control Center already contains the Main Final Audit surface.
