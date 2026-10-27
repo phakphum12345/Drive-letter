@@ -25,6 +25,22 @@ class GoogleIdentityBrokerTest(unittest.TestCase):
             self.assertNotIn("calendar", url)
             self.assertIn("127.0.0.1%3A8787%2Fv1%2Fauth%2Fgoogle%2Fcallback", url)
 
+    def test_identity_rejects_unverified_email_or_missing_subject(self):
+        from google_oauth import GoogleOAuthError, GoogleOAuthBroker
+
+        for account in (
+            {"sub": "google-sub-123", "email": "owner@example.com", "email_verified": False},
+            {"email": "owner@example.com", "email_verified": True},
+        ):
+            with self.subTest(account=account), tempfile.TemporaryDirectory() as tmp:
+                with patch.object(
+                    GoogleOAuthBroker,
+                    "complete",
+                    return_value={"account": account, "redirect_uri": "https://auth.example.com/v1/auth/google/callback"},
+                ):
+                    with self.assertRaisesRegex(GoogleOAuthError, "subject and verified email"):
+                        GoogleIdentityBroker(tmp).complete(code="code", state="state")
+
     def test_identity_session_cookie_security_matches_redirect_scheme(self):
         from google_oauth import GoogleOAuthBroker
         import google_identity
@@ -40,7 +56,7 @@ class GoogleIdentityBrokerTest(unittest.TestCase):
                             GoogleOAuthBroker,
                             "complete",
                             return_value={
-                                "account": {"email": "owner@example.com"},
+                                "account": {"sub": "google-sub-123", "email": "owner@example.com", "email_verified": True},
                                 "redirect_uri": redirect_uri,
                             },
                         ),

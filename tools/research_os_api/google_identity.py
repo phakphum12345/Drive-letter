@@ -6,7 +6,7 @@ import threading
 from urllib.parse import urlparse
 from http.server import BaseHTTPRequestHandler
 
-from google_oauth import GoogleOAuthBroker, IDENTITY_SCOPES
+from google_oauth import GoogleOAuthBroker, GoogleOAuthError, IDENTITY_SCOPES
 from rbac import RoleStore
 from auth_session import clear_cookie_header, cookie_header, issue_session, revoke_session
 from oauth_handoff import create_handoff
@@ -92,6 +92,12 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
         port = int(os.environ.get("RESEARCH_OS_API_PORT", "8787"))
         return f"http://127.0.0.1:{port}/v1/auth/google/callback"
 
+    def _fetch_userinfo(self, access_token: str) -> dict[str, object]:
+        account = super()._fetch_userinfo(access_token)
+        if not str(account.get("sub") or "").strip() or account.get("email_verified") is not True:
+            raise GoogleOAuthError("Google identity must include a subject and verified email")
+        return account
+
     def _with_role(self, account: dict[str, object]) -> dict[str, object]:
         email = str(account.get("email") or "").strip()
         if not email:
@@ -102,6 +108,8 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
     def complete(self, *, code: str, state: str) -> dict[str, object]:
         result = super().complete(code=code, state=state)
         account = result.get("account") if isinstance(result.get("account"), dict) else {}
+        if not str(account.get("sub") or "").strip() or account.get("email_verified") is not True:
+            raise GoogleOAuthError("Google identity must include a subject and verified email")
         account = self._with_role(account)
         result["account"] = account
         session = issue_session(account)
