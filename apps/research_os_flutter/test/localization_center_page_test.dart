@@ -10,7 +10,10 @@ Future<void> pumpLocalizationCenter(WidgetTester tester) async {
       attempt < 20 &&
           find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
       attempt++) {
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
   }
   expect(
     find.byType(CircularProgressIndicator),
