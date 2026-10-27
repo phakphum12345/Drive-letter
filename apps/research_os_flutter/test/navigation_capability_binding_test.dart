@@ -71,4 +71,14 @@ void main() {
     // The navigation model contains identity metadata only. Authorization
     // remains outside the presentation layer.
   });
+  test('Localization Center is a stable non-authorizing destination', () {
+    final item = researchNavigationItems.singleWhere(
+      (candidate) => candidate.destinationId == 'localization_center',
+    );
+
+    expect(item.index, 18);
+    expect(item.label, 'Localization Center');
+    expect(item.capabilityId, isNull);
+  });
+
 }
