@@ -23,7 +23,10 @@ Future<void> pumpLocalizationCenter(WidgetTester tester) async {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await SharedPreferences.getInstance();
+  });
 
   testWidgets('Localization Center renders bundled locale, search, and quality gate', (tester) async {
     tester.view.physicalSize = const Size(900, 1200);
