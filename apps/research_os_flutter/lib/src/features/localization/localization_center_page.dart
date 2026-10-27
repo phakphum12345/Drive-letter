@@ -253,6 +253,18 @@ class _LocalizationCenterPageState extends State<LocalizationCenterPage> {
                     Text('Quality gate findings', style: Theme.of(context).textTheme.titleMedium),
                     for (final issue in issues.take(8)) Text('• $issue'),
                     if (issues.length > 8) Text('… and ${issues.length - 8} more'),
+                    if (target.keys.any((key) => !_source.containsKey(key)))
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => setState(() {
+                            target.removeWhere((key, value) => !_source.containsKey(key));
+                            _status = 'Unknown keys removed from this session draft.';
+                          }),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Remove unknown keys'),
+                        ),
+                      ),
                   ],
                 ),
               ),
