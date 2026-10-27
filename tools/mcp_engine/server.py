@@ -137,8 +137,14 @@ def serve(root: str) -> int:
         print("Configured root must be an existing directory.", file=sys.stderr)
         return 2
 
-    for raw in sys.stdin.buffer:
+    while True:
+        raw = sys.stdin.buffer.readline(MAX_LINE_BYTES + 1)
+        if not raw:
+            break
         if len(raw) > MAX_LINE_BYTES:
+            # Drain the remainder of this line in bounded chunks before resuming.
+            while raw and not raw.endswith(bytes([10])):
+                raw = sys.stdin.buffer.readline(MAX_LINE_BYTES + 1)
             print(json.dumps(_error(None, -32700, "Message exceeds the size limit.")), flush=True)
             continue
         try:
