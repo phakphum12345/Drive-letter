@@ -51,7 +51,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const Key('localization-value-nav.research')),
+      find.byKey(const Key('localization-value-th-nav.research')),
       'การค้นคว้า',
     );
     await tester.pumpAndSettle();
