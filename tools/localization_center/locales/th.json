@@ -9,7 +9,7 @@
   "action.save": "บันทึก",
   "action.cancel": "ยกเลิก",
   "status.ready": "พร้อมใช้งาน",
-  "status.running": "กำลังทำงาน",
+  "status.running": "กำลังค้นคว้า…",
   "auth.sign_in": "เข้าสู่ระบบ",
   "auth.sign_out": "ออกจากระบบ",
   "research.prompt": "อธิบายหัวข้อวิจัยที่ต้องการตรวจสอบ...",
@@ -39,5 +39,8 @@
   "stage.synthesize": "สังเคราะห์",
   "stage.remember": "จดจำ",
   "principle.label": "หลักการค้นคว้า",
-  "principle.text": "ข้ออ้าง → หลักฐาน → การตรวจสอบ → ระดับความเชื่อมั่น → ข้อสรุป"
+  "principle.text": "ข้ออ้าง → หลักฐาน → การตรวจสอบ → ระดับความเชื่อมั่น → ข้อสรุป",
+  "status.off": "ปิด",
+  "status.complete": "เสร็จสิ้น",
+  "status.error": "เกิดข้อผิดพลาด"
 }
