@@ -15,7 +15,8 @@ python -m unittest discover -s tests -v
 - reject files above the configured size limit;
 - prove copy preview creates no file;
 - copy into a new destination and compare source/destination SHA-256;
-- refuse to overwrite an existing destination and preserve its bytes.
+- refuse to overwrite an existing destination and preserve its bytes;
+- preserve a competing file if it appears between the destination pre-check and exclusive creation.
 
 ## Gate labels
 
