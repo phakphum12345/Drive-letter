@@ -61,7 +61,24 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text('การค้นคว้า'), findsOneWidget);
+    final localePicker = find.byKey(const Key('localization-locale-picker'));
+    await tester.tap(localePicker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English (en)').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('localization-value-en-nav.research')),
+      'Research work',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+    await tester.pumpWidget(const MaterialApp(home: LocalizationCenterPage()));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<DropdownButton<String>>(localePicker).value, 'en');
+    expect(find.text('Research work'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
