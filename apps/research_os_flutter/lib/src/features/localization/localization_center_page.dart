@@ -177,8 +177,7 @@ class _LocalizationCenterPageState extends State<LocalizationCenterPage> {
     final output = const JsonEncoder.withIndent('  ').convert(_target);
     await Clipboard.setData(ClipboardData(text: output));
     if (!mounted) return;
-    setState(() => _status = 'Validated JSON copied to clipboard. Repository files were not changed.');
-    ScaffoldMessenger.of(context).showSnackBar(
+    setState(() => _status = 'Validated JSON copied to clipboard. Repository files were not changed.');    ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Validated translation JSON copied to clipboard')),
     );
   }
@@ -186,10 +185,10 @@ class _LocalizationCenterPageState extends State<LocalizationCenterPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        key: Key('localization-center-page'),
-        appBar: AppBar(title: Text('Localization Center')),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        key: const Key('localization-center-page'),
+        appBar: AppBar(title: const Text('Localization Center')),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
