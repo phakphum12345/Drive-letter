@@ -139,14 +139,20 @@ def copy_apply(source_root: str | Path, source_path: str,
     target.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation protects against accidental replacement of an existing file.
     source = Path(preview["source"])
+    created_by_operation = False
     try:
-        with source.open("rb") as src, target.open("xb") as dst:
-            shutil.copyfileobj(src, dst, length=64 * 1024)
+        with source.open("rb") as src:
+            # If exclusive creation fails, this operation owns no destination
+            # and must not remove a file created by another process.
+            with target.open("xb") as dst:
+                created_by_operation = True
+                shutil.copyfileobj(src, dst, length=64 * 1024)
     except Exception:
-        try:
-            target.unlink(missing_ok=True)
-        except OSError:
-            pass
+        if created_by_operation:
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                pass
         raise
     copied_hash = sha256_file(target)
     if copied_hash != preview["source_sha256"]:
