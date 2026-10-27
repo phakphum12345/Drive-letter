@@ -1,0 +1,38 @@
+name: Native MCP Engine Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/mcp_engine/**"
+      - "tests/test_native_mcp_engine.py"
+      - ".github/workflows/native-mcp-engine-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/mcp_engine/**"
+      - "tests/test_native_mcp_engine.py"
+      - ".github/workflows/native-mcp-engine-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native-mcp-engine:
+    name: Native MCP Engine unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Verify engine test scope
+        run: |
+          python --version
+          test -f tools/mcp_engine/engine.py
+          test -f tests/test_native_mcp_engine.py
+      - name: Run native MCP Engine tests
+        run: python -m unittest discover -s tests -p "test_native_mcp_engine.py" -v
