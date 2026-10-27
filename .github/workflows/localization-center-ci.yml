@@ -12,6 +12,7 @@ on:
       - "tools/validate_localization_catalogs.py"
       - "tools/test_validate_localization_catalogs.py"
       - ".github/workflows/localization-center-ci.yml"
+      - "docs/LOCALIZATION_CENTER_PHASES_2_4.md"
 
 permissions:
   contents: read
