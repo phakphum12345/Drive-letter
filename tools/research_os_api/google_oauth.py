@@ -174,6 +174,7 @@ class GoogleOAuthBroker:
         return {
             "sub": payload.get("sub"),
             "email": payload.get("email"),
+            "email_verified": payload.get("email_verified") is True,
             "name": payload.get("name"),
             "picture": payload.get("picture"),
         }
