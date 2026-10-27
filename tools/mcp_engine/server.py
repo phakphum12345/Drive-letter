@@ -103,7 +103,10 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
             "diff_files": {"left_path", "right_path"},
         }
         if name not in allowed:
-            return _text_result({"status": "FAIL", "error": "Unknown tool."}) | {"result": {"isError": True, "content": [{"type": "text", "text": "Unknown tool."}]}, "id": request_id, "jsonrpc": "2.0"}
+            return _response(request_id, {
+                "isError": True,
+                "content": [{"type": "text", "text": "Unknown tool."}],
+            })
         if set(arguments) != allowed[name] or any(not isinstance(v, str) or not v for v in arguments.values()):
             return _error(request_id, -32602, "Invalid tool arguments.")
         try:
