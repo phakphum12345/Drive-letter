@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0b0d0f">
   <title>Research OS 3.2 — Wide Research</title>
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/localization.css">
 </head>
 <body>
   <div class="app-shell">
@@ -46,7 +47,7 @@
 
         <form id="researchForm" class="research-composer">
           <div class="composer-top"><span class="spark">✦</span><textarea id="prompt" rows="4" required data-i18n-placeholder="research.prompt" placeholder="Describe the research you want to investigate..."></textarea></div>
-          <div class="composer-bottom"><div class="composer-tools"><button type="button" class="tool-chip enabled" id="deepMode" aria-pressed="true">◉ <span data-i18n="mode.deep">Deep Research</span> <span data-i18n="status.on">ON</span></button><button type="button" class="tool-chip">＋ <span data-i18n="nav.sources">Sources</span></button><button type="button" class="tool-chip">◫ <span data-i18n="nav.evidence">Evidence</span></button></div><button class="run-btn" type="submit" id="runButton"><span data-i18n="action.start_research">Start research</span> <span>→</span></button></div>
+          <div class="composer-bottom"><div class="composer-tools"><button type="button" class="tool-chip enabled" id="deepMode" aria-pressed="true">◉ <span data-i18n="mode.deep">Deep Research</span> <span id="deepModeState">ON</span></button><button type="button" class="tool-chip">＋ <span data-i18n="nav.sources">Sources</span></button><button type="button" class="tool-chip">◫ <span data-i18n="nav.evidence">Evidence</span></button></div><button class="run-btn" type="submit" id="runButton"><span data-i18n="action.start_research">Start research</span> <span>→</span></button></div>
         </form>
 
         <div class="suggestions"><span data-i18n="home.try_task">Try a research task</span><button type="button" data-prompt="Compare the strongest evidence and explain the key findings" data-i18n="suggest.compare">Compare evidence and explain the key findings</button><button type="button" data-prompt="Build a structured research brief with sources and open questions" data-i18n="suggest.brief">Build a structured research brief</button><button type="button" data-prompt="Find gaps, contradictions, and unresolved questions" data-i18n="suggest.gaps">Find gaps and contradictions</button></div>
