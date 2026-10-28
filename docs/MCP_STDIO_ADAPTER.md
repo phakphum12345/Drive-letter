@@ -4,7 +4,7 @@
 - **Transport:** STDIO only
 - **Modern protocol:** `2026-07-28` using `server/discover` and per-request `_meta`
 - **Legacy compatibility:** `2025-11-25` initialize handshake only; unsupported older revisions are rejected rather than incorrectly negotiated
-- **Tools exposed:** `inspect_file`, `diff_files`
+- **Tools exposed:** `inspect_file`, `diff_files`, `crowdin_list_projects`, `crowdin_list_project_files`
 - **Writes / HTTP / OAuth:** not exposed or implemented
 
 ## Run locally
@@ -55,11 +55,23 @@ Input: `{"left_path":"before.txt","right_path":"after.txt"}`
 
 Compares two existing files under the same configured root. UTF-8 files return a unified diff; binary/non-UTF-8 files return comparison metadata without a text diff.
 
+### `crowdin_list_projects`
+
+Input: `{}`
+
+Returns at most 25 visible project summaries using the server-configured `CROWDIN_PERSONAL_ACCESS_TOKEN`.
+
+### `crowdin_list_project_files`
+
+Input: `{"project_id":"12345"}`
+
+Returns at most 25 file summaries for one positive numeric project ID. The adapter rejects nonnumeric IDs and never accepts a caller-supplied URL or HTTP method.
+
 ## Security boundaries
 
 - Root is configured by the server operator; tool callers cannot select or change the root.
 - Tool names and argument keys are allowlisted; unknown tools and extra arguments are rejected.
-- The adapter does not expose `copy_preview`, `copy_apply`, shell commands, process execution, network calls, or repository write operations.
+- The adapter does not expose `copy_preview`, `copy_apply`, shell commands, process execution, or repository write operations. The Crowdin tools make only fixed HTTPS GET requests to Crowdin API v2; they require `CROWDIN_PERSONAL_ACCESS_TOKEN` in the server process environment and never return the token. Missing/invalid credentials fail closed.
 - The server does not bind a TCP/HTTP port and does not implement remote authentication. STDIO access is local process access, so the launching client and host account must be trusted.
 - The engine's file-size limit remains 2 MiB. The adapter also has a per-message size limit.
 - MCP tool descriptions and file contents are untrusted data, not policy instructions.
