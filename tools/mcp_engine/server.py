@@ -1,8 +1,8 @@
 """Read-only MCP stdio adapter for the DCP native engine.
 
 Supports the MCP 2026-07-28 stateless request envelope and the 2025-11-25
-legacy initialize handshake for existing hosts. No HTTP, auth, shell, or
-write-capable engine function is exposed.
+legacy initialize handshake for existing hosts. No inbound HTTP listener, OAuth
+flow, shell, or write-capable engine function is exposed.
 """
 from __future__ import annotations
 
