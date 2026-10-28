@@ -159,6 +159,8 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
         allowed = {
             "inspect_file": {"path"},
             "diff_files": {"left_path", "right_path"},
+            "crowdin_list_projects": set(),
+            "crowdin_list_project_files": {"project_id"},
         }
         if name not in allowed:
             return _response(request_id, {
