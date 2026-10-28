@@ -31,7 +31,8 @@ class McpStdioServerTests(unittest.TestCase):
     def test_legacy_initialize_and_tools_list_expose_only_read_only_tools(self):
         replies = self.request([
             {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-             "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}},
+             "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}},
+            },
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         ])
@@ -53,12 +54,13 @@ class McpStdioServerTests(unittest.TestCase):
         self.assertEqual(result["resultType"], "complete")
         self.assertEqual(result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "dcp-native-mcp")
 
-    def test_modern_requests_require_version_envelope(self):
+    def test_modern_tools_list_exposes_registered_read_only_tools(self):
         replies = self.request([{
             "jsonrpc": "2.0", "id": 2, "method": "tools/list",
             "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}},
         }])
-        self.assertEqual({tool["name"] for tool in replies[0]["result"]["tools"]}, {"inspect_file", "diff_files"})
+        names = {tool["name"] for tool in replies[0]["result"]["tools"]}
+        self.assertEqual(names, {"inspect_file", "diff_files", "crowdin_list_projects", "crowdin_list_project_files"})
 
     def test_inspect_file_returns_hash_and_read_only_evidence(self):
         replies = self.request([{
