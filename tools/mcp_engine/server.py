@@ -29,8 +29,8 @@ def _response(
     modern: bool = False,
     cacheable: bool = False,
 ) -> dict[str, Any]:
-    result.setdefault("_meta", {SERVER_INFO_META_KEY: SERVER_INFO})
     if modern:
+        result.setdefault("_meta", {SERVER_INFO_META_KEY: SERVER_INFO})
         result.setdefault("resultType", "complete")
     if modern and cacheable:
         result.setdefault("ttlMs", 0)
