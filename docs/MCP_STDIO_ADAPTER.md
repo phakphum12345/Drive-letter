@@ -5,7 +5,7 @@
 - **Modern protocol:** `2026-07-28` using `server/discover` and per-request `_meta`
 - **Legacy compatibility:** `2025-11-25` initialize handshake only; unsupported older revisions are rejected rather than incorrectly negotiated
 - **Tools exposed:** `inspect_file`, `diff_files`, `crowdin_list_projects`, `crowdin_list_project_files`
-- **Writes / HTTP / OAuth:** not exposed or implemented
+- **Writes / inbound HTTP / OAuth flow:** not exposed or implemented; Crowdin uses outbound HTTPS GET only
 
 ## Run locally
 
