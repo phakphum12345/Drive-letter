@@ -1,4 +1,4 @@
-""""Unit tests for the read-only Crowdin API adapter; all HTTP is mocked."""
+"""Unit tests for the read-only Crowdin API adapter; all HTTP is mocked."""
 import json
 import unittest
 from unittest.mock import Mock
