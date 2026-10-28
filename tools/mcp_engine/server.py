@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 from tools.mcp_engine.engine import EngineError, diff_files, inspect_file
+from tools.mcp_engine.crowdin_adapter import CrowdinAdapter, CrowdinAdapterError
 
 PROTOCOL_VERSION = "2026-07-28"
 LEGACY_PROTOCOL_VERSION = "2025-11-25"
