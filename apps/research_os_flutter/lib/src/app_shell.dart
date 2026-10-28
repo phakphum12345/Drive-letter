@@ -13,6 +13,7 @@ import 'features/google_workspace/google_workspace_page.dart';
 import 'features/graph/knowledge_graph_page.dart';
 import 'features/home/home_page.dart';
 import 'features/library/library_page.dart';
+import 'features/localization/localization_center_page.dart';
 import 'features/local_api/local_api_control_page.dart';
 import 'features/monitor/system_monitor_page.dart';
 import 'features/owner/owner_experience_page.dart';
@@ -87,6 +88,7 @@ class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
           onNavigate: _select,
         ),
         OwnerExperiencePage(apiClient: widget.apiClient),
+        const LocalizationCenterPage(),
       ];
 
   void _select(int index) => setState(() => _selectedIndex = index);

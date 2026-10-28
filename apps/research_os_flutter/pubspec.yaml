@@ -28,3 +28,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/research_os_master.webp
+    - assets/locales/en.json
+    - assets/locales/th.json

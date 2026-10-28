@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Research OS · Localization Center</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="mark">L</span><div><p class="eyebrow">RESEARCH OS · TOOLING</p><h1>Localization Center</h1></div></div>
+      <span class="local-badge"><span></span> Local-only workspace</span>
+    </header>
+    <section class="intro">
+      <p class="eyebrow">TRANSLATION WORKSPACE</p>
+      <h2>One source. Clear translations.</h2>
+      <p>Review English source strings, edit a target locale, and validate key and placeholder consistency before exporting.</p>
+    </section>
+    <section class="toolbar" aria-label="Translation controls">
+      <label>Target language
+        <select id="localeSelect" aria-label="Target language">
+          <option value="th">Thai (th)</option>
+          <option value="en">English (en)</option>
+        </select>
+      </label>
+      <label class="search">Search strings
+        <input id="searchInput" type="search" placeholder="Search key or text…" autocomplete="off">
+      </label>
+      <div class="actions">
+        <button id="importButton" class="secondary" type="button">Import JSON</button>
+        <input id="importInput" type="file" accept=".json,application/json" hidden>
+        <button id="exportButton" type="button">Export JSON</button>
+      </div>
+    </section>
+    <section class="stats" aria-label="Translation progress">
+      <article><span>Strings</span><strong id="totalCount">—</strong></article>
+      <article><span>Translated</span><strong id="translatedCount">—</strong></article>
+      <article><span>Missing</span><strong id="missingCount">—</strong></article>
+      <article><span>Completion</span><strong id="completionCount">—</strong></article>
+    </section>
+    <section class="gate" id="gate" role="status" aria-live="polite">
+      <span class="gate-icon" aria-hidden="true">●</span><div><strong id="gateTitle">Checking catalogs…</strong><p id="gateMessage">Validating keys and placeholders.</p></div>
+    </section>
+    <section class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Key</th><th scope="col">English source</th><th scope="col" id="targetHeading">Thai translation</th></tr></thead>
+        <tbody id="translationRows"><tr><td colspan="3">Loading catalogs…</td></tr></tbody>
+      </table>
+    </section>
+    <footer><span>Research OS Localization Center · MVP</span><span>No network calls · No tokens · Export requires your action</span></footer>
+  </main>
+  <dialog id="noticeDialog"><div class="dialog-body"><h2 id="noticeTitle">Notice</h2><p id="noticeText"></p><button id="closeNotice" type="button">Close</button></div></dialog>
+</body>
+</html>

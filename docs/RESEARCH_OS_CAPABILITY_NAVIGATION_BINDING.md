@@ -71,8 +71,8 @@ delegated to the owning subsystem.
 
 The convergence validator and Flutter binding test verify:
 
-1. the single navigation registry still contains exactly 18 destinations;
-2. indexes remain exactly 0–17;
+1. the single navigation registry still contains exactly 19 destinations;
+2. indexes remain exactly 0–18;
 3. bound capability IDs are unique;
 4. each promoted capability exists in the canonical capability registry;
 5. Owner identity resolves through the Owner Experience contract rather than

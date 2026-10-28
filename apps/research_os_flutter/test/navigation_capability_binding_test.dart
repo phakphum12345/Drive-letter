@@ -3,14 +3,14 @@ import 'package:research_os_flutter/src/ui/enterprise_navigation.dart';
 
 void main() {
   test('navigation registry remains the single destination source of truth', () {
-    expect(researchNavigationItems, hasLength(18));
+    expect(researchNavigationItems, hasLength(19));
     expect(
       researchNavigationItems.map((item) => item.index).toSet(),
-      equals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17}),
+      equals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}),
     );
     expect(
       researchNavigationItems.map((item) => item.label).toSet(),
-      hasLength(18),
+      hasLength(19),
     );
   });
 
@@ -71,4 +71,14 @@ void main() {
     // The navigation model contains identity metadata only. Authorization
     // remains outside the presentation layer.
   });
+  test('Localization Center is a stable non-authorizing destination', () {
+    final item = researchNavigationItems.singleWhere(
+      (candidate) => candidate.destinationId == 'localization_center',
+    );
+
+    expect(item.index, 18);
+    expect(item.label, 'Localization Center');
+    expect(item.capabilityId, isNull);
+  });
+
 }

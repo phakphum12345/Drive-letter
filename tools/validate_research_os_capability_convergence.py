@@ -53,7 +53,7 @@ def main() -> int:
     nav = _navigation_entries(NAVIGATION.read_text(encoding="utf-8"))
     if sorted(index for index, _ in nav.values()) != list(range(len(nav))):
         fail("navigation indexes are not contiguous")
-    if len(nav) != 18:
+    if len(nav) != 19:
         fail(f"unexpected navigation destination count: {len(nav)}")
 
     bindings = contract.get("bindings", [])

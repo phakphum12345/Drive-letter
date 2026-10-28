@@ -1,0 +1,19 @@
+{
+  "app.title": "Research OS",
+  "nav.research": "Research",
+  "nav.evidence": "Evidence",
+  "nav.workspace": "Workspace",
+  "nav.providers": "Providers",
+  "action.new_research": "New research",
+  "action.start": "Start research",
+  "action.save": "Save",
+  "action.cancel": "Cancel",
+  "status.ready": "Ready",
+  "status.running": "Running",
+  "auth.sign_in": "Sign in",
+  "auth.sign_out": "Sign out",
+  "research.prompt": "Describe the research you want to investigate...",
+  "research.result_count": "{count} results",
+  "error.network": "Could not connect to the service. Try again.",
+  "settings.language": "Language"
+}
