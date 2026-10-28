@@ -77,6 +77,21 @@ def _tool_specs() -> list[dict[str, Any]]:
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "crowdin_list_projects",
+            "description": "Read-only list of Crowdin projects available to the configured Crowdin token.",
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "name": "crowdin_list_project_files",
+            "description": "Read-only list of files in one numeric Crowdin project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"project_id": {"type": "string", "minLength": 1}},
+                "required": ["project_id"],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
