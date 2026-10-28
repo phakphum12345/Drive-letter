@@ -172,9 +172,20 @@ def _dispatch(message: dict[str, Any], root: str) -> dict[str, Any] | None:
         try:
             if name == "inspect_file":
                 value = inspect_file(root, arguments["path"])
-            else:
+            elif name == "diff_files":
                 value = diff_files(root, arguments["left_path"], root, arguments["right_path"])
+            else:
+                adapter = CrowdinAdapter(os.environ.get("CROWDIN_PERSONAL_ACCESS_TOKEN", ""))
+                if name == "crowdin_list_projects":
+                    value = adapter.list_projects()
+                else:
+                    value = adapter.list_project_files(arguments["project_id"])
             return _response(request_id, _text_result(value), modern=modern_request)
+        except CrowdinAdapterError as exc:
+            return _response(request_id, {
+                "content": [{"type": "text", "text": json.dumps({"status": "FAIL", "error": str(exc)}, ensure_ascii=False)}],
+                "isError": True,
+            }, modern=modern_request)
         except (EngineError, OSError, ValueError) as exc:
             safe_message = str(exc) if isinstance(exc, EngineError) else "Unable to inspect the requested file."
             return _response(request_id, {
