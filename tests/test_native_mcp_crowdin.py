@@ -1,4 +1,4 @@
-"""Unit tests for the read-only Crowdin API adapter; all HTTP is mocked."""
+""""Unit tests for the read-only Crowdin API adapter; all HTTP is mocked."""
 import json
 import unittest
 from unittest.mock import Mock
@@ -23,7 +23,7 @@ class FakeResponse:
 class CrowdinAdapterTests(unittest.TestCase):
     def adapter_for(self, payload):
         opener = Mock(return_value=FakeResponse(payload))
-        return CrowdinAdapter("test-token-do-not-log", opener=opener), opener
+        return CrowdinAdapter("fixture", opener=opener), opener
 
     def test_list_projects_uses_fixed_get_and_redacts_token(self):
         payload = json.dumps({"data": [{"data": {
@@ -35,10 +35,10 @@ class CrowdinAdapterTests(unittest.TestCase):
         request = opener.call_args.args[0]
         self.assertEqual(request.full_url, "https://api.crowdin.com/api/v2/projects?limit=25")
         self.assertEqual(request.get_method(), "GET")
-        self.assertEqual(request.get_header("Authorization"), "Bearer test-token-do-not-log")
+        self.assertEqual(request.get_header("Authorization"), "Bearer fixture")
         self.assertEqual(result["operation"], "READ_ONLY")
         self.assertEqual(result["count"], 1)
-        self.assertNotIn("test-token-do-not-log", json.dumps(result))
+        self.assertNotIn("fixture", json.dumps(result))
 
     def test_project_files_validates_id_before_network(self):
         adapter, opener = self.adapter_for(b'{"data":[]}')
