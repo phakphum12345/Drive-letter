@@ -37,7 +37,7 @@ class McpStdioServerTests(unittest.TestCase):
         ])
         self.assertEqual(replies[0]["result"]["protocolVersion"], "2025-11-25")
         names = {tool["name"] for tool in replies[1]["result"]["tools"]}
-        self.assertEqual(names, {"inspect_file", "diff_files"})
+        self.assertEqual(names, {"inspect_file", "diff_files", "crowdin_list_projects", "crowdin_list_project_files"})
 
     def test_modern_discovery_has_correct_protocol_metadata(self):
         replies = self.request([{
@@ -154,7 +154,7 @@ class OfficialMcpClientInteropTests(unittest.TestCase):
                 self.assertEqual(client.protocol_version, "2026-07-28")
                 self.assertEqual(client.server_info.name, "dcp-native-mcp")
                 tools = await client.list_tools()
-                self.assertEqual({tool.name for tool in tools.tools}, {"inspect_file", "diff_files"})
+                self.assertEqual({tool.name for tool in tools.tools}, {"inspect_file", "diff_files", "crowdin_list_projects", "crowdin_list_project_files"})
                 inspected = await client.call_tool("inspect_file", {"path": "a.txt"})
                 self.assertFalse(inspected.is_error)
                 self.assertEqual(inspected.structured_content["operation"], "READ_ONLY")
