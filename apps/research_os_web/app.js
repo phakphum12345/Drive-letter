@@ -1,4 +1,4 @@
-const API_BASE_URL=(window.RESEARCH_OS_API_BASE_URL||'https://research-os-api-phakphoum.onrender.com').replace(/\/$/,'');
+const API_BASE_URL=(window.RESEARCH_OS_API_BASE_URL||'https://phakphumwir.tail4b06c9.ts.net').replace(/\/$/,'');
 const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null};
 const stages=['define','plan','gather','verify','synthesize','remember'];
 const $=id=>document.getElementById(id);
