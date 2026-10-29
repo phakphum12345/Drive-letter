@@ -15,7 +15,7 @@ services:
       - key: RESEARCH_OS_GEMINI_MODEL
         value: gemini-3-flash-preview
       - key: RESEARCH_OS_ALLOWED_ORIGIN
-        value: https://phakphoum38-stack.github.io
+        value: https://phakphum12345.github.io
       - key: RESEARCH_OS_GITHUB_REPOSITORY
         value: phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH
       - key: RESEARCH_OS_PUBLIC_BASE_URL
