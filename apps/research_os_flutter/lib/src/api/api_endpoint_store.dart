@@ -6,7 +6,7 @@ class ApiEndpointStore {
   static const _storageKey = 'research_os_api_base_url_v1';
   static const localDefault = 'http://127.0.0.1:8787';
   static const developerDefault = 'http://127.0.0.1:8790';
-  static const renderDefault = 'https://research-os-api-phakphoum.onrender.com';
+  static const tailscaleDefault = 'https://phakphumwir.tail4b06c9.ts.net';
 
   // Connection names remain internal; PORT labels are user-facing.
   static const connectionResearchOs = 'research_os';
@@ -33,7 +33,7 @@ class ApiEndpointStore {
 
   static const buildDefault = String.fromEnvironment(
     'RESEARCH_OS_API_BASE_URL',
-    defaultValue: renderDefault,
+    defaultValue: tailscaleDefault,
   );
 
   static const port1BuildDefault = String.fromEnvironment(
@@ -118,8 +118,14 @@ class ApiEndpointStore {
 
     final normalized = normalize(saved);
 
-    // A saved endpoint is an explicit user choice. Never silently replace
-    // Local with Render (or vice versa) based on the build-time default.
+    // Preserve custom and Local choices, but migrate a previously saved
+    // hosted Render default to the supported Tailscale Serve endpoint.
+    final savedUri = Uri.tryParse(normalized);
+    if (savedUri != null && savedUri.host.toLowerCase().endsWith('.onrender.com')) {
+      final migrated = normalize(tailscaleDefault);
+      await prefs.setString(_storageKey, migrated);
+      return migrated;
+    }
     return normalized;
   }
 
