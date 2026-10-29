@@ -13,6 +13,12 @@ GitHub Pages (https://phakphum12345.github.io)
 
 The browser must not use `localhost` or `127.0.0.1` as its API base: on an iPhone, those addresses refer to the iPhone, not the Windows host. The Windows API remains loopback-bound; Tailscale Serve is the access path. Do not expose the API port publicly or disable authentication/owner authorization.
 
+## Native Flutter endpoint contract
+
+- The Flutter API default is also `https://phakphumwir.tail4b06c9.ts.net`, so new installs do not target a hosted API.
+- A saved endpoint on an `*.onrender.com` host is migrated to Tailscale Serve on load; saved Local (`127.0.0.1:8787`) and custom endpoints remain explicit user choices.
+- A Windows process can use its configured local endpoint when deliberately selected. An iPhone must not use `127.0.0.1` for the Windows host.
+
 ## Browser/API contract
 
 - The web client may override the default with `window.RESEARCH_OS_API_BASE_URL` before `app.js` loads.
