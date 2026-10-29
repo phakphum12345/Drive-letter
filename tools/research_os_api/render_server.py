@@ -13,12 +13,19 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
     """Primary Research OS handler with V1 compatibility and V2 namespace."""
 
     def end_headers(self) -> None:
-        allowed_origin = os.getenv(
-            "RESEARCH_OS_ALLOWED_ORIGIN",
-            "https://phakphoum38-stack.github.io",
-        )
-        self.send_header("Access-Control-Allow-Origin", allowed_origin)
+        configured_origins = {
+            item.strip()
+            for item in os.getenv(
+                "RESEARCH_OS_ALLOWED_ORIGIN",
+                "https://phakphum12345.github.io",
+            ).split(",")
+            if item.strip()
+        }
+        request_origin = self.headers.get("Origin", "").strip()
         self.send_header("Vary", "Origin")
+        if request_origin and request_origin in configured_origins:
+            self.send_header("Access-Control-Allow-Origin", request_origin)
+            self.send_header("Access-Control-Allow-Credentials", "true")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
