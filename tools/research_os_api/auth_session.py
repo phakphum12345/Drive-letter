@@ -215,7 +215,7 @@ def cookie_header(token: str, *, secure: bool = True) -> str:
         f"{SESSION_COOKIE}={token}",
         "Path=/",
         "HttpOnly",
-        "SameSite=Lax",
+        "SameSite=None" if secure else "SameSite=Lax",
     ]
     if secure:
         flags.append("Secure")
@@ -223,4 +223,4 @@ def cookie_header(token: str, *, secure: bool = True) -> str:
 
 
 def clear_cookie_header() -> str:
-    return f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+    return f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0"
