@@ -172,9 +172,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         label: const Text('Local 127.0.0.1'),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _savingEndpoint ? null : () => _saveEndpoint(ApiEndpointStore.renderDefault),
+                        onPressed: _savingEndpoint ? null : () => _saveEndpoint(ApiEndpointStore.tailscaleDefault),
                         icon: const Icon(Icons.cloud_outlined),
-                        label: const Text('Render'),
+                        label: const Text('Tailscale Serve'),
                       ),
                     ],
                   ),
