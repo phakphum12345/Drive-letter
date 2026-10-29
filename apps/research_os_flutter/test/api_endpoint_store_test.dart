@@ -6,7 +6,7 @@ void main() {
   test('build default follows the compile-time API contract', () {
     const expected = String.fromEnvironment(
       'RESEARCH_OS_API_BASE_URL',
-      defaultValue: ApiEndpointStore.renderDefault,
+      defaultValue: ApiEndpointStore.tailscaleDefault,
     );
     expect(ApiEndpointStore.buildDefault, expected);
   });
@@ -25,12 +25,20 @@ void main() {
     expect(await ApiEndpointStore.load(), ApiEndpointStore.localDefault);
   });
 
-  test('saved Render endpoint remains explicit across builds', () async {
+  test('new installs default to the configured Tailscale Serve endpoint', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+
+    expect(await ApiEndpointStore.load(), ApiEndpointStore.tailscaleDefault);
+  });
+
+  test('legacy hosted endpoint is migrated to Tailscale Serve', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'research_os_api_base_url_v1': ApiEndpointStore.renderDefault,
+      'research_os_api_base_url_v1': 'https://legacy-service.onrender.com',
     });
 
-    expect(await ApiEndpointStore.load(), ApiEndpointStore.renderDefault);
+    expect(await ApiEndpointStore.load(), ApiEndpointStore.tailscaleDefault);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('research_os_api_base_url_v1'), ApiEndpointStore.tailscaleDefault);
   });
 
 }
