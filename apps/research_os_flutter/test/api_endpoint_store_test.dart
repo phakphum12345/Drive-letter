@@ -25,10 +25,13 @@ void main() {
     expect(await ApiEndpointStore.load(), ApiEndpointStore.localDefault);
   });
 
-  test('new installs default to the configured Tailscale Serve endpoint', () async {
+  test('new installs default to the configured Research OS API endpoint', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
 
-    expect(await ApiEndpointStore.load(), ApiEndpointStore.tailscaleDefault);
+    expect(
+      await ApiEndpointStore.load(),
+      ApiEndpointStore.profileUrl(ApiEndpointStore.connectionResearchOs),
+    );
   });
 
   test('legacy hosted endpoint is migrated to Tailscale Serve', () async {
