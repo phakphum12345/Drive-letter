@@ -7,6 +7,12 @@ on:
     paths:
       - "apps/research_os_web/**"
       - ".github/workflows/research-os-github-pages.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/research_os_web/**"
+      - ".github/workflows/research-os-github-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -57,6 +63,7 @@ jobs:
           path: _site
 
   deploy:
+    if: github.event_name != 'pull_request'
     name: Deploy Research OS GitHub Pages
     environment:
       name: github-pages
