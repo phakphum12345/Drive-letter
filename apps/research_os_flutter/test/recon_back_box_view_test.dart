@@ -93,10 +93,11 @@ void main() {
   });
 
   testWidgets('Recon Back Box is integrated and preserves skipped semantics', (tester) async {
+    final api = _FakeApiClient();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ReconBackBoxView(apiClient: _FakeApiClient()),
+          body: ReconBackBoxView(apiClient: api),
         ),
       ),
     );
@@ -120,9 +121,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('phakphoum38-stack/sample-public').last);
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('recon-back-box-apply-target')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('recon-back-box-apply-target')));
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -520));
+    await tester.pumpAndSettle();
     expect(find.text('Repository: phakphoum38-stack/sample-public'), findsOneWidget);
+    expect(api.requestedDashboardRepositories, contains('phakphoum38-stack/sample-public'));
 
     await tester.tap(find.text('Config'));
     await tester.pumpAndSettle();
