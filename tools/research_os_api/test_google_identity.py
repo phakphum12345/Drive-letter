@@ -75,18 +75,28 @@ class GoogleIdentityBrokerTest(unittest.TestCase):
                             expected_secure,
                         )
 
-    def test_render_external_url_becomes_mobile_callback(self):
+    def test_canonical_public_base_url_becomes_mobile_callback(self):
         env = {
             "RESEARCH_OS_GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
             "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "client-secret",
-            "RENDER_EXTERNAL_URL": "https://research-os-api.example.com/",
+            "RESEARCH_OS_PUBLIC_BASE_URL": "https://research-os.example.com/",
         }
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
             broker = GoogleIdentityBroker(tmp)
             self.assertEqual(
                 broker.redirect_uri(),
-                "https://research-os-api.example.com/v1/auth/google/callback",
+                "https://research-os.example.com/v1/auth/google/callback",
             )
+
+    def test_legacy_render_url_is_not_used_as_public_auth_origin(self):
+        env = {
+            "RESEARCH_OS_GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
+            "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "client-secret",
+            "RENDER_EXTERNAL_URL": "https://legacy.example.com",
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
+            broker = GoogleIdentityBroker(tmp)
+            self.assertEqual(broker.redirect_uri(), "http://127.0.0.1:0/v1/auth/google/callback")
 
     def test_explicit_identity_redirect_wins(self):
         env = {

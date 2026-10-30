@@ -44,6 +44,7 @@ def main() -> int:
     port = int(os.getenv("PORT", "0"))
     server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
     actual_port = int(server.server_address[1])
+    os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
     print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
     try:
         server.serve_forever()

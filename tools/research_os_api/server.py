@@ -923,6 +923,7 @@ def main() -> int:
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), ResearchOSHandler)
     actual_port = int(server.server_address[1])
+    os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
     print(f"Research OS listening on http://{args.host}:{actual_port}", flush=True)
     try:
         server.serve_forever()

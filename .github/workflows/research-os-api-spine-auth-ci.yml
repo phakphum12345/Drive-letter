@@ -32,7 +32,7 @@ jobs:
         env:
           PYTHONPATH: tools/research_os_api:.
         run: |
-          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_server_auth_routes -v
+          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_google_identity tools.research_os_api.test_server_auth_routes -v
 
   owner-special-flutter:
     name: Owner Special Flutter analyze and tests
