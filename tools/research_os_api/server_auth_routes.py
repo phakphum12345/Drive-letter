@@ -155,6 +155,8 @@ def verify_email_otp(email: str, code: str) -> dict:
         session = issue_session({"user_id": user_id, "email": verified_email, "role": role})
     except RuntimeError as exc:
         raise EmailOTPError("Research OS session signing secret is not configured", 503) from exc
+    public_base = (os.getenv("RESEARCH_OS_API_BASE_URL") or os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip()
+    secure_cookie = urlparse(public_base).scheme.lower() == "https"
     return {"connected": True, "provider": "email_otp", "session": session,
             "account": {"user_id": user_id, "email": verified_email, "role": role},
-            "token_type": "research_os_session", "set_cookie": cookie_header(session, secure=True)}
+            "token_type": "research_os_session", "set_cookie": cookie_header(session, secure=secure_cookie)}
