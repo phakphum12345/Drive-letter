@@ -17,9 +17,9 @@ class _FakeApiClient extends ResearchOSApiClient {
         'visibility_filter': 'public_only',
         'repositories': <Map<String, dynamic>>[
           <String, dynamic>{
-            'full_name': owner == 'phakphoum38-stack'
-                ? '${owner}/sample-public'
-                : '${owner}/Drive-letter',
+            'full_name': owner == 'phakphum12345'
+                ? '${owner}/Drive-letter'
+                : '${owner}/sample-public',
           },
         ],
       };
