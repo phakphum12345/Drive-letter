@@ -1,11 +1,21 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import 'src/friend_app.dart';
 import 'src/owner_api.dart';
+import 'src/startup_probe.dart';
 
-Future<void> main() async {
+Future<void> _probeStartupInBackground(OwnerFriendApi api) async {
+  try {
+    await OwnerStartupProbe(api).run();
+  } catch (_) {
+    // Startup diagnostics must never prevent the app shell from opening.
+  }
+}
+
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   final ownerId = Platform.environment['RESEARCH_OS_OWNER_ID'] ?? 'owner';
@@ -26,6 +36,8 @@ Future<void> main() async {
   );
   registerOwnerFriendApi(api);
 
-  // Render immediately; the UI probes the API after its first frame.
+  // Render immediately, then collect health/status/provider evidence without
+  // blocking first frame. Offline API state must not strand the user at launch.
   runApp(OwnerFriendApp(api: api));
+  unawaited(_probeStartupInBackground(api));
 }

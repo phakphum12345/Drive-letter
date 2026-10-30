@@ -8,6 +8,12 @@ class APISpineContractTests(unittest.TestCase):
     def read(self, path):
         return (ROOT / path).read_text(encoding="utf-8")
 
+    def test_app_shell_launches_before_background_startup_probe(self):
+        main = self.read("owner_special/flutter_app/lib/main.dart")
+        self.assertIn("runApp(OwnerFriendApp(api: api));", main)
+        self.assertIn("unawaited(_probeStartupInBackground(api));", main)
+        self.assertLess(main.index("runApp(OwnerFriendApp(api: api));"), main.index("unawaited(_probeStartupInBackground(api));"))
+
     def test_native_client_uses_one_api_base_url(self):
         main = self.read("owner_special/flutter_app/lib/main.dart")
         client = self.read("owner_special/flutter_app/lib/src/owner_api.dart")
