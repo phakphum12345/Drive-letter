@@ -90,7 +90,9 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     final savedRepository = prefs.getString(_repositoryKey);
     if (!mounted) return;
     setState(() {
-      if (config != null && config.isNotEmpty) _config.text = config;
+      if (config != null && config.isNotEmpty) {
+        _config.text = config;
+      }
       if (raw != null) {
         try { _learning = _items(jsonDecode(raw)); } on FormatException { _learning = []; }
       }
@@ -355,18 +357,24 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Public GitHub target', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          key: const Key('recon-back-box-owner-selector'),
-          decoration: const InputDecoration(labelText: 'GitHub Owner / Organization', border: OutlineInputBorder()),
-          items: const <String>['phakphum12345', 'phakphoum38-stack']
-              .map((owner) => DropdownMenuItem<String>(value: owner, child: Text(owner)))
-              .toList(),
-          value: const <String>['phakphum12345', 'phakphoum38-stack'].contains(_selectedOwner)
-              ? _selectedOwner
-              : null,
-          onChanged: _targetLoading ? null : (owner) {
-            if (owner != null && owner != _selectedOwner) _changeOwner(owner);
-          },
+        KeyedSubtree(
+          key: ValueKey<String>(_selectedOwner),
+          child: DropdownButtonFormField<String>(
+            key: const Key('recon-back-box-owner-selector'),
+            initialValue: const <String>['phakphum12345', 'phakphoum38-stack'].contains(_selectedOwner)
+                ? _selectedOwner
+                : null,
+            decoration: const InputDecoration(
+              labelText: 'GitHub Owner / Organization',
+              border: OutlineInputBorder(),
+            ),
+            items: const <String>['phakphum12345', 'phakphoum38-stack']
+                .map((owner) => DropdownMenuItem<String>(value: owner, child: Text(owner)))
+                .toList(),
+            onChanged: _targetLoading ? null : (owner) {
+              if (owner != null && owner != _selectedOwner) _changeOwner(owner);
+            },
+          ),
         ),
         const SizedBox(height: 8),
         Row(children: [
@@ -393,12 +401,20 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
           ),
         ]),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          key: const Key('recon-back-box-repository-selector'),
-          value: _repositories.contains(_selectedRepository) ? _selectedRepository : null,
-          decoration: const InputDecoration(labelText: 'Public Repository', border: OutlineInputBorder()),
-          items: _repositories.map((name) => DropdownMenuItem<String>(value: name, child: Text(name))).toList(),
-          onChanged: _targetLoading ? null : (value) => setState(() => _selectedRepository = value),
+        KeyedSubtree(
+          key: ValueKey<String>('$_selectedOwner/${_selectedRepository ?? ''}'),
+          child: DropdownButtonFormField<String>(
+            key: const Key('recon-back-box-repository-selector'),
+            initialValue: _repositories.contains(_selectedRepository) ? _selectedRepository : null,
+            decoration: const InputDecoration(
+              labelText: 'Public Repository',
+              border: OutlineInputBorder(),
+            ),
+            items: _repositories
+                .map((name) => DropdownMenuItem<String>(value: name, child: Text(name)))
+                .toList(),
+            onChanged: _targetLoading ? null : (value) => setState(() => _selectedRepository = value),
+          ),
         ),
         if (_targetLoading) const LinearProgressIndicator(minHeight: 2),
         if (_targetError != null) _notice('Owner / repository list UNKNOWN', _targetError!),
