@@ -125,11 +125,13 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         }
       });
     } on Object catch (error) {
-      if (mounted) setState(() {
-        _repositories = <String>[];
-        _selectedRepository = null;
-        _targetError = error.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _repositories = <String>[];
+          _selectedRepository = null;
+          _targetError = error.toString();
+        });
+      }
     } finally {
       if (mounted) setState(() => _targetLoading = false);
     }
