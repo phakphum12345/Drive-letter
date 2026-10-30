@@ -277,7 +277,6 @@ class ResearchOSApiClient {
     final response = await _client.get(uri, headers: const {
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'ResearchOS-Recon-Back-Box',
     });
     Object? body;
     try { body = jsonDecode(response.body); }
