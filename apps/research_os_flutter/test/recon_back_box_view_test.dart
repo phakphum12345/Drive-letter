@@ -85,6 +85,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('recon-back-box-apply-target')));
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -520));
+    await tester.pumpAndSettle();
 
     expect(find.text('Repository: octo-org/sample-public'), findsOneWidget);
     expect(api.requestedDashboardRepositories, contains('octo-org/sample-public'));
@@ -103,6 +105,8 @@ void main() {
     expect(find.text('Recon Back Box'), findsOneWidget);
     expect(find.byKey(const Key('recon-back-box-owner-selector')), findsOneWidget);
     expect(find.byKey(const Key('recon-back-box-repository-selector')), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -520));
+    await tester.pumpAndSettle();
     expect(find.text('Skipped: 1'), findsOneWidget);
     expect(find.textContaining('Skipped, missing, stale and unknown evidence are not PASS'), findsOneWidget);
 
