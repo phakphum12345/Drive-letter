@@ -272,643 +272,89 @@ class ResearchOSApiClient {
   }
 
 
-  Future<Map<String, dynamic>> getPublicGitHubRepositories(String owner) async {
-    final login = owner.trim();
-    if (!RegExp(r'^[A-Za-z0-9-]{1,39}
-    final uri = _uri('/v1/memory/search').replace(
-      queryParameters: <String, String>{'q': query, 'limit': '5'},
-    );
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Map<String, Object?> _aiPayload(String field, String value) {
-    final provider = preferredProvider?.trim();
-    return <String, Object?>{
-      field: value,
-      if (provider != null && provider.isNotEmpty) 'provider': provider,
-    };
-  }
-
-  Future<Map<String, dynamic>> generateText(String prompt) {
-    return _postJson('/v1/ai/generate', _aiPayload('prompt', prompt));
-  }
-
-  Future<Map<String, dynamic>> answerWithMemory(String question) {
-    return _postJson(
-      '/v1/ai/answer-with-memory',
-      _aiPayload('question', question),
-    );
-  }
-
-  Future<Map<String, dynamic>> commitMemory(
-    String syncKey, {
-    required String title,
-    required List<Map<String, Object?>> conversation,
-  }) async {
-    final response = await _client.post(
-      _uri('/v1/memory/commit'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{
-        'title': title,
-        'conversation': conversation,
-        'status': 'hypothesis',
-        'tags': <String>['research-os', 'chat-session'],
-        'min_quality': 20,
-        'confirm': true,
-      }),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCloudConversations(String syncKey) async {
-    final response = await _client.get(
-      _uri('/v1/conversations/cloud'),
-      headers: <String, String>{'X-Research-OS-Sync-Key': syncKey},
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> syncCloudConversation(
-    String syncKey,
-    Map<String, Object?> session,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/sync'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session': session}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> deleteCloudConversation(
-    String syncKey,
-    String sessionId,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/delete'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session_id': sessionId}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCopilotContext({
-    String? query,
-    List<String> paths = const <String>[],
-    int memoryLimit = 5,
-  }) async {
-    final queryParts = <String>[
-      if (query != null && query.trim().isNotEmpty)
-        'query=${Uri.encodeQueryComponent(query.trim())}',
-      for (final path in paths) 'path=${Uri.encodeQueryComponent(path)}',
-      'memory_limit=${Uri.encodeQueryComponent('$memoryLimit')}',
-    ];
-    final uri = _uri('/v1/copilot/context?${queryParts.join('&')}');
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> chatWithCopilot({
-    required String message,
-    List<String> paths = const <String>[],
-    String? contextQuery,
-    int memoryLimit = 5,
-  }) {
-    return _postJson('/v1/copilot/chat', <String, Object?>{
-      'message': message,
-      if (paths.isNotEmpty) 'paths': paths,
-      if (contextQuery != null && contextQuery.trim().isNotEmpty)
-        'context_query': contextQuery.trim(),
-      'memory_limit': memoryLimit,
-    });
-  }
-
-  Future<Map<String, dynamic>> _getJson(String path) async {
-    final response = await _client.get(
-      _uri(path),
-      headers: _sessionHeaders(),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> _postJson(
-    String path,
-    Map<String, Object?> payload,
-  ) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        ..._sessionHeaders(),
-      },
-      body: jsonEncode(payload),
-    );
-    return _decode(response);
-  }
-
-
-  Future<Map<String, dynamic>> _getPublicGitHubObject(String path) async {
-    final value = await _getPublicGitHubJson(path, const <String, String>{});
-    if (value is! Map) {
-      throw const ResearchOSApiException('GitHub returned an unexpected object response.');
-    }
-    return Map<String, dynamic>.from(value);
-  }
-
-  Future<Object?> _getPublicGitHubJson(String path, Map<String, String> queryParameters) async {
-    final uri = Uri.https('api.github.com', path, queryParameters);
-    final response = await _client.get(uri, headers: const <String, String>{
+  Future<Object?> _githubGet(String path, [Map<String, String> query = const {}]) async {
+    final uri = Uri.https('api.github.com', path, query);
+    final response = await _client.get(uri, headers: const {
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'ResearchOS-Recon-Back-Box',
     });
-    Object? decoded;
-    try {
-      decoded = jsonDecode(response.body);
-    } on FormatException {
-      throw ResearchOSApiException('GitHub returned invalid JSON (HTTP ${response.statusCode}).', statusCode: response.statusCode);
+    Object? body;
+    try { body = jsonDecode(response.body); }
+    on FormatException {
+      throw ResearchOSApiException('GitHub returned invalid JSON (${response.statusCode}).', statusCode: response.statusCode);
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final detail = decoded is Map ? decoded['message'] ?? decoded['error'] ?? 'Unknown GitHub API error' : 'Unknown GitHub API error';
-      throw ResearchOSApiException('GitHub public API error ${response.statusCode}: $detail', statusCode: response.statusCode);
+      final message = body is Map ? body['message'] ?? 'Unknown GitHub API error' : 'Unknown GitHub API error';
+      throw ResearchOSApiException('GitHub public API error ${response.statusCode}: $message', statusCode: response.statusCode);
     }
-    return decoded;
+    return body;
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(response.body);
-    } on FormatException {
-      throw ResearchOSApiException(
-        'Research OS API returned invalid JSON (${response.statusCode}).',
-      );
-    }
-    if (decoded is! Map<String, dynamic>) {
-      throw const ResearchOSApiException(
-        'Research OS API returned an unexpected response shape.',
-      );
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final rawError = decoded['error'];
-      final detail = rawError is Map
-          ? rawError['message'] ?? rawError['code'] ?? 'Unknown error'
-          : decoded['detail'] ?? rawError ?? 'Unknown error';
-      throw ResearchOSApiException(
-        'Research OS API error ${response.statusCode}: $detail',
-        statusCode: response.statusCode,
-      );
-    }
-    return decoded;
+  Future<Map<String, dynamic>> _githubObject(String path) async {
+    final value = await _githubGet(path);
+    if (value is! Map) throw const ResearchOSApiException('Unexpected GitHub object response.');
+    return Map<String, dynamic>.from(value);
   }
 
-  Map<String, String> _sessionHeaders() => <String, String>{
-        if (_sessionToken != null && _sessionToken!.isNotEmpty)
-          'X-Research-OS-Session': _sessionToken!,
-      };
-
-  void close() => _client.close();
-}
-).hasMatch(login)) {
+  Future<Map<String, dynamic>> getPublicGitHubRepositories(String owner) async {
+    final login = owner.trim();
+    if (!RegExp(r'^[A-Za-z0-9-]{1,39}$').hasMatch(login)) {
       throw const ResearchOSApiException('GitHub owner name is invalid.');
     }
     Map<String, dynamic> identity;
-    try {
-      identity = await _getPublicGitHubObject('/users/$login');
-    } on ResearchOSApiException catch (error) {
+    try { identity = await _githubObject('/users/$login'); }
+    on ResearchOSApiException catch (error) {
       if (error.statusCode != 404) rethrow;
-      identity = await _getPublicGitHubObject('/orgs/$login');
+      identity = await _githubObject('/orgs/$login');
     }
-    final isOrganization = identity['type'] == 'Organization';
-    final path = isOrganization ? '/orgs/$login/repos' : '/users/$login/repos';
+    final org = identity['type'] == 'Organization';
+    final path = org ? '/orgs/$login/repos' : '/users/$login/repos';
     final repositories = <Map<String, dynamic>>[];
     for (var page = 1; page <= 10; page++) {
-      final payload = await _getPublicGitHubJson(path, <String, String>{
-        'type': isOrganization ? 'public' : 'owner',
-        'sort': 'updated', 'per_page': '100', 'page': '$page',
+      final value = await _githubGet(path, {
+        'type': org ? 'public' : 'owner', 'sort': 'updated',
+        'per_page': '100', 'page': '$page',
       });
-      if (payload is! List) {
-        throw const ResearchOSApiException('GitHub returned an unexpected repository list.');
-      }
-      final pageItems = payload.whereType<Map>().map((item) => <String, dynamic>{
-        'full_name': item['full_name'], 'name': item['name'],
-        'default_branch': item['default_branch'], 'html_url': item['html_url'],
-        'updated_at': item['updated_at'], 'stargazers_count': item['stargazers_count'],
-        'forks_count': item['forks_count'], 'private': item['private'],
-      }).where((item) => item['full_name'] is String).toList();
-      repositories.addAll(pageItems);
-      if (pageItems.length < 100) break;
+      if (value is! List) throw const ResearchOSApiException('Unexpected GitHub repository list.');
+      final items = value.whereType<Map>().map((item) => Map<String, dynamic>.from(item))
+          .where((item) => item['private'] != true && item['full_name'] is String).toList();
+      repositories.addAll(items);
+      if (value.length < 100) break;
     }
-    repositories.sort((a, b) => (a['full_name'] as String).compareTo(b['full_name'] as String));
-    return <String, dynamic>{
-      'owner': login, 'owner_type': isOrganization ? 'organization' : 'user',
+    repositories.sort((a,b) => (a['full_name'] as String).compareTo(b['full_name'] as String));
+    return {'owner': login, 'owner_type': org ? 'organization' : 'user',
       'repositories': repositories, 'visibility_filter': 'public_only',
-      'read_only': true, 'source': 'github_public_rest_api',
-    };
+      'read_only': true, 'source': 'github_public_rest_api'};
   }
 
-  Future<Map<String, dynamic>> getPublicGitHubDashboard({
-    required String repository,
-  }) async {
+  Future<Map<String, dynamic>> getPublicGitHubDashboard({required String repository}) async {
     final parts = repository.trim().split('/');
     if (parts.length != 2 ||
-        !RegExp(r'^[A-Za-z0-9-]{1,39}
-    final uri = _uri('/v1/memory/search').replace(
-      queryParameters: <String, String>{'q': query, 'limit': '5'},
-    );
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Map<String, Object?> _aiPayload(String field, String value) {
-    final provider = preferredProvider?.trim();
-    return <String, Object?>{
-      field: value,
-      if (provider != null && provider.isNotEmpty) 'provider': provider,
-    };
-  }
-
-  Future<Map<String, dynamic>> generateText(String prompt) {
-    return _postJson('/v1/ai/generate', _aiPayload('prompt', prompt));
-  }
-
-  Future<Map<String, dynamic>> answerWithMemory(String question) {
-    return _postJson(
-      '/v1/ai/answer-with-memory',
-      _aiPayload('question', question),
-    );
-  }
-
-  Future<Map<String, dynamic>> commitMemory(
-    String syncKey, {
-    required String title,
-    required List<Map<String, Object?>> conversation,
-  }) async {
-    final response = await _client.post(
-      _uri('/v1/memory/commit'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{
-        'title': title,
-        'conversation': conversation,
-        'status': 'hypothesis',
-        'tags': <String>['research-os', 'chat-session'],
-        'min_quality': 20,
-        'confirm': true,
-      }),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCloudConversations(String syncKey) async {
-    final response = await _client.get(
-      _uri('/v1/conversations/cloud'),
-      headers: <String, String>{'X-Research-OS-Sync-Key': syncKey},
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> syncCloudConversation(
-    String syncKey,
-    Map<String, Object?> session,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/sync'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session': session}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> deleteCloudConversation(
-    String syncKey,
-    String sessionId,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/delete'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session_id': sessionId}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCopilotContext({
-    String? query,
-    List<String> paths = const <String>[],
-    int memoryLimit = 5,
-  }) async {
-    final queryParts = <String>[
-      if (query != null && query.trim().isNotEmpty)
-        'query=${Uri.encodeQueryComponent(query.trim())}',
-      for (final path in paths) 'path=${Uri.encodeQueryComponent(path)}',
-      'memory_limit=${Uri.encodeQueryComponent('$memoryLimit')}',
-    ];
-    final uri = _uri('/v1/copilot/context?${queryParts.join('&')}');
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> chatWithCopilot({
-    required String message,
-    List<String> paths = const <String>[],
-    String? contextQuery,
-    int memoryLimit = 5,
-  }) {
-    return _postJson('/v1/copilot/chat', <String, Object?>{
-      'message': message,
-      if (paths.isNotEmpty) 'paths': paths,
-      if (contextQuery != null && contextQuery.trim().isNotEmpty)
-        'context_query': contextQuery.trim(),
-      'memory_limit': memoryLimit,
-    });
-  }
-
-  Future<Map<String, dynamic>> _getJson(String path) async {
-    final response = await _client.get(
-      _uri(path),
-      headers: _sessionHeaders(),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> _postJson(
-    String path,
-    Map<String, Object?> payload,
-  ) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        ..._sessionHeaders(),
-      },
-      body: jsonEncode(payload),
-    );
-    return _decode(response);
-  }
-
-  Map<String, dynamic> _decode(http.Response response) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(response.body);
-    } on FormatException {
-      throw ResearchOSApiException(
-        'Research OS API returned invalid JSON (${response.statusCode}).',
-      );
-    }
-    if (decoded is! Map<String, dynamic>) {
-      throw const ResearchOSApiException(
-        'Research OS API returned an unexpected response shape.',
-      );
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final rawError = decoded['error'];
-      final detail = rawError is Map
-          ? rawError['message'] ?? rawError['code'] ?? 'Unknown error'
-          : decoded['detail'] ?? rawError ?? 'Unknown error';
-      throw ResearchOSApiException(
-        'Research OS API error ${response.statusCode}: $detail',
-        statusCode: response.statusCode,
-      );
-    }
-    return decoded;
-  }
-
-  Map<String, String> _sessionHeaders() => <String, String>{
-        if (_sessionToken != null && _sessionToken!.isNotEmpty)
-          'X-Research-OS-Session': _sessionToken!,
-      };
-
-  void close() => _client.close();
-}
-).hasMatch(parts[0]) ||
-        !RegExp(r'^[A-Za-z0-9_.-]+
-    final uri = _uri('/v1/memory/search').replace(
-      queryParameters: <String, String>{'q': query, 'limit': '5'},
-    );
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Map<String, Object?> _aiPayload(String field, String value) {
-    final provider = preferredProvider?.trim();
-    return <String, Object?>{
-      field: value,
-      if (provider != null && provider.isNotEmpty) 'provider': provider,
-    };
-  }
-
-  Future<Map<String, dynamic>> generateText(String prompt) {
-    return _postJson('/v1/ai/generate', _aiPayload('prompt', prompt));
-  }
-
-  Future<Map<String, dynamic>> answerWithMemory(String question) {
-    return _postJson(
-      '/v1/ai/answer-with-memory',
-      _aiPayload('question', question),
-    );
-  }
-
-  Future<Map<String, dynamic>> commitMemory(
-    String syncKey, {
-    required String title,
-    required List<Map<String, Object?>> conversation,
-  }) async {
-    final response = await _client.post(
-      _uri('/v1/memory/commit'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{
-        'title': title,
-        'conversation': conversation,
-        'status': 'hypothesis',
-        'tags': <String>['research-os', 'chat-session'],
-        'min_quality': 20,
-        'confirm': true,
-      }),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCloudConversations(String syncKey) async {
-    final response = await _client.get(
-      _uri('/v1/conversations/cloud'),
-      headers: <String, String>{'X-Research-OS-Sync-Key': syncKey},
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> syncCloudConversation(
-    String syncKey,
-    Map<String, Object?> session,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/sync'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session': session}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> deleteCloudConversation(
-    String syncKey,
-    String sessionId,
-  ) async {
-    final response = await _client.post(
-      _uri('/v1/conversations/cloud/delete'),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'X-Research-OS-Sync-Key': syncKey,
-      },
-      body: jsonEncode(<String, Object?>{'session_id': sessionId}),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> getCopilotContext({
-    String? query,
-    List<String> paths = const <String>[],
-    int memoryLimit = 5,
-  }) async {
-    final queryParts = <String>[
-      if (query != null && query.trim().isNotEmpty)
-        'query=${Uri.encodeQueryComponent(query.trim())}',
-      for (final path in paths) 'path=${Uri.encodeQueryComponent(path)}',
-      'memory_limit=${Uri.encodeQueryComponent('$memoryLimit')}',
-    ];
-    final uri = _uri('/v1/copilot/context?${queryParts.join('&')}');
-    final response = await _client.get(uri);
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> chatWithCopilot({
-    required String message,
-    List<String> paths = const <String>[],
-    String? contextQuery,
-    int memoryLimit = 5,
-  }) {
-    return _postJson('/v1/copilot/chat', <String, Object?>{
-      'message': message,
-      if (paths.isNotEmpty) 'paths': paths,
-      if (contextQuery != null && contextQuery.trim().isNotEmpty)
-        'context_query': contextQuery.trim(),
-      'memory_limit': memoryLimit,
-    });
-  }
-
-  Future<Map<String, dynamic>> _getJson(String path) async {
-    final response = await _client.get(
-      _uri(path),
-      headers: _sessionHeaders(),
-    );
-    return _decode(response);
-  }
-
-  Future<Map<String, dynamic>> _postJson(
-    String path,
-    Map<String, Object?> payload,
-  ) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        ..._sessionHeaders(),
-      },
-      body: jsonEncode(payload),
-    );
-    return _decode(response);
-  }
-
-  Map<String, dynamic> _decode(http.Response response) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(response.body);
-    } on FormatException {
-      throw ResearchOSApiException(
-        'Research OS API returned invalid JSON (${response.statusCode}).',
-      );
-    }
-    if (decoded is! Map<String, dynamic>) {
-      throw const ResearchOSApiException(
-        'Research OS API returned an unexpected response shape.',
-      );
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final rawError = decoded['error'];
-      final detail = rawError is Map
-          ? rawError['message'] ?? rawError['code'] ?? 'Unknown error'
-          : decoded['detail'] ?? rawError ?? 'Unknown error';
-      throw ResearchOSApiException(
-        'Research OS API error ${response.statusCode}: $detail',
-        statusCode: response.statusCode,
-      );
-    }
-    return decoded;
-  }
-
-  Map<String, String> _sessionHeaders() => <String, String>{
-        if (_sessionToken != null && _sessionToken!.isNotEmpty)
-          'X-Research-OS-Session': _sessionToken!,
-      };
-
-  void close() => _client.close();
-}
-).hasMatch(parts[1])) {
-      throw const ResearchOSApiException('Repository must use the owner/name format.');
+        !RegExp(r'^[A-Za-z0-9-]{1,39}$').hasMatch(parts[0]) ||
+        !RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(parts[1])) {
+      throw const ResearchOSApiException('Repository must use owner/name format.');
     }
     final root = '/repos/${parts[0]}/${parts[1]}';
-    final metadata = await _getPublicGitHubObject(root);
-    if (metadata['private'] == true ||
-        (metadata['visibility'] != null && metadata['visibility'] != 'public')) {
+    final metadata = await _githubObject(root);
+    if (metadata['private'] == true || metadata['visibility'] == 'private') {
       throw const ResearchOSApiException('Recon Back Box can inspect public repositories only.');
     }
-    final commitsFuture = _getPublicGitHubJson('$root/commits', const {'per_page': '10'});
-    final pullsFuture = _getPublicGitHubJson('$root/pulls', const {'state': 'open', 'per_page': '20'});
-    final runsFuture = _getPublicGitHubJson('$root/actions/runs', const {'per_page': '10'})
-        .then<Map<String, dynamic>>(
-          (value) => <String, dynamic>{'value': value},
-          onError: (Object error) => <String, dynamic>{'error': error.toString()},
-        );
-    final results = await Future.wait<Object?>([commitsFuture, pullsFuture, runsFuture]);
-    final commits = results[0];
-    final pulls = results[1];
-    final runsResult = results[2] as Map<String, dynamic>;
-    if (commits is! List || pulls is! List) {
-      throw const ResearchOSApiException('GitHub returned an unexpected repository dashboard response.');
+    final values = await Future.wait<Object?>([
+      _githubGet('$root/commits', {'per_page': '10'}),
+      _githubGet('$root/pulls', {'state': 'open', 'per_page': '20'}),
+      _githubGet('$root/actions/runs', {'per_page': '10'}).then<Object?>((v) => v, onError: (Object _) => null),
+    ]);
+    if (values[0] is! List || values[1] is! List) {
+      throw const ResearchOSApiException('GitHub returned an unexpected dashboard response.');
     }
-    final runPayload = runsResult['value'];
-    final workflowRuns = runPayload is Map ? runPayload['workflow_runs'] : null;
-    return <String, dynamic>{
-      'repository': <String, dynamic>{
-        'full_name': metadata['full_name'], 'html_url': metadata['html_url'],
-        'default_branch': metadata['default_branch'],
-        'visibility': metadata['visibility'] ?? 'public', 'updated_at': metadata['updated_at'],
-      },
-      'commits': commits, 'pull_requests': pulls,
-      'workflow_runs': workflowRuns is List ? workflowRuns : null,
-      if (runsResult['error'] is String) 'workflow_runs_error': runsResult['error'],
+    final runData = values[2];
+    return {
+      'repository': {'full_name': metadata['full_name'], 'html_url': metadata['html_url'],
+        'default_branch': metadata['default_branch'], 'visibility': metadata['visibility'] ?? 'public'},
+      'commits': values[0], 'pull_requests': values[1],
+      'workflow_runs': runData is Map && runData['workflow_runs'] is List ? runData['workflow_runs'] : null,
+      'workflow_runs_error': runData == null ? 'GitHub Actions data unavailable' : null,
       'source': 'github_public_rest_api', 'read_only': true,
     };
   }
