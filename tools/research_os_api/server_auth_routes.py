@@ -151,7 +151,10 @@ def verify_email_otp(email: str, code: str) -> dict:
     owner_emails = {v.strip().lower() for v in (os.getenv("RESEARCH_OS_OWNER_EMAILS") or "").split(",") if v.strip()}
     role = "OWNER" if verified_email in owner_emails else "USER"
     user_id = "email:" + hashlib.sha256(verified_email.encode("utf-8")).hexdigest()[:32]
-    session = issue_session({"user_id": user_id, "email": verified_email, "role": role})
+    try:
+        session = issue_session({"user_id": user_id, "email": verified_email, "role": role})
+    except RuntimeError as exc:
+        raise EmailOTPError("Research OS session signing secret is not configured", 503) from exc
     return {"connected": True, "provider": "email_otp", "session": session,
             "account": {"user_id": user_id, "email": verified_email, "role": role},
             "token_type": "research_os_session", "set_cookie": cookie_header(session, secure=True)}

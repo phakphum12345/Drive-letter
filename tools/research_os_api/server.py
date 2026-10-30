@@ -287,19 +287,20 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         return principal
 
     def _multi_login_redirect(self, provider: str) -> str:
+        public_base = (os.getenv("RESEARCH_OS_API_BASE_URL") or os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+        if public_base:
+            return f"{public_base}/v1/auth/{provider}/callback"
         explicit = (os.getenv("RESEARCH_OS_LOGIN_REDIRECT_URI") or "").strip()
         if explicit:
             return explicit.rstrip("/") + f"/v1/auth/{provider}/callback"
-        public_base = (os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
-        if public_base:
-            return f"{public_base}/v1/auth/{provider}/callback"
         port = int(os.getenv("RESEARCH_OS_API_PORT", "0"))
         return f"http://127.0.0.1:{port}/v1/auth/{provider}/callback"
 
     def _pairing_base_url(self) -> str:
         explicit = (
-            os.getenv("RESEARCH_OS_PAIRING_BASE_URL")
+            os.getenv("RESEARCH_OS_API_BASE_URL")
             or os.getenv("RESEARCH_OS_PUBLIC_BASE_URL")
+            or os.getenv("RESEARCH_OS_PAIRING_BASE_URL")
         )
         if explicit and explicit.strip():
             base_url = explicit.strip().rstrip("/")
@@ -319,7 +320,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             if hostname in {"127.0.0.1", "localhost", "::1"}:
                 return f"http://{host.rstrip('/')}"
             raise ValueError(
-                "Configure RESEARCH_OS_PAIRING_BASE_URL or RESEARCH_OS_PUBLIC_BASE_URL "
+                "Configure RESEARCH_OS_API_BASE_URL or RESEARCH_OS_PUBLIC_BASE_URL "
                 "to an HTTPS URL before creating a public QR pairing code"
             )
         port = int(os.getenv("RESEARCH_OS_API_PORT", "8787"))

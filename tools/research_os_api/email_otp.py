@@ -28,6 +28,12 @@ def _root() -> Path:
 def _path() -> Path:
     return _root() / "email_otp_challenges.json"
 
+def _code_digest(salt: str, code: str) -> str:
+    secret = (os.getenv("RESEARCH_OS_EMAIL_OTP_SECRET") or os.getenv("RESEARCH_OS_SESSION_SECRET") or "").encode("utf-8")
+    if not secret:
+        raise EmailOTPError("Email OTP requires RESEARCH_OS_EMAIL_OTP_SECRET or RESEARCH_OS_SESSION_SECRET", 503)
+    return hmac.new(secret, f"{salt}:{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
 def _normalize_email(value: str) -> str:
     email = str(value or "").strip().lower()
     if len(email) > 254 or email.count("@") != 1:
@@ -82,7 +88,7 @@ def start_email_otp(email_value: str, *, now: int | None = None) -> dict:
     current = int(time.time()) if now is None else int(now)
     key = hashlib.sha256(email.encode()).hexdigest()
     code, salt = f"{secrets.randbelow(1_000_000):06d}", secrets.token_hex(16)
-    digest = hashlib.sha256(f"{salt}:{code}".encode()).hexdigest()
+    digest = _code_digest(salt, code)
     with _LOCK:
         state = _read()
         previous = state.get(key) if isinstance(state.get(key), dict) else {}
@@ -120,7 +126,7 @@ def verify_email_otp(email_value: str, code_value: str, *, now: int | None = Non
             raise EmailOTPError("The verification code has expired", 401)
         attempts = int(challenge.get("attempts", 0)) + 1
         challenge["attempts"] = attempts
-        supplied = hashlib.sha256(f"{challenge.get('salt', '')}:{code}".encode()).hexdigest()
+        supplied = _code_digest(str(challenge.get("salt") or ""), code)
         if attempts > OTP_MAX_ATTEMPTS or not hmac.compare_digest(str(challenge.get("digest") or ""), supplied):
             if attempts >= OTP_MAX_ATTEMPTS:
                 challenge["digest"] = ""

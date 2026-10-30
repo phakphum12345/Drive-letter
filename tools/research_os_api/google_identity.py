@@ -75,18 +75,19 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
         return sorted(IDENTITY_SCOPES)
 
     def redirect_uri(self) -> str:
+        public_base = (
+            os.environ.get("RESEARCH_OS_API_BASE_URL")
+            or os.environ.get("RESEARCH_OS_PUBLIC_BASE_URL")
+            or ""
+        ).strip().rstrip("/")
+        if public_base:
+            return f"{public_base}/v1/auth/google/callback"
+
         explicit = (
             os.environ.get("RESEARCH_OS_GOOGLE_IDENTITY_REDIRECT_URI") or ""
         ).strip()
         if explicit:
             return explicit
-
-        public_base = (
-            os.environ.get("RESEARCH_OS_PUBLIC_BASE_URL")
-            or ""
-        ).strip().rstrip("/")
-        if public_base:
-            return f"{public_base}/v1/auth/google/callback"
 
         port = int(os.environ.get("RESEARCH_OS_API_PORT", "0"))
         return f"http://127.0.0.1:{port}/v1/auth/google/callback"
