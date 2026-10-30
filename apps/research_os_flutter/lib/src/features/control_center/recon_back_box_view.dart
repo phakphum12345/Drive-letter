@@ -22,7 +22,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     'schema_version': 1,
     'config_id': 'research-os-recon-back-box',
     'mode': 'observe',
-    'repository': repository,
+    'repository': _activeRepository,
     'hash_algorithm': 'sha256',
     'deduplicate': true,
     'overwrite_allowed': false,
@@ -42,6 +42,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   };
 
   final _config = TextEditingController();
+  final _ownerController = TextEditingController(text: 'phakphum12345');
   final _url = TextEditingController();
   final _topic = TextEditingController();
   final _notes = TextEditingController();
@@ -68,6 +69,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   @override
   void dispose() {
     _config.dispose();
+    _ownerController.dispose();
     _url.dispose();
     _topic.dispose();
     _notes.dispose();
@@ -78,7 +80,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       ? value.whereType<Map>().map((x) => Map<String, dynamic>.from(x)).toList()
       : <Map<String, dynamic>>[];
 
-  String get _activeRepository => _selectedRepository ?? repository;
+  String get _activeRepository => _selectedRepository ?? 'UNKNOWN';
 
   Future<void> _initialize() async {
     final prefs = await SharedPreferences.getInstance();
@@ -93,6 +95,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         try { _learning = _items(jsonDecode(raw)); } on FormatException { _learning = []; }
       }
       if (owner != null && owner.trim().isNotEmpty) _selectedOwner = owner.trim();
+      _ownerController.text = _selectedOwner;
       if (savedRepository != null && savedRepository.trim().isNotEmpty) {
         _selectedRepository = savedRepository.trim();
       }
@@ -133,6 +136,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   Future<void> _changeOwner(String owner) async {
     setState(() {
       _selectedOwner = owner;
+      _ownerController.text = owner;
       _selectedRepository = null;
       _repositories = <String>[];
       _github = null;
@@ -312,7 +316,10 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       Card(child: ListTile(
         leading: Icon(_github == null ? Icons.help_outline : Icons.fact_check_outlined),
         title: Text(_githubError ?? 'Repository: $_activeRepository'),
-        subtitle: Text(_observedAt == null ? 'Observation time UNKNOWN' : 'Observed at ${_observedAt!.toIso8601String()}'),
+        subtitle: Text(
+          'Default branch: ${_github?['repository'] is Map ? (_github!['repository'] as Map)['default_branch'] ?? 'UNKNOWN' : 'UNKNOWN'}'
+          '\\n${_observedAt == null ? 'Observation time UNKNOWN' : 'Observed at ${_observedAt!.toIso8601String()}'}',
+        ),
       )),
       Card(child: Padding(
         padding: const EdgeInsets.all(16),
@@ -355,10 +362,37 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
           items: const <String>['phakphum12345', 'phakphoum38-stack']
               .map((owner) => DropdownMenuItem<String>(value: owner, child: Text(owner)))
               .toList(),
+          value: const <String>['phakphum12345', 'phakphoum38-stack'].contains(_selectedOwner)
+              ? _selectedOwner
+              : null,
           onChanged: _targetLoading ? null : (owner) {
             if (owner != null && owner != _selectedOwner) _changeOwner(owner);
           },
         ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: TextField(
+            key: const Key('recon-back-box-custom-owner'),
+            controller: _ownerController,
+            decoration: const InputDecoration(
+              labelText: 'Other GitHub Owner / Organization',
+              hintText: 'Enter a public GitHub username or organization',
+              border: OutlineInputBorder(),
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) {
+              if (!_targetLoading && value.trim().isNotEmpty) _changeOwner(value.trim());
+            },
+          )),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            key: const Key('recon-back-box-load-owner'),
+            onPressed: _targetLoading || _ownerController.text.trim().isEmpty
+                ? null
+                : () => _changeOwner(_ownerController.text.trim()),
+            child: const Text('Load Owner'),
+          ),
+        ]),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           key: const Key('recon-back-box-repository-selector'),
@@ -490,7 +524,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         'repository': _activeRepository,
         'github_owner': _selectedOwner,
         'authority': 'FINAL_GATE',
-        'source': 'Research OS authenticated API',
+        'source': 'GitHub public REST API; no GitHub credential sent',
         'skipped_is_pass': false,
         'unknown_is_pass': false,
         'github_actions_artifacts': 'not exposed by current Research OS API',
