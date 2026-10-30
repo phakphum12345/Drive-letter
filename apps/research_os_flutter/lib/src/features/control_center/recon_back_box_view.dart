@@ -15,6 +15,8 @@ class ReconBackBoxView extends StatefulWidget {
 class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   static const repository = 'phakphum12345/Drive-letter';
   static const _configKey = 'research_os.recon_back_box.config.v1';
+  static const _ownerKey = 'research_os.recon_back_box.github_owner.v1';
+  static const _repositoryKey = 'research_os.recon_back_box.github_repository.v1';
   static const _learningKey = 'research_os.recon_back_box.learning.v1';
   static const _defaultConfig = <String, Object?>{
     'schema_version': 1,
@@ -44,6 +46,11 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   final _topic = TextEditingController();
   final _notes = TextEditingController();
   bool _loading = false;
+  bool _targetLoading = false;
+  String _selectedOwner = 'phakphum12345';
+  String? _selectedRepository = repository;
+  List<String> _repositories = <String>[];
+  String? _targetError;
   String? _githubError;
   String? _artifactError;
   DateTime? _observedAt;
@@ -55,8 +62,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
   void initState() {
     super.initState();
     _config.text = JsonEncoder.withIndent('  ').convert(_defaultConfig);
-    _loadLocal();
-    _refresh();
+    _initialize();
   }
 
   @override
@@ -72,25 +78,91 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       ? value.whereType<Map>().map((x) => Map<String, dynamic>.from(x)).toList()
       : <Map<String, dynamic>>[];
 
-  Future<void> _loadLocal() async {
+  String get _activeRepository => _selectedRepository ?? repository;
+
+  Future<void> _initialize() async {
     final prefs = await SharedPreferences.getInstance();
     final config = prefs.getString(_configKey);
     final raw = prefs.getString(_learningKey);
+    final owner = prefs.getString(_ownerKey);
+    final savedRepository = prefs.getString(_repositoryKey);
     if (!mounted) return;
     setState(() {
       if (config != null && config.isNotEmpty) _config.text = config;
       if (raw != null) {
         try { _learning = _items(jsonDecode(raw)); } on FormatException { _learning = []; }
       }
+      if (owner != null && owner.trim().isNotEmpty) _selectedOwner = owner.trim();
+      if (savedRepository != null && savedRepository.trim().isNotEmpty) {
+        _selectedRepository = savedRepository.trim();
+      }
     });
+    await _loadRepositories(preserveSelection: true);
+    await _refresh();
+  }
+
+  Future<void> _loadRepositories({bool preserveSelection = false}) async {
+    setState(() { _targetLoading = true; _targetError = null; });
+    try {
+      final result = await widget.apiClient.getPublicGitHubRepositories(_selectedOwner);
+      final items = _items(result['repositories']);
+      final names = items
+          .map((item) => item['full_name'])
+          .whereType<String>()
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _repositories = names;
+        if (!preserveSelection || !_repositories.contains(_selectedRepository)) {
+          _selectedRepository = _repositories.contains(repository) && _selectedOwner == 'phakphum12345'
+              ? repository
+              : null;
+        }
+      });
+    } on Object catch (error) {
+      if (mounted) setState(() {
+        _repositories = <String>[];
+        _selectedRepository = null;
+        _targetError = error.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _targetLoading = false);
+    }
+  }
+
+  Future<void> _changeOwner(String owner) async {
+    setState(() {
+      _selectedOwner = owner;
+      _selectedRepository = null;
+      _repositories = <String>[];
+      _github = null;
+      _githubError = null;
+      _targetError = null;
+    });
+    await _loadRepositories();
+  }
+
+  Future<void> _applyTarget() async {
+    final target = _selectedRepository;
+    if (target == null || !target.startsWith('$_selectedOwner/')) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ownerKey, _selectedOwner);
+    await prefs.setString(_repositoryKey, target);
+    if (!mounted) return;
+    await _refresh();
   }
 
   Future<void> _refresh() async {
     if (_loading) return;
+    final target = _selectedRepository;
+    if (target == null || !target.startsWith('$_selectedOwner/')) {
+      setState(() => _githubError = 'Select a public repository owned by the selected GitHub Owner.');
+      return;
+    }
     setState(() { _loading = true; _githubError = null; _artifactError = null; });
     try {
       final values = await Future.wait<Map<String, dynamic>>([
-        widget.apiClient.getGitHubDashboard(repository: repository),
+        widget.apiClient.getPublicGitHubDashboard(repository: target),
         widget.apiClient.getKnowledgeArtifacts(),
       ]);
       if (!mounted) return;
@@ -101,7 +173,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       });
     } on Object {
       try {
-        final value = await widget.apiClient.getGitHubDashboard(repository: repository);
+        final value = await widget.apiClient.getPublicGitHubDashboard(repository: target);
         if (mounted) setState(() => _github = value);
       } on Object catch (e) { if (mounted) setState(() => _githubError = e.toString()); }
       try {
@@ -228,6 +300,8 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     final skipped = runs.where((x) => x['conclusion'] == 'skipped').length;
     final failures = runs.where((x) => ['failure', 'cancelled', 'timed_out'].contains(x['conclusion'])).length;
     return ListView(padding: const EdgeInsets.all(16), children: [
+      _targetSelector(context),
+      const SizedBox(height: 12),
       Wrap(spacing: 10, runSpacing: 10, children: [
         _Metric('API source', _github == null ? 'UNKNOWN' : 'OBSERVED', Icons.cloud_done_outlined),
         _Metric('Workflow runs', runs.length.toString(), Icons.account_tree_outlined),
@@ -237,7 +311,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       const SizedBox(height: 12),
       Card(child: ListTile(
         leading: Icon(_github == null ? Icons.help_outline : Icons.fact_check_outlined),
-        title: Text(_githubError ?? 'Repository: $repository'),
+        title: Text(_githubError ?? 'Repository: $_activeRepository'),
         subtitle: Text(_observedAt == null ? 'Observation time UNKNOWN' : 'Observed at ${_observedAt!.toIso8601String()}'),
       )),
       Card(child: Padding(
@@ -257,7 +331,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
       const Card(child: ListTile(
         leading: Icon(Icons.security_outlined),
         title: Text('Safety boundary'),
-        subtitle: Text('Uses the authenticated Research OS API. No GitHub token is stored in this UI. No merge, deploy or repository-write action is provided.'),
+        subtitle: Text('GitHub data uses unauthenticated public REST API only. No GitHub token or OAuth account is used for Owner selection. No merge, deploy or repository-write action is provided.'),
       )),
       if (_githubError != null || _artifactError != null)
         Card(child: ListTile(
@@ -267,6 +341,47 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         )),
     ]);
   }
+
+  Widget _targetSelector(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Public GitHub target', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: const Key('recon-back-box-owner-selector'),
+          value: _selectedOwner,
+          decoration: const InputDecoration(labelText: 'GitHub Owner / Organization', border: OutlineInputBorder()),
+          items: const <String>['phakphum12345', 'phakphoum38-stack']
+              .map((owner) => DropdownMenuItem<String>(value: owner, child: Text(owner)))
+              .toList(),
+          onChanged: _targetLoading ? null : (owner) {
+            if (owner != null && owner != _selectedOwner) _changeOwner(owner);
+          },
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: const Key('recon-back-box-repository-selector'),
+          value: _repositories.contains(_selectedRepository) ? _selectedRepository : null,
+          decoration: const InputDecoration(labelText: 'Public Repository', border: OutlineInputBorder()),
+          items: _repositories.map((name) => DropdownMenuItem<String>(value: name, child: Text(name))).toList(),
+          onChanged: _targetLoading ? null : (value) => setState(() => _selectedRepository = value),
+        ),
+        if (_targetLoading) const LinearProgressIndicator(minHeight: 2),
+        if (_targetError != null) _notice('Owner / repository list UNKNOWN', _targetError!),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: Text('Public repositories only • no GitHub token • saved on this device')),
+          FilledButton.icon(
+            key: const Key('recon-back-box-apply-target'),
+            onPressed: _targetLoading || _loading || _selectedRepository == null ? null : _applyTarget,
+            icon: const Icon(Icons.check),
+            label: const Text('Apply'),
+          ),
+        ]),
+      ]),
+    ),
+  );
 
   Widget _runsView(BuildContext context, List<Map<String, dynamic>> runs, List<Map<String, dynamic>> pulls) {
     return ListView(padding: const EdgeInsets.all(16), children: [
@@ -372,7 +487,8 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     Card(child: Padding(
       padding: const EdgeInsets.all(14),
       child: SelectableText(JsonEncoder.withIndent('  ').convert(<String, Object?>{
-        'repository': repository,
+        'repository': _activeRepository,
+        'github_owner': _selectedOwner,
         'authority': 'FINAL_GATE',
         'source': 'Research OS authenticated API',
         'skipped_is_pass': false,
