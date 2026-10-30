@@ -12,8 +12,6 @@ abstract class OwnerFriendApi {
 
   Future<Map<String, dynamic>> authStatus() => Future<Map<String, dynamic>>.error(UnsupportedError('Research OS identity is not implemented by this API client'));
   Future<Map<String, dynamic>> startGoogleIdentity() => Future<Map<String, dynamic>>.error(UnsupportedError('Google Identity is not implemented by this API client'));
-  Future<Map<String, dynamic>> startEmailOtp(String email) => Future<Map<String, dynamic>>.error(UnsupportedError('Email OTP is not implemented by this API client'));
-  Future<Map<String, dynamic>> verifyEmailOtp(String email, String code) => Future<Map<String, dynamic>>.error(UnsupportedError('Email OTP is not implemented by this API client'));
   Future<Map<String, dynamic>> exchangeGoogleIdentityHandoff(String state) => Future<Map<String, dynamic>>.error(UnsupportedError('Google Identity handoff is not implemented by this API client'));
   Future<Map<String, dynamic>> signOut() => Future<Map<String, dynamic>>.error(UnsupportedError('Research OS sign-out is not implemented by this API client'));
   void setSession(String token) {}
@@ -33,6 +31,18 @@ abstract class OwnerFriendApi {
   }) => Future<Map<String, dynamic>>.error(
     UnsupportedError('Research OS POST is not implemented by this API client'),
   );
+}
+
+extension OwnerFriendEmailOtp on OwnerFriendApi {
+  Future<Map<String, dynamic>> startEmailOtp(String email) =>
+      researchPost('/v1/auth/email-otp/start', body: <String, dynamic>{'email': email});
+
+  Future<Map<String, dynamic>> verifyEmailOtp(String email, String code) =>
+      researchPost(
+        '/v1/auth/email-otp/verify',
+        body: <String, dynamic>{'email': email, 'code': code},
+        headers: const <String, String>{'X-Research-OS-Client': 'native'},
+      );
 }
 
 OwnerFriendApi? _activeOwnerFriendApi;
@@ -87,12 +97,6 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
 
   @override
   Future<Map<String, dynamic>> startGoogleIdentity() => _researchRequest('POST', '/v1/auth/google/start', authenticated: false);
-
-  @override
-  Future<Map<String, dynamic>> startEmailOtp(String email) => researchPost('/v1/auth/email-otp/start', body: <String, dynamic>{'email': email});
-
-  @override
-  Future<Map<String, dynamic>> verifyEmailOtp(String email, String code) => researchPost('/v1/auth/email-otp/verify', body: <String, dynamic>{'email': email, 'code': code}, headers: const <String, String>{'X-Research-OS-Client': 'native'});
 
   @override
   Future<Map<String, dynamic>> exchangeGoogleIdentityHandoff(String state) => _researchRequest('POST', '/v1/auth/google/handoff', authenticated: false, headers: <String, String>{'X-Research-OS-OAuth-State': state});
