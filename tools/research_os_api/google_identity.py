@@ -83,7 +83,6 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
 
         public_base = (
             os.environ.get("RESEARCH_OS_PUBLIC_BASE_URL")
-            or os.environ.get("RENDER_EXTERNAL_URL")
             or ""
         ).strip().rstrip("/")
         if public_base:

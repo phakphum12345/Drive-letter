@@ -29,7 +29,7 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Research-OS-Sync-Key",
+            "Content-Type, Authorization, X-Research-OS-Sync-Key, X-Research-OS-Owner, X-Research-OS-Profile, X-Research-OS-Session, X-Research-OS-OAuth-State",
         )
         self.send_header("Access-Control-Max-Age", "86400")
         super().end_headers()
@@ -40,10 +40,11 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
 
 
 def main() -> int:
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8787"))
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "0"))
     server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
-    print(f"Research OS primary API listening on http://{host}:{port}")
+    actual_port = int(server.server_address[1])
+    print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

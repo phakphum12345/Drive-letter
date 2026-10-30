@@ -33,7 +33,8 @@ from github_status import (GitHubStatusError, accounts as github_accounts, dashb
 from google_identity import GoogleIdentityBroker
 from google_oauth import GoogleOAuthBroker, GoogleOAuthError
 from google_workspace import GoogleWorkspaceConfig, get_google_workspace_dashboard
-from server_auth_routes import auth_pairing_authorize, auth_provider_handoff
+from server_auth_routes import auth_pairing_authorize, auth_provider_handoff, start_email_otp, verify_email_otp
+from email_otp import EmailOTPError
 from identity_providers import provider_catalog
 from identity_context import resolve_identity_context
 from memory import build_context, search_memory
@@ -165,9 +166,11 @@ def _project_registry_snapshot() -> dict[str, Any]:
 class ResearchOSHandler(BaseHTTPRequestHandler):
     server_version = "ResearchOSAPI/0.8"
 
-    def _send(self, status: int, payload: Any) -> None:
+    def _send(self, status: int, payload: Any, cookie: str | None = None) -> None:
         body = _json_bytes(payload)
         self.send_response(status)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -198,6 +201,27 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _proxy_friend(self, method: str, path: str, body: dict[str, Any] | None = None) -> None:
+        """Proxy Owner Special paths through this canonical API origin."""
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        for name in ("X-Research-OS-Owner", "X-Research-OS-Profile", "X-Research-OS-Session"):
+            value = self.headers.get(name)
+            if value: headers[name] = value
+        payload = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(f"{FRIEND_BASE_URL}{path}", data=payload, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=35) as response:
+                status, raw = response.status, response.read()
+        except urllib.error.HTTPError as exc:
+            status, raw = exc.code, exc.read()
+        except urllib.error.URLError as exc:
+            self._send(HTTPStatus.BAD_GATEWAY, {"error": "friend_service_unavailable", "detail": str(exc.reason)})
+            return
+        try: result = json.loads(raw.decode("utf-8")) if raw else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            status, result = HTTPStatus.BAD_GATEWAY, {"error": "invalid_friend_response"}
+        self._send(status, result)
 
     def _send_static(self, filename: str) -> None:
         path = (WEB_DIR / filename).resolve()
@@ -255,7 +279,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         explicit = (os.getenv("RESEARCH_OS_LOGIN_REDIRECT_URI") or "").strip()
         if explicit:
             return explicit.rstrip("/") + f"/v1/auth/{provider}/callback"
-        public_base = (os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+        public_base = (os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
         if public_base:
             return f"{public_base}/v1/auth/{provider}/callback"
         port = int(os.getenv("RESEARCH_OS_API_PORT", "8787"))
@@ -265,7 +289,6 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         explicit = (
             os.getenv("RESEARCH_OS_PAIRING_BASE_URL")
             or os.getenv("RESEARCH_OS_PUBLIC_BASE_URL")
-            or os.getenv("RENDER_EXTERNAL_URL")
         )
         if explicit and explicit.strip():
             base_url = explicit.strip().rstrip("/")
@@ -317,6 +340,9 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = parsed.path
         try:
+            if path.startswith("/owner/"):
+                self._proxy_friend("GET", path)
+                return
             if path.startswith("/platform/v1"):
                 status, payload = _management_http().dispatch("GET", self.path, self.headers)
                 self._send(status, payload)
@@ -567,6 +593,19 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             body = self._read_json()
+            if path.startswith("/owner/") or path == "/v1/launch-desk/run":
+                self._proxy_friend("POST", path, body)
+                return
+            if path == "/v1/auth/email-otp/start":
+                try: self._send(HTTPStatus.ACCEPTED, start_email_otp(str(body.get("email") or "")))
+                except EmailOTPError as exc: self._send(exc.status, {"error": "email_otp_unavailable" if exc.status == 503 else "email_otp_rejected", "detail": str(exc)})
+                return
+            if path == "/v1/auth/email-otp/verify":
+                try:
+                    result = verify_email_otp(str(body.get("email") or ""), str(body.get("code") or ""))
+                    self._send(HTTPStatus.OK, {k: v for k, v in result.items() if k != "set_cookie"}, result.get("set_cookie"))
+                except EmailOTPError as exc: self._send(exc.status, {"error": "email_otp_rejected", "detail": str(exc)})
+                return
             if path.startswith("/platform/v1"):
                 status, payload = _management_http().dispatch("POST", self.path, self.headers, body)
                 self._send(status, payload)
