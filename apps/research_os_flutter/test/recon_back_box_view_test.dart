@@ -18,8 +18,8 @@ class _FakeApiClient extends ResearchOSApiClient {
         'repositories': <Map<String, dynamic>>[
           <String, dynamic>{
             'full_name': owner == 'phakphum12345'
-                ? '${owner}/Drive-letter'
-                : '${owner}/sample-public',
+                ? '$owner/Drive-letter'
+                : '$owner/sample-public',
           },
         ],
       };
