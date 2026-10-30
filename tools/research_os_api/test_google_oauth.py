@@ -19,6 +19,7 @@ class GoogleOAuthBrokerTest(unittest.TestCase):
             "RESEARCH_OS_GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
             "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "super-secret",
             "RESEARCH_OS_API_PORT": "8787",
+            "RESEARCH_OS_API_BASE_URL": "https://research.example.test",
         }
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
             broker = GoogleOAuthBroker(tmp)
@@ -27,7 +28,7 @@ class GoogleOAuthBrokerTest(unittest.TestCase):
             self.assertIn("accounts.google.com/o/oauth2/v2/auth", url)
             self.assertIn("client-id.apps.googleusercontent.com", url)
             self.assertNotIn("super-secret", url)
-            self.assertIn("127.0.0.1%3A8787", url)
+            self.assertIn("https%3A%2F%2Fresearch.example.test%2Fv1%2Fgoogle-workspace%2Foauth%2Fcallback", url)
             self.assertTrue((Path(tmp) / "google_workspace" / "oauth_state.json").exists())
 
     def test_status_and_disconnect_use_backend_token_store(self):

@@ -57,11 +57,10 @@ void main() {
     });
 
     final api = HttpOwnerFriendApi(
-      baseUrl: 'http://127.0.0.1:9999',
+      baseUrl: 'http://127.0.0.1:${server.port}',
       ownerId: 'owner',
       profileId: 'work',
       sessionId: 'desktop-test',
-      researchOsBaseUrl: 'http://127.0.0.1:${server.port}',
     );
     api.setSession('research-session');
 

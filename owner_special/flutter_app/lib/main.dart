@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,7 +7,15 @@ import 'src/friend_app.dart';
 import 'src/owner_api.dart';
 import 'src/startup_probe.dart';
 
-Future<void> main() async {
+Future<void> _probeStartupInBackground(OwnerFriendApi api) async {
+  try {
+    await OwnerStartupProbe(api).run();
+  } catch (_) {
+    // Startup diagnostics must never prevent the app shell from opening.
+  }
+}
+
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   final ownerId = Platform.environment['RESEARCH_OS_OWNER_ID'] ?? 'owner';
@@ -15,8 +24,9 @@ Future<void> main() async {
   final sessionId =
       Platform.environment['RESEARCH_OS_OWNER_SESSION'] ?? 'desktop';
   final baseUrl =
-      Platform.environment['RESEARCH_OS_FRIEND_URL'] ??
-      'http://127.0.0.1:8790';
+      (Platform.environment['RESEARCH_OS_API_BASE_URL'] ??
+              'https://phakphumwir.tail4b06c9.ts.net')
+          .trim();
 
   final api = HttpOwnerFriendApi(
     baseUrl: baseUrl,
@@ -26,20 +36,8 @@ Future<void> main() async {
   );
   registerOwnerFriendApi(api);
 
-  Map<String, dynamic>? startup;
-  String? startupError;
-
-  try {
-    startup = await OwnerStartupProbe(api).run();
-  } catch (error) {
-    startupError = error.toString();
-  }
-
-  runApp(
-    OwnerFriendApp(
-      api: api,
-      startup: startup,
-      startupError: startupError,
-    ),
-  );
+  // Render immediately, then collect health/status/provider evidence without
+  // blocking first frame. Offline API state must not strand the user at launch.
+  runApp(OwnerFriendApp(api: api));
+  unawaited(_probeStartupInBackground(api));
 }

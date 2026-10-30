@@ -1,8 +1,8 @@
 param(
   [string]$DataDir = "$env:USERPROFILE\ResearchOSData",
-  [string]$HostAddress = "0.0.0.0",
-  [int]$Port = 8787,
-  [int]$FriendPort = 8790,
+  [string]$HostAddress = "127.0.0.1",
+  [int]$Port = 0,
+  [int]$FriendPort = 0,
   [ValidateSet("gemini", "mock", "local", "openai-compatible", "anthropic")]
   [string]$Provider = "gemini",
   [switch]$Background
@@ -31,6 +31,21 @@ $FriendOutLog = Join-Path $LogDir "research-os-friend.out.log"
 $FriendErrLog = Join-Path $LogDir "research-os-friend.err.log"
 $FriendDataDir = Join-Path $DataDir "owner-friend"
 $FriendAuditPath = Join-Path $LogDir "research-os-friend.audit.jsonl"
+function Get-FreeLoopbackPort {
+  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+  try {
+    $listener.Start()
+    return [int]$listener.LocalEndpoint.Port
+  } finally {
+    $listener.Stop()
+  }
+}
+
+# Zero means choose an available loopback port for this run. Explicit values
+# remain supported for diagnostics and externally managed Tailscale Serve.
+if ($Port -le 0) { $Port = Get-FreeLoopbackPort }
+if ($FriendPort -le 0) { $FriendPort = Get-FreeLoopbackPort }
+if ($Port -eq $FriendPort) { throw "API and Friend Service must use different ports." }
 $FriendUrl = "http://127.0.0.1:$FriendPort"
 
 if (-not (Test-Path $ApiDir)) {
@@ -131,7 +146,8 @@ Write-Host "Data directory : $DataDir"
 Write-Host "Provider       : $Provider"
 Write-Host "Friend URL     : $FriendUrl"
 Write-Host "Local API URL  : http://127.0.0.1:$Port"
-Write-Host "LAN API URL    : http://<WINDOWS-IP>:$Port"
+Write-Host "Bind address   : $HostAddress (loopback-only by default)"
+Write-Host "Tailscale Serve : point its local backend to http://127.0.0.1:$Port; no public API port is opened"
 Write-Host ""
 Write-Host "Friend Service is a required local dependency for RESEARCH_OS_AI_ROUTE=friend."
 Write-Host "Secrets are NOT stored by this script."

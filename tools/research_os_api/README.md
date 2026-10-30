@@ -13,7 +13,7 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 ### Windows — Local Research OS พร้อม Friend Service
 
-สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service ที่ `127.0.0.1:8790` เป็น dependency ของ research route:
+สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
 ```powershell
 .\scripts\start-research-os-local.ps1
@@ -22,11 +22,11 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 Launcher จะ:
 
 1. สร้าง data/log directories
-2. ตรวจ `http://127.0.0.1:8790/owner/health`
-3. ถ้ายังไม่ทำงาน จะ start `owner_special/scripts/run_friend_service.py`
-4. รอจน health เป็น `ok`
+2. เลือกพอร์ตว่างบน loopback ให้ Friend Service และ API (หรือใช้ค่าที่ระบุเอง)
+3. start `owner_special/scripts/run_friend_service.py` ที่พอร์ตภายใน
+4. รอจน Friend health เป็น `ok`
 5. ตั้ง `RESEARCH_OS_FRIEND_URL` และ `RESEARCH_OS_AI_ROUTE=friend`
-6. จึง start Research OS API ที่ `8787`
+6. start Research OS API ที่พอร์ต loopback อีกพอร์ตหนึ่ง
 7. เมื่อรันแบบ foreground จะ cleanup Friend Service ตอนจบ
 
 Background mode:
@@ -35,21 +35,25 @@ Background mode:
 .\scripts\start-research-os-local.ps1 -Background
 ```
 
-ตรวจสถานะ:
+ตรวจสถานะจาก URL ที่ launcher แสดงในหน้าต่างเริ่มต้น:
 
 ```powershell
-curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8790/owner/health
+curl http://127.0.0.1:<API_PORT>/health
+curl http://127.0.0.1:<API_PORT>/owner/health
 ```
+
+`/owner/*` ถูก proxy ผ่าน API Spine ไปยัง Friend Service ภายในเครื่อง การเชื่อมต่อจาก iPhone/Web ใช้ `RESEARCH_OS_API_BASE_URL` เดียวกับหน้าเว็บ (ค่าเริ่มต้นเป็น Tailscale Serve URL) ไม่เชื่อมต่อ `127.0.0.1` ของเครื่อง client โดยตรง. พอร์ตภายในเป็น dynamic; หากใช้ Tailscale Serve ให้ชี้ backend ไปยัง API port ที่ launcher รายงานหลังเริ่มแต่ละครั้ง.
 
 > ไม่ควรแก้ปัญหา `Connection refused` ด้วยการ fallback ไป `mock` เพราะจะทำให้ research response อาจกลายเป็น mock/echo ที่ไม่ใช่ผลจาก Friend runtime จริง
 
 ### API อย่างเดียว
 
+หากกำหนด `--port 0` ระบบจะเลือกพอร์ตว่างและพิมพ์หมายเลขพอร์ตจริงใน log; ใช้หมายเลขนั้นสำหรับ health check และ Tailscale Serve.
+
 ถ้าตั้งใจใช้ API โดยไม่ใช้ Friend route:
 
 ```bash
-python tools/research_os_api/server.py --host 127.0.0.1 --port 8787
+python tools/research_os_api/server.py --host 127.0.0.1 --port 0
 ```
 
 วิเคราะห์บทสนทนา:
@@ -77,13 +81,13 @@ curl -X POST http://127.0.0.1:8787/v1/ai/generate \
 Canonical entrypoint:
 
 ```bash
-python owner_special/scripts/run_friend_service.py --owner-id owner --host 127.0.0.1 --port 8790
+python owner_special/scripts/run_friend_service.py --owner-id owner --host 127.0.0.1 --port 0
 ```
 
 Health endpoint:
 
 ```text
-GET http://127.0.0.1:8790/owner/health
+GET http://127.0.0.1:<FRIEND_PORT>/owner/health
 ```
 
 Chat endpoint requires the Owner identity headers and is consumed internally by `/v1/ai/generate` when `RESEARCH_OS_AI_ROUTE=friend`.
@@ -138,11 +142,13 @@ export RESEARCH_OS_GEMINI_MODEL="..."
 
 ชื่อโมเดลจริงต้องกำหนดผ่าน Environment Variable เพื่อไม่ฝัง dependency กับรุ่นใดใน Core
 
-## Security Boundary
+## Authentication and Security Boundary
 
-API รุ่นแรก bind ที่ `127.0.0.1` โดยค่าเริ่มต้นและยังไม่มีระบบ Authentication จึง **ห้ามเปิดออกอินเทอร์เน็ตโดยตรง**
+Google Sign-in และ Email OTP ใช้ Research OS session ชุดเดียวกัน; QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. Email OTP ต้องตั้ง SMTP host/from, `RESEARCH_OS_SESSION_SECRET` และ `RESEARCH_OS_EMAIL_OTP_SECRET` ก่อนจึงจะส่งรหัสและออก session ได้. กำหนด `RESEARCH_OS_API_BASE_URL` เป็น HTTPS origin กลางเดียวสำหรับ Flutter, Web, Google callbacks และ QR URLs (รองรับ `RESEARCH_OS_PUBLIC_BASE_URL` เป็น alias เดิม). ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
 
-ก่อนใช้ในเครือข่ายหรือ Production ต้องเพิ่มอย่างน้อย:
+API local bind ที่ `127.0.0.1` โดยค่าเริ่มต้น; อย่าเปิด internal API/Friend ports สู่ public internet. ใช้ Tailscale Serve เป็นทางเข้า.
+
+ก่อนใช้ในเครือข่ายหรือ Production ต้องมีอย่างน้อย:
 
 - Authentication และ Authorization
 - TLS

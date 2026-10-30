@@ -3,7 +3,8 @@ from __future__ import annotations
 from http.cookies import CookieError, SimpleCookie
 from urllib.parse import parse_qs, urlparse
 
-from auth_session import SESSION_COOKIE, clear_cookie_header, cookie_header, revoke_session, verify_session
+from auth_session import SESSION_COOKIE, clear_cookie_header, cookie_header, issue_session, revoke_session, verify_session
+from email_otp import EmailOTPError, start_email_otp as _start_email_otp, verify_email_otp as _verify_email_otp
 from google_identity import GoogleIdentityBroker
 from multi_login_runtime import MultiLoginRuntimeError, begin_runtime_login, complete_runtime_login
 from oauth_handoff import consume_handoff, create_handoff, handoff_root
@@ -101,7 +102,7 @@ def auth_status(cookie_header_value: str | None) -> dict:
         session = verify_session(token)
     except ValueError:
         return {"connected": False, "account": None}
-    return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": session["role"]}}
+    return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": str(session["role"]).upper()}}
 
 
 def auth_signout(cookie_header_value: str | None) -> str:
@@ -137,3 +138,25 @@ def auth_pairing_authorize(provider: str, pairing_id: str, pairing_secret: str, 
         raise MultiLoginRuntimeError("pairing provider authorization could not be started")
     bind_oauth_state(pairing_id, pairing_secret, state, provider_name)
     return authorization_url
+
+
+def start_email_otp(email: str) -> dict:
+    return _start_email_otp(email)
+
+
+def verify_email_otp(email: str, code: str) -> dict:
+    verified_email = _verify_email_otp(email, code)
+    import hashlib
+    import os
+    owner_emails = {v.strip().lower() for v in (os.getenv("RESEARCH_OS_OWNER_EMAILS") or "").split(",") if v.strip()}
+    role = "OWNER" if verified_email in owner_emails else "USER"
+    user_id = "email:" + hashlib.sha256(verified_email.encode("utf-8")).hexdigest()[:32]
+    try:
+        session = issue_session({"user_id": user_id, "email": verified_email, "role": role})
+    except RuntimeError as exc:
+        raise EmailOTPError("Research OS session signing secret is not configured", 503) from exc
+    public_base = (os.getenv("RESEARCH_OS_API_BASE_URL") or os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip()
+    secure_cookie = urlparse(public_base).scheme.lower() == "https"
+    return {"connected": True, "provider": "email_otp", "session": session,
+            "account": {"user_id": user_id, "email": verified_email, "role": role},
+            "token_type": "research_os_session", "set_cookie": cookie_header(session, secure=secure_cookie)}

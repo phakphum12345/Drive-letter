@@ -111,14 +111,61 @@ function Invoke-CleanValidation {
         if (-not (Test-Path $memoryPath)) { throw 'Owner memory was not persisted' }
         $beforeUpgrade = (Get-FileHash $memoryPath -Algorithm SHA256).Hash
 
-        if (Test-Path $audit) { Clear-Content $audit -ErrorAction SilentlyContinue }
         $appExe = Join-Path $appRoot 'app\research_os_owner_special.exe'
         if (-not (Test-Path $appExe)) { throw 'Installed Owner Desktop EXE missing' }
-        $app = Start-Process $appExe -PassThru
+
+        # The installed Friend Service is the local Owner backend. Run the
+        # canonical Research OS API Spine in this validation process and route
+        # the installed app through that single origin, matching desktop CI.
+        $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $apiScript = Join-Path $repoRoot 'tools\research_os_api\render_server.py'
+        if (-not (Test-Path $apiScript -PathType Leaf)) { throw "Research OS API Spine source missing: $apiScript" }
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+        try { $listener.Start(); $apiPort = [int]$listener.LocalEndpoint.Port } finally { $listener.Stop() }
+        $apiBase = "http://127.0.0.1:$apiPort"
+        $apiOut = Join-Path $env:RUNNER_TEMP 'owner-installer-api.out.log'
+        $apiErr = Join-Path $env:RUNNER_TEMP 'owner-installer-api.err.log'
+        $apiProcess = $null
+        $app = $null
+        $environmentNames = @('HOST','PORT','RESEARCH_OS_API_PORT','RESEARCH_OS_API_BASE_URL','RESEARCH_OS_FRIEND_URL','RESEARCH_OS_DATA_DIR','RESEARCH_OS_AI_ROUTE')
+        $previousEnvironment = @{}
+        foreach ($name in $environmentNames) {
+            $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        }
         try {
+            $env:HOST = '127.0.0.1'
+            $env:PORT = "$apiPort"
+            $env:RESEARCH_OS_API_PORT = "$apiPort"
+            $env:RESEARCH_OS_API_BASE_URL = $apiBase
+            $env:RESEARCH_OS_FRIEND_URL = 'http://127.0.0.1:8790'
+            $env:RESEARCH_OS_DATA_DIR = $dataRoot
+            $env:RESEARCH_OS_AI_ROUTE = 'friend'
+            $apiProcess = Start-Process -FilePath 'python' -ArgumentList @($apiScript) -WorkingDirectory $repoRoot -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
+
+            $ready = $false
+            for ($i=0; $i -lt 60; $i++) {
+                try {
+                    $apiHealth = Invoke-RestMethod -Uri "$apiBase/health" -TimeoutSec 2
+                    $ownerHealth = Invoke-RestMethod -Uri "$apiBase/owner/health" -TimeoutSec 2
+                    if ($apiHealth.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
+                } catch {}
+                Start-Sleep -Milliseconds 250
+            }
+            if (-not $ready) {
+                if (Test-Path $apiOut) { Get-Content $apiOut -Tail 80 | Out-Host }
+                if (Test-Path $apiErr) { Get-Content $apiErr -Tail 120 | Out-Host }
+                throw 'Research OS API Spine did not become ready for installed Owner Desktop'
+            }
+
+            $apiStatus = Invoke-RestMethod -Uri "$apiBase/owner/status" -Headers $headers -TimeoutSec 5
+            $apiProvider = Invoke-RestMethod -Uri "$apiBase/owner/provider" -Headers $headers -TimeoutSec 5
+            if (-not $apiStatus -or -not $apiProvider) { throw 'API Spine Owner status/provider preflight failed' }
+
+            if (Test-Path $audit) { Clear-Content $audit -ErrorAction SilentlyContinue }
+            $app = Start-Process -FilePath $appExe -WorkingDirectory (Split-Path $appExe) -PassThru
             $proved = $false
             for ($i=0; $i -lt 60; $i++) {
-                if ($app.HasExited) { throw 'Owner Desktop exited before startup E2E proof' }
+                if ($app.HasExited) { throw "Installed Owner Desktop exited during startup E2E (exit code $($app.ExitCode))" }
                 if (Test-Path $audit) {
                     $records = @(Get-Content $audit -ErrorAction SilentlyContinue | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
                     $healthSeen = @($records | Where-Object { $_.path -eq '/owner/health' -and [int]$_.status -eq 200 }).Count -gt 0
@@ -128,9 +175,25 @@ function Invoke-CleanValidation {
                 }
                 Start-Sleep -Milliseconds 300
             }
-            if (-not $proved) { throw 'Installed Owner Desktop did not prove health/status/provider startup requests' }
+            if (-not $proved) { throw 'Installed Owner Desktop did not prove health/status/provider requests through the API Spine' }
+            Write-Host 'INSTALLED_OWNER_DESKTOP_API_SPINE_E2E=PASS'
+            Get-Content $audit | Out-Host
+        } catch {
+            Write-Host '=== Installed Owner API Spine diagnostics ==='
+            if (Test-Path $audit) { Get-Content $audit -Tail 100 | Out-Host }
+            if (Test-Path $apiOut) { Get-Content $apiOut -Tail 80 | Out-Host }
+            if (Test-Path $apiErr) { Get-Content $apiErr -Tail 120 | Out-Host }
+            throw
         } finally {
-            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+            if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+            if ($apiProcess -and -not $apiProcess.HasExited) { Stop-Process -Id $apiProcess.Id -Force -ErrorAction SilentlyContinue }
+            foreach ($name in $environmentNames) {
+                if ($null -eq $previousEnvironment[$name]) {
+                    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+                } else {
+                    Set-Item "Env:$name" $previousEnvironment[$name]
+                }
+            }
         }
 
         $setupHash = (Get-FileHash $SetupPath -Algorithm SHA256).Hash.ToLowerInvariant()
