@@ -88,7 +88,7 @@ class GoogleIdentityBroker(GoogleOAuthBroker):
         if public_base:
             return f"{public_base}/v1/auth/google/callback"
 
-        port = int(os.environ.get("RESEARCH_OS_API_PORT", "8787"))
+        port = int(os.environ.get("RESEARCH_OS_API_PORT", "0"))
         return f"http://127.0.0.1:{port}/v1/auth/google/callback"
 
     def _fetch_userinfo(self, access_token: str) -> dict[str, object]:

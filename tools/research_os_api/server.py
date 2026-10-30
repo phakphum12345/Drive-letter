@@ -104,7 +104,7 @@ def _load_module(name: str, path: Path):
     return module
 
 
-FRIEND_BASE_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip("/")
+FRIEND_BASE_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:0").rstrip("/")
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner")
 
 
@@ -204,7 +204,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
 
     def _proxy_friend(self, method: str, path: str, body: dict[str, Any] | None = None) -> None:
         """Proxy Owner Special paths through this canonical API origin."""
-        headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        headers = {"Accept": self.headers.get("Accept", "application/json"), "Content-Type": "application/json"}
         for name in ("X-Research-OS-Owner", "X-Research-OS-Profile", "X-Research-OS-Session"):
             value = self.headers.get(name)
             if value: headers[name] = value
@@ -212,6 +212,17 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         request = urllib.request.Request(f"{FRIEND_BASE_URL}{path}", data=payload, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=35) as response:
+                if response.headers.get_content_type() == "text/event-stream":
+                    self.send_response(response.status)
+                    self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    while True:
+                        chunk = response.read(8192)
+                        if not chunk: break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                    return
                 status, raw = response.status, response.read()
         except urllib.error.HTTPError as exc:
             status, raw = exc.code, exc.read()
@@ -282,7 +293,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         public_base = (os.getenv("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
         if public_base:
             return f"{public_base}/v1/auth/{provider}/callback"
-        port = int(os.getenv("RESEARCH_OS_API_PORT", "8787"))
+        port = int(os.getenv("RESEARCH_OS_API_PORT", "0"))
         return f"http://127.0.0.1:{port}/v1/auth/{provider}/callback"
 
     def _pairing_base_url(self) -> str:
@@ -907,10 +918,12 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Research OS provider-agnostic HTTP API")
     parser.add_argument("--host", default=os.getenv("RESEARCH_OS_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("RESEARCH_OS_API_PORT", "8787")))
+    parser.add_argument("--port", type=int, default=int(os.getenv("RESEARCH_OS_API_PORT", "0")))
+
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), ResearchOSHandler)
-    print(f"Research OS listening on http://{args.host}:{args.port}")
+    actual_port = int(server.server_address[1])
+    print(f"Research OS listening on http://{args.host}:{actual_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

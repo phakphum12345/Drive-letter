@@ -45,6 +45,15 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn("[int]$Port = 0", launcher)
         self.assertIn("[int]$FriendPort = 0", launcher)
         self.assertIn("Get-FreeLoopbackPort", launcher)
+        self.assertNotIn("[int]$Port = 8787", launcher)
+        self.assertNotIn("[int]$FriendPort = 8790", launcher)
+
+    def test_runtime_entrypoints_support_ephemeral_ports(self):
+        api = self.read("tools/research_os_api/server.py")
+        friend = self.read("owner_special/scripts/run_friend_service.py")
+        self.assertIn('default=int(os.getenv("RESEARCH_OS_API_PORT", "0"))', api)
+        self.assertIn('default=0)', friend)
+        self.assertIn("server.server_address[1]", api)
 
 if __name__ == "__main__":
     unittest.main()

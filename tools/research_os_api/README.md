@@ -48,10 +48,12 @@ curl http://127.0.0.1:<API_PORT>/owner/health
 
 ### API อย่างเดียว
 
+หากกำหนด `--port 0` ระบบจะเลือกพอร์ตว่างและพิมพ์หมายเลขพอร์ตจริงใน log; ใช้หมายเลขนั้นสำหรับ health check และ Tailscale Serve.
+
 ถ้าตั้งใจใช้ API โดยไม่ใช้ Friend route:
 
 ```bash
-python tools/research_os_api/server.py --host 127.0.0.1 --port 8787
+python tools/research_os_api/server.py --host 127.0.0.1 --port 0
 ```
 
 วิเคราะห์บทสนทนา:
@@ -79,13 +81,13 @@ curl -X POST http://127.0.0.1:8787/v1/ai/generate \
 Canonical entrypoint:
 
 ```bash
-python owner_special/scripts/run_friend_service.py --owner-id owner --host 127.0.0.1 --port 8790
+python owner_special/scripts/run_friend_service.py --owner-id owner --host 127.0.0.1 --port 0
 ```
 
 Health endpoint:
 
 ```text
-GET http://127.0.0.1:8790/owner/health
+GET http://127.0.0.1:<FRIEND_PORT>/owner/health
 ```
 
 Chat endpoint requires the Owner identity headers and is consumed internally by `/v1/ai/generate` when `RESEARCH_OS_AI_ROUTE=friend`.

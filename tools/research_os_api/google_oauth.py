@@ -44,7 +44,7 @@ class GoogleOAuthBroker:
             return explicit
         public_base = (os.environ.get("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
         if public_base: return f"{public_base}/v1/google-workspace/oauth/callback"
-        port = int(os.environ.get("RESEARCH_OS_API_PORT", "8787"))
+        port = int(os.environ.get("RESEARCH_OS_API_PORT", "0"))
         return f"http://127.0.0.1:{port}/v1/google-workspace/oauth/callback"
 
     def _enabled_scopes(self) -> list[str]:

@@ -20,7 +20,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Research OS Owner Special Friend Service")
     parser.add_argument("--owner-id", default="owner")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8790)
+    parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--data-root", type=Path, default=None)
     parser.add_argument("--audit-path", type=Path, default=None)
     parser.add_argument("--repository-root", type=Path, default=Path.cwd())
