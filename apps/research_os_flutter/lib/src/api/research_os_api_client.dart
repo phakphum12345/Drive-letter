@@ -464,7 +464,7 @@ class ResearchOSApiClient {
     final isOrganization = identity['type'] == 'Organization';
     final path = isOrganization ? '/orgs/$login/repos' : '/users/$login/repos';
     final payload = await _getPublicGitHubJson(path, <String, String>{
-      'type': 'owner',
+      'type': isOrganization ? 'public' : 'owner',
       'sort': 'updated',
       'per_page': '100',
       'page': '1',
