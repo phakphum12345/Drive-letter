@@ -127,12 +127,15 @@ jobs:
           if ($identity.passed -ne $true) { throw 'Owner Desktop identity gate failed' }
           if ([string]$identity.commit -ne [string]$env:TARGET_SHA) { throw "Owner Desktop source commit mismatch: $($identity.commit) != $env:TARGET_SHA" }
           Write-Host 'OWNER_DESKTOP_IDENTITY_GATE=PASS'
-      - name: Start Friend service and API Spine and verify runtime
+      - name: Start Friend service + API Spine and prove Owner Desktop startup
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $env:PYTHONPATH = "$env:GITHUB_WORKSPACE\owner_special"
           $dataRoot = "$env:RUNNER_TEMP\research-os-owner-data"
           $auditPath = "$env:RUNNER_TEMP\owner-friend-audit.jsonl"
+          $apiOut = "$env:RUNNER_TEMP\research-os-api.out.log"
+          $apiErr = "$env:RUNNER_TEMP\research-os-api.err.log"
           $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
           try { $listener.Start(); $friendPort = [int]$listener.LocalEndpoint.Port } finally { $listener.Stop() }
           $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
@@ -140,60 +143,64 @@ jobs:
           if ($friendPort -eq $apiPort) { throw 'Dynamic test ports unexpectedly collided.' }
           $friendUrl = "http://127.0.0.1:$friendPort"
           $apiBase = "http://127.0.0.1:$apiPort"
-          $service = Start-Process python -ArgumentList @('owner_special/scripts/run_friend_service.py','--owner-id','owner','--host','127.0.0.1','--port',"$friendPort",'--data-root',$dataRoot,'--audit-path',$auditPath,'--repository-root',$env:GITHUB_WORKSPACE) -PassThru
-          "OWNER_FRIEND_PID=$($service.Id)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "OWNER_FRIEND_AUDIT=$auditPath" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          for ($i=0; $i -lt 40; $i++) { try { $h=Invoke-RestMethod "$friendUrl/owner/health" -TimeoutSec 2; if ($h.status -eq 'ok') { break } } catch {}; Start-Sleep -Milliseconds 250 }
-          if (-not $h -or $h.status -ne 'ok') { throw 'Owner Friend Service did not become ready' }
-
-          $env:HOST = '127.0.0.1'
-          $env:PORT = "$apiPort"
-          $env:RESEARCH_OS_API_PORT = "$apiPort"
-          $env:RESEARCH_OS_API_BASE_URL = $apiBase
-          $env:RESEARCH_OS_FRIEND_URL = $friendUrl
-          $env:RESEARCH_OS_DATA_DIR = $dataRoot
-          $env:RESEARCH_OS_AI_ROUTE = 'friend'
-          $apiOut = "$env:RUNNER_TEMP\research-os-api.out.log"
-          $apiErr = "$env:RUNNER_TEMP\research-os-api.err.log"
-          $gateway = Start-Process python -ArgumentList @('tools/research_os_api/render_server.py') -WorkingDirectory $env:GITHUB_WORKSPACE -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
-          "OWNER_API_PID=$($gateway.Id)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          "RESEARCH_OS_API_BASE_URL=$apiBase" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          $ready = $false
-          for ($i=0; $i -lt 60; $i++) {
-            try {
-              $health = Invoke-RestMethod "$apiBase/health" -TimeoutSec 2
-              $ownerHealth = Invoke-RestMethod "$apiBase/owner/health" -TimeoutSec 2
-              if ($health.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
-            } catch {}
-            Start-Sleep -Milliseconds 250
-          }
-          if (-not $ready) {
-            Get-Content $apiErr -Tail 60 -ErrorAction SilentlyContinue
-            throw 'Research OS API Spine did not become ready with Owner proxy'
-          }
-          Write-Host "OWNER_API_SPINE=$apiBase"
-      - name: Launch Owner Desktop startup E2E
-        shell: pwsh
-        run: |
-          $exe = Get-Item 'owner_special/flutter_app/build/windows/x64/runner/Release/research_os_owner_special.exe'
-          $app = Start-Process $exe.FullName -PassThru
+          $service = $null
+          $gateway = $null
+          $app = $null
           try {
-            $proved=$false
+            $service = Start-Process python -ArgumentList @('owner_special/scripts/run_friend_service.py','--owner-id','owner','--host','127.0.0.1','--port',"$friendPort",'--data-root',$dataRoot,'--audit-path',$auditPath,'--repository-root',$env:GITHUB_WORKSPACE) -PassThru
+            $env:HOST = '127.0.0.1'
+            $env:PORT = "$apiPort"
+            $env:RESEARCH_OS_API_PORT = "$apiPort"
+            $env:RESEARCH_OS_API_BASE_URL = $apiBase
+            $env:RESEARCH_OS_FRIEND_URL = $friendUrl
+            $env:RESEARCH_OS_DATA_DIR = $dataRoot
+            $env:RESEARCH_OS_AI_ROUTE = 'friend'
+            $gateway = Start-Process python -ArgumentList @('tools/research_os_api/render_server.py') -WorkingDirectory $env:GITHUB_WORKSPACE -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
+
+            $ready = $false
             for ($i=0; $i -lt 60; $i++) {
-              $records=@(Get-Content $env:OWNER_FRIEND_AUDIT -ErrorAction SilentlyContinue | Where-Object {$_.Trim()} | ForEach-Object {$_ | ConvertFrom-Json})
-              $h=@($records|Where-Object {$_.path -eq '/owner/health' -and [int]$_.status -eq 200}).Count -gt 0
-              $s=@($records|Where-Object {$_.path -eq '/owner/status' -and [int]$_.status -eq 200}).Count -gt 0
-              $p=@($records|Where-Object {$_.path -eq '/owner/provider' -and [int]$_.status -eq 200}).Count -gt 0
-              if ($h -and $s -and $p) {$proved=$true; break}; Start-Sleep -Milliseconds 250
+              try {
+                $health = Invoke-RestMethod "$apiBase/health" -TimeoutSec 2
+                $ownerHealth = Invoke-RestMethod "$apiBase/owner/health" -TimeoutSec 2
+                if ($health.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
+              } catch {}
+              Start-Sleep -Milliseconds 250
             }
-            if (-not $proved) { throw 'Owner Desktop startup E2E failed' }
-          } finally { if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue } }
-      - name: Cleanup API Spine and Friend service
-        if: always()
-        shell: pwsh
-        run: |
-          if ($env:OWNER_API_PID) { Stop-Process ([int]$env:OWNER_API_PID) -Force -ErrorAction SilentlyContinue }
-          if ($env:OWNER_FRIEND_PID) { Stop-Process ([int]$env:OWNER_FRIEND_PID) -Force -ErrorAction SilentlyContinue }
+            if (-not $ready) { throw 'Research OS API Spine / Owner proxy did not become ready' }
+
+            $headers = @{'X-Research-OS-Owner'='owner'; 'X-Research-OS-Profile'='default'; 'X-Research-OS-Session'='desktop-e2e'}
+            $status = Invoke-RestMethod "$apiBase/owner/status" -Headers $headers -TimeoutSec 5
+            $provider = Invoke-RestMethod "$apiBase/owner/provider" -Headers $headers -TimeoutSec 5
+            if (-not $status -or -not $provider) { throw 'API Spine Owner status/provider preflight did not return data' }
+
+            if (Test-Path $auditPath) { Clear-Content $auditPath -ErrorAction SilentlyContinue }
+            $exe = Get-Item 'owner_special/flutter_app/build/windows/x64/runner/Release/research_os_owner_special.exe'
+            $app = Start-Process $exe.FullName -PassThru
+            $proved = $false
+            for ($i=0; $i -lt 60; $i++) {
+              if ($app.HasExited) { throw "Owner Desktop exited during startup E2E (exit code $($app.ExitCode))" }
+              $records = @(Get-Content $auditPath -ErrorAction SilentlyContinue | Where-Object {$_.Trim()} | ForEach-Object {$_ | ConvertFrom-Json})
+              $h = @($records | Where-Object {$_.path -eq '/owner/health' -and [int]$_.status -eq 200}).Count -gt 0
+              $s = @($records | Where-Object {$_.path -eq '/owner/status' -and [int]$_.status -eq 200}).Count -gt 0
+              $p = @($records | Where-Object {$_.path -eq '/owner/provider' -and [int]$_.status -eq 200}).Count -gt 0
+              if ($h -and $s -and $p) { $proved = $true; break }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $proved) { throw 'Owner Desktop did not prove health/status/provider requests through the API Spine' }
+            Write-Host 'OWNER_DESKTOP_STARTUP_E2E=PASS'
+            Write-Host 'OWNER_API_SPINE=' $apiBase
+            Get-Content $auditPath | Out-Host
+          } catch {
+            Write-Host '=== Owner Desktop / API Spine failure diagnostics ==='
+            if (Test-Path $auditPath) { Get-Content $auditPath -Tail 100 | Out-Host }
+            if (Test-Path $apiOut) { Get-Content $apiOut -Tail 80 | Out-Host }
+            if (Test-Path $apiErr) { Get-Content $apiErr -Tail 120 | Out-Host }
+            throw
+          } finally {
+            if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+            if ($gateway -and -not $gateway.HasExited) { Stop-Process -Id $gateway.Id -Force -ErrorAction SilentlyContinue }
+            if ($service -and -not $service.HasExited) { Stop-Process -Id $service.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Upload validated Owner desktop
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
