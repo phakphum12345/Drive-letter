@@ -1,0 +1,65 @@
+name: Research OS API Spine and Authentication CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/research_os_api/**"
+      - "owner_special/flutter_app/**"
+      - "scripts/start-research-os-local.ps1"
+      - "apps/research_os_web/**"
+      - "docs/RESEARCH_OS_WEB_CONNECTIVITY.md"
+      - ".github/workflows/research-os-api-spine-auth-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-os-api-spine-auth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-auth:
+    name: Python API and OTP contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v5
+        with:
+          python-version: "3.11"
+      - name: Run focused API spine tests
+        env:
+          PYTHONPATH: tools/research_os_api:.
+        run: |
+          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_server_auth_routes -v
+
+  owner-special-flutter:
+    name: Owner Special Flutter analyze and tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Flutter
+        uses: ./.github/actions/flutter-setup
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: owner_special/flutter_app
+        shell: pwsh
+        run: |
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { throw 'Owner Special flutter pub get failed.' }
+      - name: Analyze
+        working-directory: owner_special/flutter_app
+        shell: pwsh
+        run: |
+          flutter analyze
+          if ($LASTEXITCODE -ne 0) { throw 'Owner Special flutter analyze failed.' }
+      - name: Test
+        working-directory: owner_special/flutter_app
+        shell: pwsh
+        run: |
+          flutter test --reporter expanded
+          if ($LASTEXITCODE -ne 0) { throw 'Owner Special flutter tests failed.' }

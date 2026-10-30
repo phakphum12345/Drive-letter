@@ -62,53 +62,27 @@ class _OwnerFriendAppState extends State<OwnerFriendApp> {
           constraints: const BoxConstraints(maxWidth: 360),
           child: TeamCenter(onChanged: _onTeamChanged),
         ),
-        status: _StatusPill(api: widget.api),
+        status: _StatusPill(connected: widget.startupError == null),
       ),
     );
   }
 }
 
-class _StatusPill extends StatefulWidget {
-  const _StatusPill({required this.api});
-  final OwnerFriendApi api;
-
-  @override
-  State<_StatusPill> createState() => _StatusPillState();
-}
-
-class _StatusPillState extends State<_StatusPill> {
-  bool? _connected;
-
-  @override
-  void initState() {
-    super.initState();
-    _probe();
-  }
-
-  Future<void> _probe() async {
-    try {
-      final result = await widget.api.health().timeout(const Duration(seconds: 8));
-      if (mounted) setState(() => _connected = result['status'] == 'ok');
-    } catch (_) {
-      if (mounted) setState(() => _connected = false);
-    }
-  }
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.connected});
+  final bool connected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final connected = _connected == true;
-    final color = _connected == null
-        ? theme.colorScheme.onSurfaceVariant
-        : connected ? const Color(0xFF34D399) : const Color(0xFFF59E0B);
-    final label = _connected == null ? 'Checking' : connected ? 'Connected' : 'Offline';
+    final color = connected ? const Color(0xFF34D399) : const Color(0xFFF59E0B);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(999)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 7),
-        Text(label, style: theme.textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
+        Text(connected ? 'Connected' : 'Offline', style: theme.textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
       ]),
     );
   }

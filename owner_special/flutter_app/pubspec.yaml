@@ -11,7 +11,6 @@ dependencies:
     sdk: flutter
   research_os_contracts:
     path: ../../packages/research_os_contracts
-  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

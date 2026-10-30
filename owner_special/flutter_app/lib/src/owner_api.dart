@@ -44,12 +44,14 @@ void registerOwnerFriendApi(OwnerFriendApi api) {
 String _normalizeBaseUrl(String value) => value.endsWith('/') ? value.substring(0, value.length - 1) : value;
 
 final class HttpOwnerFriendApi implements OwnerFriendApi {
-  HttpOwnerFriendApi({required String baseUrl, required this.ownerId, this.profileId = 'default', this.sessionId = 'desktop', this.timeout = const Duration(seconds: 8), this.chatTimeout = const Duration(seconds: 30)})
-      : baseUrl = _normalizeBaseUrl(baseUrl);
+  HttpOwnerFriendApi({required String baseUrl, required this.ownerId, this.profileId = 'default', this.sessionId = 'desktop', String researchOsBaseUrl = 'http://127.0.0.1:8787', this.timeout = const Duration(seconds: 5), this.chatTimeout = const Duration(seconds: 30)})
+      : baseUrl = _normalizeBaseUrl(baseUrl),
+        researchOsBaseUrl = _normalizeBaseUrl(researchOsBaseUrl);
   final String baseUrl;
   final String ownerId;
   final String profileId;
   final String sessionId;
+  final String researchOsBaseUrl;
   final Duration timeout;
   final Duration chatTimeout;
   String? _sessionToken;
@@ -85,10 +87,6 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
 
   @override
   Future<Map<String, dynamic>> startGoogleIdentity() => _researchRequest('POST', '/v1/auth/google/start', authenticated: false);
-
-  Future<Map<String, dynamic>> startEmailOtp(String email) => researchPost('/v1/auth/email-otp/start', body: <String, dynamic>{'email': email});
-
-  Future<Map<String, dynamic>> verifyEmailOtp(String email, String code) => researchPost('/v1/auth/email-otp/verify', body: <String, dynamic>{'email': email, 'code': code});
 
   @override
   Future<Map<String, dynamic>> exchangeGoogleIdentityHandoff(String state) => _researchRequest('POST', '/v1/auth/google/handoff', authenticated: false, headers: <String, String>{'X-Research-OS-OAuth-State': state});
@@ -162,7 +160,7 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
   Future<Map<String, dynamic>> _researchChat(String text, {required int complexity, required int risk, required int parallelism, required int helperBudget, required List<String> requestedSkills, required List<String> requestedTools}) async {
     final client = HttpClient();
     final requestTimeout = chatTimeout;
-    final uri = Uri.parse('$baseUrl/v1/ai/generate');
+    final uri = Uri.parse('$researchOsBaseUrl/v1/ai/generate');
     try {
       final request = await client.postUrl(uri).timeout(requestTimeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
@@ -215,7 +213,7 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
 
   Future<Map<String, dynamic>> _researchRequest(String method, String path, {bool authenticated = true, Map<String, String>? headers}) async {
     final client = HttpClient();
-    final uri = Uri.parse('$baseUrl$path');
+    final uri = Uri.parse('$researchOsBaseUrl$path');
     try {
       final request = method == 'POST' ? await client.postUrl(uri).timeout(timeout) : await client.getUrl(uri).timeout(timeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
