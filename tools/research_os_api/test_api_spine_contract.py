@@ -48,6 +48,13 @@ class APISpineContractTests(unittest.TestCase):
         self.assertNotIn("[int]$Port = 8787", launcher)
         self.assertNotIn("[int]$FriendPort = 8790", launcher)
 
+    def test_owner_desktop_startup_e2e_uses_the_api_gateway(self):
+        workflow = self.read(".github/workflows/owner-special-friend.yml")
+        self.assertIn("tools/research_os_api/render_server.py", workflow)
+        self.assertIn("RESEARCH_OS_API_BASE_URL=$apiBase", workflow)
+        self.assertIn("$apiBase/owner/health", workflow)
+        self.assertIn("OWNER_API_PID", workflow)
+
     def test_runtime_entrypoints_support_ephemeral_ports(self):
         api = self.read("tools/research_os_api/server.py")
         friend = self.read("owner_special/scripts/run_friend_service.py")

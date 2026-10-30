@@ -127,17 +127,51 @@ jobs:
           if ($identity.passed -ne $true) { throw 'Owner Desktop identity gate failed' }
           if ([string]$identity.commit -ne [string]$env:TARGET_SHA) { throw "Owner Desktop source commit mismatch: $($identity.commit) != $env:TARGET_SHA" }
           Write-Host 'OWNER_DESKTOP_IDENTITY_GATE=PASS'
-      - name: Start Friend service and verify runtime
+      - name: Start Friend service and API Spine and verify runtime
         shell: pwsh
         run: |
           $env:PYTHONPATH = "$env:GITHUB_WORKSPACE\owner_special"
           $dataRoot = "$env:RUNNER_TEMP\research-os-owner-data"
           $auditPath = "$env:RUNNER_TEMP\owner-friend-audit.jsonl"
-          $service = Start-Process python -ArgumentList @('owner_special/scripts/run_friend_service.py','--owner-id','owner','--port','8790','--data-root',$dataRoot,'--audit-path',$auditPath,'--repository-root',$env:GITHUB_WORKSPACE) -PassThru
+          $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          try { $listener.Start(); $friendPort = [int]$listener.LocalEndpoint.Port } finally { $listener.Stop() }
+          $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          try { $listener.Start(); $apiPort = [int]$listener.LocalEndpoint.Port } finally { $listener.Stop() }
+          if ($friendPort -eq $apiPort) { throw 'Dynamic test ports unexpectedly collided.' }
+          $friendUrl = "http://127.0.0.1:$friendPort"
+          $apiBase = "http://127.0.0.1:$apiPort"
+          $service = Start-Process python -ArgumentList @('owner_special/scripts/run_friend_service.py','--owner-id','owner','--host','127.0.0.1','--port',"$friendPort",'--data-root',$dataRoot,'--audit-path',$auditPath,'--repository-root',$env:GITHUB_WORKSPACE) -PassThru
           "OWNER_FRIEND_PID=$($service.Id)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
           "OWNER_FRIEND_AUDIT=$auditPath" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-          for ($i=0; $i -lt 40; $i++) { try { $h=Invoke-RestMethod 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2; if ($h.status -eq 'ok') { exit 0 } } catch {}; Start-Sleep -Milliseconds 250 }
-          throw 'Owner Friend Service did not become ready'
+          for ($i=0; $i -lt 40; $i++) { try { $h=Invoke-RestMethod "$friendUrl/owner/health" -TimeoutSec 2; if ($h.status -eq 'ok') { break } } catch {}; Start-Sleep -Milliseconds 250 }
+          if (-not $h -or $h.status -ne 'ok') { throw 'Owner Friend Service did not become ready' }
+
+          $env:HOST = '127.0.0.1'
+          $env:PORT = "$apiPort"
+          $env:RESEARCH_OS_API_PORT = "$apiPort"
+          $env:RESEARCH_OS_API_BASE_URL = $apiBase
+          $env:RESEARCH_OS_FRIEND_URL = $friendUrl
+          $env:RESEARCH_OS_DATA_DIR = $dataRoot
+          $env:RESEARCH_OS_AI_ROUTE = 'friend'
+          $apiOut = "$env:RUNNER_TEMP\research-os-api.out.log"
+          $apiErr = "$env:RUNNER_TEMP\research-os-api.err.log"
+          $gateway = Start-Process python -ArgumentList @('tools/research_os_api/render_server.py') -WorkingDirectory $env:GITHUB_WORKSPACE -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
+          "OWNER_API_PID=$($gateway.Id)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RESEARCH_OS_API_BASE_URL=$apiBase" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $ready = $false
+          for ($i=0; $i -lt 60; $i++) {
+            try {
+              $health = Invoke-RestMethod "$apiBase/health" -TimeoutSec 2
+              $ownerHealth = Invoke-RestMethod "$apiBase/owner/health" -TimeoutSec 2
+              if ($health.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not $ready) {
+            Get-Content $apiErr -Tail 60 -ErrorAction SilentlyContinue
+            throw 'Research OS API Spine did not become ready with Owner proxy'
+          }
+          Write-Host "OWNER_API_SPINE=$apiBase"
       - name: Launch Owner Desktop startup E2E
         shell: pwsh
         run: |
@@ -154,10 +188,12 @@ jobs:
             }
             if (-not $proved) { throw 'Owner Desktop startup E2E failed' }
           } finally { if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue } }
-      - name: Cleanup Friend service
+      - name: Cleanup API Spine and Friend service
         if: always()
         shell: pwsh
-        run: if ($env:OWNER_FRIEND_PID) { Stop-Process ([int]$env:OWNER_FRIEND_PID) -Force -ErrorAction SilentlyContinue }
+        run: |
+          if ($env:OWNER_API_PID) { Stop-Process ([int]$env:OWNER_API_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:OWNER_FRIEND_PID) { Stop-Process ([int]$env:OWNER_FRIEND_PID) -Force -ErrorAction SilentlyContinue }
       - name: Upload validated Owner desktop
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
