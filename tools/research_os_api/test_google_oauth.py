@@ -19,7 +19,7 @@ class GoogleOAuthBrokerTest(unittest.TestCase):
             "RESEARCH_OS_GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
             "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "super-secret",
             "RESEARCH_OS_API_PORT": "8787",
-            "RESEARCH_OS_PUBLIC_BASE_URL": "https://research.example.test",
+            "RESEARCH_OS_API_BASE_URL": "https://research.example.test",
         }
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
             broker = GoogleOAuthBroker(tmp)

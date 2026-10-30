@@ -144,7 +144,7 @@ export RESEARCH_OS_GEMINI_MODEL="..."
 
 ## Authentication and Security Boundary
 
-Google Sign-in และ Email OTP ใช้ Research OS session ชุดเดียวกัน; QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. Email OTP ต้องตั้ง SMTP host/from ก่อนจึงจะส่งรหัสได้. กำหนด `RESEARCH_OS_PUBLIC_BASE_URL` เป็น HTTPS origin เดียวสำหรับ Google callbacks และ QR URLs. ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
+Google Sign-in และ Email OTP ใช้ Research OS session ชุดเดียวกัน; QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. Email OTP ต้องตั้ง SMTP host/from ก่อนจึงจะส่งรหัสได้. กำหนด `RESEARCH_OS_API_BASE_URL` เป็น HTTPS origin กลางเดียวสำหรับ Flutter, Web, Google callbacks และ QR URLs (รองรับ `RESEARCH_OS_PUBLIC_BASE_URL` เป็น alias เดิม). ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
 
 API local bind ที่ `127.0.0.1` โดยค่าเริ่มต้น; อย่าเปิด internal API/Friend ports สู่ public internet. ใช้ Tailscale Serve เป็นทางเข้า.
 

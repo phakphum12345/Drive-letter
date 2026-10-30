@@ -27,7 +27,7 @@ class APISpineContractTests(unittest.TestCase):
         identity = self.read("tools/research_os_api/google_identity.py")
         workspace = self.read("tools/research_os_api/google_oauth.py")
         for source in (server, identity, workspace):
-            self.assertIn("RESEARCH_OS_PUBLIC_BASE_URL", source)
+            self.assertIn("RESEARCH_OS_API_BASE_URL", source)
             self.assertNotIn("RENDER_EXTERNAL_URL", source)
 
     def test_email_otp_contract_is_present_and_fail_closed_without_smtp(self):

@@ -79,7 +79,7 @@ class GoogleIdentityBrokerTest(unittest.TestCase):
         env = {
             "RESEARCH_OS_GOOGLE_CLIENT_ID": "client-id.apps.googleusercontent.com",
             "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "client-secret",
-            "RESEARCH_OS_PUBLIC_BASE_URL": "https://research-os.example.com/",
+            "RESEARCH_OS_API_BASE_URL": "https://research-os.example.com/",
         }
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
             broker = GoogleIdentityBroker(tmp)

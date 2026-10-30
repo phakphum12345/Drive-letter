@@ -7,7 +7,7 @@ import email_otp
 class EmailOTPTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {"RESEARCH_OS_DATA_DIR": self.temp.name}, clear=False)
+        self.env = patch.dict(os.environ, {"RESEARCH_OS_DATA_DIR": self.temp.name, "RESEARCH_OS_EMAIL_OTP_SECRET": "unit-test-otp-secret"}, clear=False)
         self.env.start()
         self.sent = []
         self.sender = patch.object(email_otp, "_send_email", side_effect=lambda email, code: self.sent.append((email, code)))
@@ -37,5 +37,10 @@ class EmailOTPTests(unittest.TestCase):
     def test_invalid_email_rejected(self):
         with self.assertRaises(email_otp.EmailOTPError):
             email_otp.start_email_otp("not-an-email", now=1000)
+    def test_otp_requires_a_server_side_secret(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_EMAIL_OTP_SECRET": "", "RESEARCH_OS_SESSION_SECRET": ""}):
+            with self.assertRaises(email_otp.EmailOTPError) as raised:
+                email_otp.start_email_otp("user@example.com", now=1000)
+            self.assertEqual(raised.exception.status, 503)
 
 if __name__ == "__main__": unittest.main()
