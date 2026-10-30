@@ -22,7 +22,7 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
     'schema_version': 1,
     'config_id': 'research-os-recon-back-box',
     'mode': 'observe',
-    'repository': _activeRepository,
+    'repository': repository,
     'hash_algorithm': 'sha256',
     'deduplicate': true,
     'overwrite_allowed': false,
