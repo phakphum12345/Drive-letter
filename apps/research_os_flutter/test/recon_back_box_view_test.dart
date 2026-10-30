@@ -18,8 +18,8 @@ class _FakeApiClient extends ResearchOSApiClient {
         'repositories': <Map<String, dynamic>>[
           <String, dynamic>{
             'full_name': owner == 'phakphoum38-stack'
-                ? 'phakphoum38-stack/sample-public'
-                : 'phakphum12345/Drive-letter',
+                ? '${owner}/sample-public'
+                : '${owner}/Drive-letter',
           },
         ],
       };
@@ -60,6 +60,34 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+
+  testWidgets('custom public GitHub organization can be loaded and applied', (tester) async {
+    final api = _FakeApiClient();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ReconBackBoxView(apiClient: api)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('recon-back-box-custom-owner')),
+      'octo-org',
+    );
+    await tester.tap(find.byKey(const Key('recon-back-box-load-owner')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('recon-back-box-repository-selector')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('octo-org/sample-public').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('recon-back-box-apply-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Repository: octo-org/sample-public'), findsOneWidget);
+    expect(api.requestedDashboardRepositories, contains('octo-org/sample-public'));
   });
 
   testWidgets('Recon Back Box is integrated and preserves skipped semantics', (tester) async {
