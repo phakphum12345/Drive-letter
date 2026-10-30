@@ -271,6 +271,93 @@ class ResearchOSApiClient {
     return _decode(await _client.get(uri));
   }
 
+
+  Future<Object?> _githubGet(String path, [Map<String, String> query = const {}]) async {
+    final uri = Uri.https('api.github.com', path, query);
+    final response = await _client.get(uri, headers: const {
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    });
+    Object? body;
+    try { body = jsonDecode(response.body); }
+    on FormatException {
+      throw ResearchOSApiException('GitHub returned invalid JSON (${response.statusCode}).', statusCode: response.statusCode);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = body is Map ? body['message'] ?? 'Unknown GitHub API error' : 'Unknown GitHub API error';
+      throw ResearchOSApiException('GitHub public API error ${response.statusCode}: $message', statusCode: response.statusCode);
+    }
+    return body;
+  }
+
+  Future<Map<String, dynamic>> _githubObject(String path) async {
+    final value = await _githubGet(path);
+    if (value is! Map) throw const ResearchOSApiException('Unexpected GitHub object response.');
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<Map<String, dynamic>> getPublicGitHubRepositories(String owner) async {
+    final login = owner.trim();
+    if (!RegExp(r'^[A-Za-z0-9-]{1,39}$').hasMatch(login)) {
+      throw const ResearchOSApiException('GitHub owner name is invalid.');
+    }
+    Map<String, dynamic> identity;
+    try { identity = await _githubObject('/users/$login'); }
+    on ResearchOSApiException catch (error) {
+      if (error.statusCode != 404) rethrow;
+      identity = await _githubObject('/orgs/$login');
+    }
+    final org = identity['type'] == 'Organization';
+    final path = org ? '/orgs/$login/repos' : '/users/$login/repos';
+    final repositories = <Map<String, dynamic>>[];
+    for (var page = 1; page <= 10; page++) {
+      final value = await _githubGet(path, {
+        'type': org ? 'public' : 'owner', 'sort': 'updated',
+        'per_page': '100', 'page': '$page',
+      });
+      if (value is! List) throw const ResearchOSApiException('Unexpected GitHub repository list.');
+      final items = value.whereType<Map>().map((item) => Map<String, dynamic>.from(item))
+          .where((item) => item['private'] != true && item['full_name'] is String).toList();
+      repositories.addAll(items);
+      if (value.length < 100) break;
+    }
+    repositories.sort((a,b) => (a['full_name'] as String).compareTo(b['full_name'] as String));
+    return {'owner': login, 'owner_type': org ? 'organization' : 'user',
+      'repositories': repositories, 'visibility_filter': 'public_only',
+      'read_only': true, 'source': 'github_public_rest_api'};
+  }
+
+  Future<Map<String, dynamic>> getPublicGitHubDashboard({required String repository}) async {
+    final parts = repository.trim().split('/');
+    if (parts.length != 2 ||
+        !RegExp(r'^[A-Za-z0-9-]{1,39}$').hasMatch(parts[0]) ||
+        !RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(parts[1])) {
+      throw const ResearchOSApiException('Repository must use owner/name format.');
+    }
+    final root = '/repos/${parts[0]}/${parts[1]}';
+    final metadata = await _githubObject(root);
+    if (metadata['private'] == true || metadata['visibility'] == 'private') {
+      throw const ResearchOSApiException('Recon Back Box can inspect public repositories only.');
+    }
+    final values = await Future.wait<Object?>([
+      _githubGet('$root/commits', {'per_page': '10'}),
+      _githubGet('$root/pulls', {'state': 'open', 'per_page': '20'}),
+      _githubGet('$root/actions/runs', {'per_page': '10'}).then<Object?>((v) => v, onError: (Object _) => null),
+    ]);
+    if (values[0] is! List || values[1] is! List) {
+      throw const ResearchOSApiException('GitHub returned an unexpected dashboard response.');
+    }
+    final runData = values[2];
+    return {
+      'repository': {'full_name': metadata['full_name'], 'html_url': metadata['html_url'],
+        'default_branch': metadata['default_branch'], 'visibility': metadata['visibility'] ?? 'public'},
+      'commits': values[0], 'pull_requests': values[1],
+      'workflow_runs': runData is Map && runData['workflow_runs'] is List ? runData['workflow_runs'] : null,
+      'workflow_runs_error': runData == null ? 'GitHub Actions data unavailable' : null,
+      'source': 'github_public_rest_api', 'read_only': true,
+    };
+  }
+
   Future<Map<String, dynamic>> searchMemory(String query) async {
     final uri = _uri('/v1/memory/search').replace(
       queryParameters: <String, String>{'q': query, 'limit': '5'},
