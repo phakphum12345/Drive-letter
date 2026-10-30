@@ -109,6 +109,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Skipped: 1'), findsOneWidget);
     expect(find.textContaining('Skipped, missing, stale and unknown evidence are not PASS'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, 520));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('recon-back-box-owner-selector')));
     await tester.pumpAndSettle();
