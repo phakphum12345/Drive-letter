@@ -425,10 +425,7 @@ class ResearchOSApiClient {
     return Map<String, dynamic>.from(value);
   }
 
-  Future<Object?> _getPublicGitHubJson(
-    String path,
-    Map<String, String> queryParameters,
-  ) async {
+  Future<Object?> _getPublicGitHubJson(String path, Map<String, String> queryParameters) async {
     final uri = Uri.https('api.github.com', path, queryParameters);
     final response = await _client.get(uri, headers: const <String, String>{
       'Accept': 'application/vnd.github+json',
@@ -439,11 +436,19 @@ class ResearchOSApiClient {
     try {
       decoded = jsonDecode(response.body);
     } on FormatException {
-      throw ResearchOSApiException('GitHub returned invalid JSON (HTTP ${response.statusCode}).', statusCode: response.statusCode);
+      throw ResearchOSApiException(
+        'GitHub returned invalid JSON (HTTP ${response.statusCode}).',
+        statusCode: response.statusCode,
+      );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final detail = decoded is Map ? decoded['message'] ?? decoded['error'] ?? 'Unknown GitHub API error' : 'Unknown GitHub API error';
-      throw ResearchOSApiException('GitHub public API error ${response.statusCode}: $detail', statusCode: response.statusCode);
+      final detail = decoded is Map
+          ? decoded['message'] ?? decoded['error'] ?? 'Unknown GitHub API error'
+          : 'Unknown GitHub API error';
+      throw ResearchOSApiException(
+        'GitHub public API error ${response.statusCode}: $detail',
+        statusCode: response.statusCode,
+      );
     }
     return decoded;
   }
