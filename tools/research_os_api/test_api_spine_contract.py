@@ -56,10 +56,17 @@ class APISpineContractTests(unittest.TestCase):
 
     def test_owner_desktop_startup_e2e_uses_the_api_gateway(self):
         workflow = self.read(".github/workflows/owner-special-friend.yml")
+        self.assertIn("Start Friend service + API Spine and prove Owner Desktop startup", workflow)
         self.assertIn("tools/research_os_api/render_server.py", workflow)
-        self.assertIn("RESEARCH_OS_API_BASE_URL=$apiBase", workflow)
+        self.assertIn("$env:RESEARCH_OS_API_BASE_URL = $apiBase", workflow)
+        self.assertIn("$env:RESEARCH_OS_FRIEND_URL = $friendUrl", workflow)
         self.assertIn("$apiBase/owner/health", workflow)
-        self.assertIn("OWNER_API_PID", workflow)
+        self.assertIn("$apiBase/owner/status", workflow)
+        self.assertIn("$apiBase/owner/provider", workflow)
+        self.assertIn("OWNER_DESKTOP_STARTUP_E2E=PASS", workflow)
+        self.assertIn("finally", workflow)
+        self.assertIn("Stop-Process -Id $gateway.Id", workflow)
+        self.assertIn("Stop-Process -Id $service.Id", workflow)
 
     def test_runtime_entrypoints_support_ephemeral_ports(self):
         api = self.read("tools/research_os_api/server.py")
