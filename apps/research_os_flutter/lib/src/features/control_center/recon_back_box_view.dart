@@ -357,7 +357,6 @@ class _ReconBackBoxViewState extends State<ReconBackBoxView> {
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           key: const Key('recon-back-box-owner-selector'),
-          value: _selectedOwner,
           decoration: const InputDecoration(labelText: 'GitHub Owner / Organization', border: OutlineInputBorder()),
           items: const <String>['phakphum12345', 'phakphoum38-stack']
               .map((owner) => DropdownMenuItem<String>(value: owner, child: Text(owner)))
