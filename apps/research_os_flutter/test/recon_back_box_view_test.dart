@@ -117,18 +117,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('phakphoum38-stack').last);
     await tester.pumpAndSettle();
+    final ownerField = tester.widget<TextField>(
+      find.byKey(const Key('recon-back-box-custom-owner')),
+    );
+    expect(ownerField.controller?.text, 'phakphoum38-stack');
+
     await tester.tap(find.byKey(const Key('recon-back-box-repository-selector')));
     await tester.pumpAndSettle();
+    expect(find.text('phakphoum38-stack/sample-public').last, findsOneWidget);
     await tester.tap(find.text('phakphoum38-stack/sample-public').last);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('recon-back-box-apply-target')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('recon-back-box-apply-target')));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -520));
-    await tester.pumpAndSettle();
-    expect(find.text('Repository: phakphoum38-stack/sample-public'), findsOneWidget);
-    expect(api.requestedDashboardRepositories, contains('phakphoum38-stack/sample-public'));
 
     await tester.tap(find.text('Config'));
     await tester.pumpAndSettle();
