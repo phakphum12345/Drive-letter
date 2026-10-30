@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import 'src/friend_app.dart';
 import 'src/owner_api.dart';
-import 'src/startup_probe.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,8 +14,9 @@ Future<void> main() async {
   final sessionId =
       Platform.environment['RESEARCH_OS_OWNER_SESSION'] ?? 'desktop';
   final baseUrl =
-      Platform.environment['RESEARCH_OS_FRIEND_URL'] ??
-      'http://127.0.0.1:8790';
+      (Platform.environment['RESEARCH_OS_API_BASE_URL'] ??
+              'https://phakphumwir.tail4b06c9.ts.net')
+          .trim();
 
   final api = HttpOwnerFriendApi(
     baseUrl: baseUrl,
@@ -26,20 +26,7 @@ Future<void> main() async {
   );
   registerOwnerFriendApi(api);
 
-  Map<String, dynamic>? startup;
-  String? startupError;
-
-  try {
-    startup = await OwnerStartupProbe(api).run();
-  } catch (error) {
-    startupError = error.toString();
-  }
-
-  runApp(
-    OwnerFriendApp(
-      api: api,
-      startup: startup,
-      startupError: startupError,
-    ),
-  );
+  // Never block the first frame on a remote API probe. The app shell is
+  // usable offline and reports backend availability in its status indicator.
+  runApp(OwnerFriendApp(api: api));
 }
