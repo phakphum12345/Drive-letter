@@ -29,7 +29,7 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Research-OS-Sync-Key, X-Research-OS-Owner, X-Research-OS-Profile, X-Research-OS-Session, X-Research-OS-OAuth-State",
+            "Content-Type, Authorization, X-Research-OS-Sync-Key, X-Research-OS-Owner, X-Research-OS-Profile, X-Research-OS-Session, X-Research-OS-OAuth-State, X-Research-OS-Client",
         )
         self.send_header("Access-Control-Max-Age", "86400")
         super().end_headers()

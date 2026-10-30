@@ -112,15 +112,26 @@ def verify_email_otp(email_value: str, code_value: str, *, now: int | None = Non
         if not isinstance(challenge, dict):
             raise EmailOTPError("The verification code is missing or expired", 401)
         if int(challenge.get("expires_at", 0)) <= current:
-            state.pop(key, None); _write(state)
+            challenge["digest"] = ""
+            challenge["salt"] = ""
+            challenge["expires_at"] = 0
+            state[key] = challenge
+            _write(state)
             raise EmailOTPError("The verification code has expired", 401)
         attempts = int(challenge.get("attempts", 0)) + 1
         challenge["attempts"] = attempts
         supplied = hashlib.sha256(f"{challenge.get('salt', '')}:{code}".encode()).hexdigest()
         if attempts > OTP_MAX_ATTEMPTS or not hmac.compare_digest(str(challenge.get("digest") or ""), supplied):
-            if attempts >= OTP_MAX_ATTEMPTS: state.pop(key, None)
-            else: state[key] = challenge
+            if attempts >= OTP_MAX_ATTEMPTS:
+                challenge["digest"] = ""
+                challenge["salt"] = ""
+                challenge["expires_at"] = 0
+            state[key] = challenge
             _write(state)
             raise EmailOTPError("The verification code is invalid", 401)
-        state.pop(key, None); _write(state)
+        challenge["digest"] = ""
+        challenge["salt"] = ""
+        challenge["expires_at"] = 0
+        state[key] = challenge
+        _write(state)
     return email

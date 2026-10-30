@@ -322,7 +322,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             session = verify_session(token)
         except ValueError:
             return {"connected": False, "account": None}
-        return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": session["role"]}}
+        return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": str(session["role"]).upper()}}
 
     def _authorize_github_account_control(self) -> bool:
         """Protect account/repository enumeration with the existing owner authority."""
@@ -603,7 +603,10 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             if path == "/v1/auth/email-otp/verify":
                 try:
                     result = verify_email_otp(str(body.get("email") or ""), str(body.get("code") or ""))
-                    self._send(HTTPStatus.OK, {k: v for k, v in result.items() if k != "set_cookie"}, result.get("set_cookie"))
+                    response = {k: v for k, v in result.items() if k not in {"set_cookie", "session"}}
+                    if str(self.headers.get("X-Research-OS-Client") or "").lower() == "native":
+                        response["session"] = result["session"]
+                    self._send(HTTPStatus.OK, response, result.get("set_cookie"))
                 except EmailOTPError as exc: self._send(exc.status, {"error": "email_otp_rejected", "detail": str(exc)})
                 return
             if path.startswith("/platform/v1"):

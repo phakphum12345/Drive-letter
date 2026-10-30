@@ -102,7 +102,7 @@ def auth_status(cookie_header_value: str | None) -> dict:
         session = verify_session(token)
     except ValueError:
         return {"connected": False, "account": None}
-    return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": session["role"]}}
+    return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": str(session["role"]).upper()}}
 
 
 def auth_signout(cookie_header_value: str | None) -> str:
