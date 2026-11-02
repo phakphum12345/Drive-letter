@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.0",
+  "agent_id": "agent-windows-001",
+  "owner_id": "owner-example",
+  "device_id": "device-example",
+  "protocol_versions": [
+    "1.0"
+  ],
+  "capabilities": [
+    {
+      "name": "filesystem.approved_read",
+      "version": "1.0"
+    },
+    {
+      "name": "windows.process.inspect",
+      "version": "1.0"
+    }
+  ],
+  "lifecycle_state": "ACTIVE",
+  "os_name": "Windows",
+  "os_version": "11",
+  "agent_version": "0.1.0",
+  "last_heartbeat_at": "2026-11-03T00:00:00Z",
+  "registered_at": "2026-11-02T00:00:00Z",
+  "revoked_at": null
+}
