@@ -14,7 +14,7 @@ class RenderServerEntrypointTests(unittest.TestCase):
                 server = server_factory.return_value
                 server.server_address = (expected_host, expected_port)
                 self.assertEqual(render_server.main(), 0)
-                server_factory.assert_called_once_with((expected_host, expected_port))
+                server_factory.assert_called_once_with((expected_host, expected_port), render_server.CloudResearchOSHandler)
                 server.serve_forever.assert_called_once_with()
                 server.server_close.assert_called_once_with()
                 self.assertEqual(os.environ["RESEARCH_OS_API_PORT"], str(expected_port))
