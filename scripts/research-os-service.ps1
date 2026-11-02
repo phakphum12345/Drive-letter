@@ -152,7 +152,8 @@ function Set-ServiceEnvironment([string]$PythonPath) {
     "RESEARCH_OS_DATA_DIR=$DataDir",
     "RESEARCH_OS_PYTHON_EXE=$PythonPath",
     'RESEARCH_OS_API_HOST=127.0.0.1',
-    "RESEARCH_OS_API_PORT=$ApiPort"
+    "RESEARCH_OS_API_PORT=$ApiPort",
+    'RESEARCH_OS_FRIEND_URL=http://127.0.0.1:8790'
   )
 
   New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Value $values -Force | Out-Null
