@@ -2,9 +2,10 @@ name: Research OS API Spine and Authentication CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, docs/research-os-cloud-local-architecture]
     paths:
       - "tools/research_os_api/**"
+      - "contracts/research_os/cloud_local/**"
       - "owner_special/flutter_app/**"
       - "scripts/start-research-os-local.ps1"
       - "scripts/configure-research-os-tailscale-serve.ps1"
@@ -29,11 +30,13 @@ jobs:
       - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v5
         with:
           python-version: "3.11"
+      - name: Install contract schema validator
+        run: python -m pip install -r tools/research_os_api/contract-requirements.txt
       - name: Run focused API spine tests
         env:
           PYTHONPATH: tools/research_os_api:.
         run: |
-          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_google_identity tools.research_os_api.test_server_auth_routes -v
+          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_google_identity tools.research_os_api.test_server_auth_routes tools.research_os_api.test_cloud_local_contract -v
 
   owner-special-flutter:
     name: Owner Special Flutter analyze and tests

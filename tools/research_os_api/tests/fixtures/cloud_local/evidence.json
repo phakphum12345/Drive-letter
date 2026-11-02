@@ -1,0 +1,17 @@
+{
+  "contract_version": "1.0",
+  "evidence_id": "ev-001",
+  "job_id": "job-cloud-001",
+  "owner_id": "owner-example",
+  "stage_id": "stage-analysis",
+  "actor_id": "worker-cloud-001",
+  "event_type": "job.started",
+  "occurred_at": "2026-11-03T00:01:00Z",
+  "result": "SUCCESS",
+  "source_sha": "0123456789abcdef0123456789abcdef01234567",
+  "policy_decision_id": "policy-001",
+  "correlation_id": "corr-cloud-001",
+  "lease_fingerprint": "0123456789abcdef",
+  "artifact_hashes": [],
+  "previous_evidence_id": null
+}
