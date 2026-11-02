@@ -89,7 +89,7 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn("configure-research-os-tailscale-serve.ps1", launcher)
         self.assertIn("-ApiPort $Port", launcher)
         self.assertIn("Get-FreeLoopbackPort", launcher)
-        self.assertIn("tailscale serve --bg", serve)
+        self.assertIn("$tailscalePath serve --bg", serve)
         self.assertIn("status --json", serve)
         self.assertIn("serve status", serve)
         self.assertIn("phakphumwir.tail4b06c9.ts.net", serve)
