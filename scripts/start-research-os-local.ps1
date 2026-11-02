@@ -9,6 +9,32 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Tailscale Serve configuration on Windows requires an elevated terminal.
+# Re-launch this same script through UAC so users do not need to configure
+# privileges or ports manually.
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  $arguments = @(
+    "-NoProfile",
+    "-ExecutionPolicy Bypass",
+    "-File `"$PSCommandPath`"",
+    "-DataDir `"$DataDir`"",
+    "-HostAddress `"$HostAddress`"",
+    "-Port $Port",
+    "-FriendPort $FriendPort",
+    "-Provider $Provider"
+  )
+  if ($Background) { $arguments += "-Background" }
+  try {
+    $elevated = Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList ($arguments -join " ") -Wait -PassThru
+    exit $elevated.ExitCode
+  } catch {
+    throw "Research OS setup needs Administrator approval to configure Tailscale Serve. No services were started. $($_.Exception.Message)"
+  }
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 # Establish the repository import boundary for every child Python process. The local
 # launcher intentionally starts render_server.py from tools/research_os_api, while
@@ -21,6 +47,8 @@ if ([string]::IsNullOrWhiteSpace($env:PYTHONPATH)) {
 }
 $ApiDir = Join-Path $RepoRoot "tools\research_os_api"
 $FriendScript = Join-Path $RepoRoot "owner_special\scripts\run_friend_service.py"
+$ServeScript = Join-Path $PSScriptRoot "configure-research-os-tailscale-serve.ps1"
+$ExpectedServeHostname = "phakphumwir.tail4b06c9.ts.net"
 $RunDir = Join-Path $DataDir "run"
 $LogDir = Join-Path $DataDir "logs"
 $PidFile = Join-Path $RunDir "research-os-api.pid"
@@ -147,7 +175,8 @@ Write-Host "Provider       : $Provider"
 Write-Host "Friend URL     : $FriendUrl"
 Write-Host "Local API URL  : http://127.0.0.1:$Port"
 Write-Host "Bind address   : $HostAddress (loopback-only by default)"
-Write-Host "Tailscale Serve : point its local backend to http://127.0.0.1:$Port; no public API port is opened"
+Write-Host "Tailscale Serve : configured automatically after API startup"
+Write-Host "Public API      : https://$ExpectedServeHostname"
 Write-Host ""
 Write-Host "Friend Service is a required local dependency for RESEARCH_OS_AI_ROUTE=friend."
 Write-Host "Secrets are NOT stored by this script."
@@ -182,19 +211,86 @@ if ($Background) {
   }
   $process = Start-Process @startArgs
   Set-Content -Path $PidFile -Value $process.Id -NoNewline
+
+  $apiReady = $false
+  for ($i = 0; $i -lt 60; $i++) {
+    if ($process.HasExited) {
+      $detail = if (Test-Path $ErrLog) { Get-Content $ErrLog -Tail 40 | Out-String } else { "no stderr log" }
+      if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
+      Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+      Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
+      throw "Research OS API exited before becoming ready. $detail"
+    }
+    try {
+      $health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
+      if ($health.status -eq "ok") { $apiReady = $true; break }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+  }
+  if (-not $apiReady) {
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
+    throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog"
+  }
+
+  try {
+    & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
+  } catch {
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
+    throw
+  }
+
   Write-Host "Research OS Local API started in background (PID $($process.Id))."
   Write-Host "Friend Service PID : $($friendProcess.Id)"
-  Write-Host "PID files : $PidFile / $FriendPidFile"
-  Write-Host "Logs     : $LogDir"
+  Write-Host "API PID file       : $PidFile"
+  Write-Host "Logs               : $LogDir"
+  Write-Host "Flutter endpoint   : https://$ExpectedServeHostname"
   exit 0
 }
 
+$foregroundApi = $null
 try {
-  Push-Location $ApiDir
-  python render_server.py
+  $foregroundArgs = @{
+    FilePath = "python"
+    ArgumentList = "render_server.py"
+    WorkingDirectory = $ApiDir
+    WindowStyle = "Hidden"
+    RedirectStandardOutput = $OutLog
+    RedirectStandardError = $ErrLog
+    PassThru = $true
+  }
+  $foregroundApi = Start-Process @foregroundArgs
+  Set-Content -Path $PidFile -Value $foregroundApi.Id -NoNewline
+
+  $apiReady = $false
+  for ($i = 0; $i -lt 60; $i++) {
+    if ($foregroundApi.HasExited) {
+      $detail = if (Test-Path $ErrLog) { Get-Content $ErrLog -Tail 40 | Out-String } else { "no stderr log" }
+      throw "Research OS API exited before becoming ready. $detail"
+    }
+    try {
+      $health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
+      if ($health.status -eq "ok") { $apiReady = $true; break }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+  }
+  if (-not $apiReady) { throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog" }
+
+  & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
+  Write-Host "Research OS API is ready at https://$ExpectedServeHostname"
+  Write-Host "Press Ctrl+C to stop the local API and Friend Service."
+  Wait-Process -Id $foregroundApi.Id
 }
 finally {
-  Pop-Location
+  if ($foregroundApi -and -not $foregroundApi.HasExited) {
+    Stop-Process -Id $foregroundApi.Id -Force -ErrorAction SilentlyContinue
+  }
+  Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
   if ($friendProcess -and -not $friendProcess.HasExited) {
     Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue
   }

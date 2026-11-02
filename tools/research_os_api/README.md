@@ -42,7 +42,7 @@ curl http://127.0.0.1:<API_PORT>/health
 curl http://127.0.0.1:<API_PORT>/owner/health
 ```
 
-`/owner/*` ถูก proxy ผ่าน API Spine ไปยัง Friend Service ภายในเครื่อง การเชื่อมต่อจาก iPhone/Web ใช้ `RESEARCH_OS_API_BASE_URL` เดียวกับหน้าเว็บ (ค่าเริ่มต้นเป็น Tailscale Serve URL) ไม่เชื่อมต่อ `127.0.0.1` ของเครื่อง client โดยตรง. พอร์ตภายในเป็น dynamic; หากใช้ Tailscale Serve ให้ชี้ backend ไปยัง API port ที่ launcher รายงานหลังเริ่มแต่ละครั้ง.
+`/owner/*` ถูก proxy ผ่าน API Spine ไปยัง Friend Service ภายในเครื่อง การเชื่อมต่อจาก iPhone/Web/Flutter ใช้ `RESEARCH_OS_API_BASE_URL` เดียวกัน (ค่าเริ่มต้นคือ `https://phakphumwir.tail4b06c9.ts.net`) และไม่เชื่อมต่อ `127.0.0.1` ของเครื่อง client โดยตรง. พอร์ต API และ Friend ภายในถูกเลือกแบบ dynamic; launcher จะตรวจสอบ Tailscale host และตั้งค่า Tailscale Serve ให้ proxy ไปยัง API port ที่เลือกโดยอัตโนมัติ จึงไม่ต้องกรอกหรือแก้ Port เอง. เครื่อง Host ต้องติดตั้งและ sign in Tailscale พร้อมเปิดใช้ HTTPS certificates/Serve ใน tailnet ก่อน; อุปกรณ์ client ต้องเชื่อมต่อและได้รับอนุญาตใน tailnet เดียวกัน.
 
 > ไม่ควรแก้ปัญหา `Connection refused` ด้วยการ fallback ไป `mock` เพราะจะทำให้ research response อาจกลายเป็น mock/echo ที่ไม่ใช่ผลจาก Friend runtime จริง
 

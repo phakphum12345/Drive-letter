@@ -75,5 +75,26 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn('default=0)', friend)
         self.assertIn("server.server_address[1]", api)
 
+    def test_native_flutter_and_web_share_the_canonical_tailscale_endpoint(self):
+        expected = "https://phakphumwir.tail4b06c9.ts.net"
+        native = self.read("owner_special/flutter_app/lib/main.dart")
+        web = self.read("apps/research_os_web/app.js")
+        self.assertIn(expected, native)
+        self.assertIn(expected, web)
+        self.assertNotIn("onrender.com", native.lower())
+
+    def test_local_launcher_automatically_updates_and_verifies_tailscale_serve(self):
+        launcher = self.read("scripts/start-research-os-local.ps1")
+        serve = self.read("scripts/configure-research-os-tailscale-serve.ps1")
+        self.assertIn("configure-research-os-tailscale-serve.ps1", launcher)
+        self.assertIn("-ApiPort $Port", launcher)
+        self.assertIn("Get-FreeLoopbackPort", launcher)
+        self.assertIn("$tailscalePath serve --bg", serve)
+        self.assertIn("status --json", serve)
+        self.assertIn("serve status", serve)
+        self.assertIn("phakphumwir.tail4b06c9.ts.net", serve)
+        self.assertIn("127.0.0.1:$ApiPort", serve)
+        self.assertNotIn("point its local backend", launcher)
+
 if __name__ == "__main__":
     unittest.main()
