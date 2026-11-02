@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -22,6 +23,40 @@ class ServerAuthRouteTests(unittest.TestCase):
         result = server_auth_routes.auth_status(None)
         self.assertFalse(result["connected"])
         self.assertIsNone(result["account"])
+
+    def test_google_qr_pairing_uses_public_callback_over_legacy_loopback_override(self):
+        public_callback = "https://research-os.example.com/v1/auth/google/callback"
+        legacy_callback = "http://127.0.0.1:8787/v1/auth/google/callback"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {
+                "RESEARCH_OS_DATA_DIR": temp_dir,
+                "RESEARCH_OS_GOOGLE_CLIENT_ID": "test-client.apps.googleusercontent.com",
+                "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "test-client-secret",
+                "RESEARCH_OS_PUBLIC_BASE_URL": "https://research-os.example.com",
+                "RESEARCH_OS_GOOGLE_IDENTITY_REDIRECT_URI": legacy_callback,
+            }
+            with patch.dict(os.environ, env, clear=True):
+                pairing = qr_pairing.create_pairing()
+                authorization_url = server_auth_routes.auth_pairing_authorize(
+                    "google",
+                    pairing["pairing_id"],
+                    pairing["pairing_secret"],
+                    public_callback,
+                )
+
+                query = parse_qs(urlparse(authorization_url).query)
+                self.assertEqual(query["redirect_uri"], [public_callback])
+
+                state = query["state"][0]
+                state_path = (
+                    Path(temp_dir)
+                    / "google_workspace"
+                    / "identity_oauth_state.json"
+                )
+                state_payload = json.loads(state_path.read_text(encoding="utf-8"))
+                self.assertEqual(state_payload["state"], state)
+                self.assertEqual(state_payload["redirect_uri"], public_callback)
 
     def test_non_google_qr_callback_waits_for_existing_session_approval(self):
         previous_data_dir = os.environ.get("RESEARCH_OS_DATA_DIR")
