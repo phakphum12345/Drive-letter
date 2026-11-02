@@ -12,6 +12,7 @@ import 'launch_desk_page.dart';
 import 'mission_control_desktop_page.dart';
 import 'native_core_workspace_page.dart';
 import 'owner_api.dart';
+import 'research_os_ai_chat_page.dart';
 import 'team_center.dart';
 
 class OwnerFriendApp extends StatefulWidget {
@@ -40,7 +41,7 @@ class _OwnerFriendAppState extends State<OwnerFriendApp> {
     );
     final pages = <Widget>[
       MissionControlDesktopPage(projection: null),
-      _FriendChatPage(api: widget.api, team: _currentTeam),
+      ResearchOsAiChatPage(api: widget.api, teamName: _currentTeam.name),
       LaunchDeskPage(api: widget.api),
       _CapabilitiesPage(api: widget.api, startup: widget.startup),
       _MemoryPage(api: widget.api),
@@ -120,200 +121,6 @@ class _TeamPage extends StatelessWidget {
         const SizedBox(height: 16),
         const Wrap(spacing: 8, runSpacing: 8, children: [Chip(label: Text('Chat')), Chip(label: Text('Agents')), Chip(label: Text('Memory')), Chip(label: Text('Files')), Chip(label: Text('Tasks'))]),
       ]),
-    );
-  }
-}
-
-class _FriendChatPage extends StatefulWidget {
-  const _FriendChatPage({required this.api, required this.team});
-  final OwnerFriendApi api;
-  final TeamRecord team;
-  @override
-  State<_FriendChatPage> createState() => _FriendChatPageState();
-}
-
-class _FriendChatPageState extends State<_FriendChatPage> {
-  final _controller = TextEditingController();
-  final _scrollController = ScrollController();
-  bool _busy = false;
-  bool _turboMillion = true;
-  final List<_ChatMessage> _messages = <_ChatMessage>[
-    const _ChatMessage(role: 'assistant', text: 'สวัสดีครับ ผม Friend\nพร้อมช่วยวางแผน วิเคราะห์ และเดินงานใน Research OS ให้ครับ'),
-  ];
-  String _scale = '-';
-  int _capacity = 0;
-  int _activeWorkers = 0;
-  int _batches = 0;
-  String _factory = '-';
-
-  @override
-  void dispose() { _controller.dispose(); _scrollController.dispose(); super.dispose(); }
-
-  Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _busy) return;
-    _controller.clear();
-    setState(() {
-      _busy = true;
-      _messages.add(_ChatMessage(role: 'user', text: text));
-    });
-    await _scrollToBottom();
-    try {
-      final response = await widget.api.chat(text, complexity: 6, risk: 3, parallelism: 8, helperBudget: _turboMillion ? 1000000 : 0, requestedSkills: const <String>['analysis', 'planning', 'memory', 'quality']);
-      final decision = Map<String, dynamic>.from(response['decision'] as Map);
-      final helpers = Map<String, dynamic>.from(response['helpers'] as Map? ?? const <String, dynamic>{});
-      final factory = Map<String, dynamic>.from(response['factory'] as Map);
-      setState(() {
-        _messages.add(_ChatMessage(role: 'assistant', text: response['text']?.toString() ?? ''));
-        _scale = decision['scale']?.toString() ?? '-';
-        _capacity = (decision['capacity'] as num?)?.toInt() ?? 0;
-        _activeWorkers = (helpers['active_workers'] as num?)?.toInt() ?? 0;
-        _batches = (helpers['batches'] as num?)?.toInt() ?? 0;
-        _factory = (factory['stages'] as List? ?? const <Object>[]).join(' → ');
-      });
-    } catch (error) {
-      setState(() => _messages.add(_ChatMessage(role: 'assistant', text: 'ขออภัยครับ เกิดข้อผิดพลาดจาก Friend Service\n$error')));
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-        await _scrollToBottom();
-      }
-    }
-  }
-
-  Future<void> _scrollToBottom() async {
-    await Future<void>.delayed(const Duration(milliseconds: 40));
-    if (!_scrollController.hasClients) return;
-    await _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(2, 2, 2, 10),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Friend', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 2),
-            Text('Your research copilot for planning, analysis and execution', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ])),
-          FilterChip(
-            key: const Key('turbo-million'),
-            selected: _turboMillion,
-            onSelected: (value) => setState(() => _turboMillion = value),
-            avatar: Icon(Icons.bolt, size: 16, color: _turboMillion ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
-            label: const Text('Turbo'),
-          ),
-        ]),
-      ),
-      Expanded(
-        child: Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(children: [
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) => _MessageBubble(message: _messages[index]),
-              ),
-            ),
-            if (_busy) const Padding(padding: EdgeInsets.fromLTRB(22, 0, 22, 12), child: Align(alignment: Alignment.centerLeft, child: _ThinkingIndicator())),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: theme.colorScheme.outline.withValues(alpha: .10))),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Expanded(child: TextField(key: const Key('friend-input'), controller: _controller, minLines: 1, maxLines: 5, onSubmitted: (_) => _send(), decoration: const InputDecoration(hintText: 'Message Friend…', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none))),
-                  Padding(padding: const EdgeInsets.only(right: 6, bottom: 6), child: IconButton.filled(key: const Key('friend-send'), onPressed: _busy ? null : _send, tooltip: 'Send', icon: _busy ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.arrow_upward, size: 18))),
-                ]),
-              ),
-            ),
-          ]),
-        ),
-      ),
-      const SizedBox(height: 8),
-      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-        _Metric(label: 'Brain scale:', value: _scale),
-        _Metric(label: 'Logical capacity:', value: '$_capacity'),
-        _Metric(label: 'Active workers:', value: '$_activeWorkers'),
-        _Metric(label: 'Batches:', value: '$_batches'),
-        _Metric(label: 'Factory:', value: _factory),
-      ])),
-    ]);
-  }
-}
-
-class _ChatMessage {
-  const _ChatMessage({required this.role, required this.text});
-  final String role;
-  final String text;
-}
-
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message});
-  final _ChatMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final user = message.role == 'user';
-    return Align(
-      alignment: user ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 820),
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(
-          color: user ? theme.colorScheme.primary.withValues(alpha: .10) : theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: user ? theme.colorScheme.primary.withValues(alpha: .14) : theme.colorScheme.outline.withValues(alpha: .08)),
-        ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: user ? theme.colorScheme.primary.withValues(alpha: .15) : theme.colorScheme.secondary.withValues(alpha: .14), borderRadius: BorderRadius.circular(9)), child: Icon(user ? Icons.person_outline : Icons.auto_awesome, size: 16, color: user ? theme.colorScheme.primary : theme.colorScheme.secondary)),
-          const SizedBox(width: 11),
-          Expanded(child: SelectableText(message.text, key: user ? null : const Key('friend-answer'), style: theme.textTheme.bodyLarge)),
-        ]),
-      ),
-    );
-  }
-}
-
-class _ThinkingIndicator extends StatelessWidget {
-  const _ThinkingIndicator();
-  @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2)),
-    const SizedBox(width: 10),
-    Text('Friend is thinking…', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-  ]);
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: Text(
-          '$label $value',
-          style: theme.textTheme.labelSmall,
-        ),
-      ),
     );
   }
 }

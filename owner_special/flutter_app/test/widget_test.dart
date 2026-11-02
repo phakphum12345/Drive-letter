@@ -4,14 +4,18 @@ import 'package:research_os_owner_special/src/friend_app.dart';
 import 'package:research_os_owner_special/src/owner_api.dart';
 
 class FakeOwnerFriendApi extends OwnerFriendApi {
+  String? lastPrompt;
+  int? lastComplexity;
+  int? lastHelperBudget;
+
   @override
   Future<Map<String, dynamic>> health() async => <String, dynamic>{'status': 'ok'};
 
   @override
   Future<Map<String, dynamic>> status() async => <String, dynamic>{
-        'brain_profiles': <String, int>{'1^3': 1, '3^3': 27, '6^3': 216, '6^6': 46656, 'fast-1m': 1000000},
+        'brain_profiles': <String, int>{'1^3': 1, '3^3': 27},
         'helper_scheduler': <String, int>{'max_logical_helpers': 1000000, 'max_active_workers': 128},
-        'capabilities': <String>['brain', 'skills', 'persistent-memory', 'factory'],
+        'capabilities': <String>['brain', 'skills', 'persistent-memory'],
       };
 
   @override
@@ -27,13 +31,8 @@ class FakeOwnerFriendApi extends OwnerFriendApi {
       };
 
   @override
-  Future<Map<String, dynamic>> configureProvider({required String baseUrl, required String model, String? apiKey}) async => <String, dynamic>{
-        'enabled': true,
-        'credential_present': true,
-        'secret_backend': 'test',
-        'base_url': baseUrl,
-        'model': model,
-      };
+  Future<Map<String, dynamic>> configureProvider({required String baseUrl, required String model, String? apiKey}) async =>
+      <String, dynamic>{'enabled': true, 'credential_present': true, 'secret_backend': 'test'};
 
   @override
   Future<Map<String, dynamic>> testProvider() async => <String, dynamic>{'connected': true};
@@ -47,19 +46,20 @@ class FakeOwnerFriendApi extends OwnerFriendApi {
     int helperBudget = 0,
     List<String> requestedSkills = const <String>[],
     List<String> requestedTools = const <String>[],
-  }) async => <String, dynamic>{
-        'text': 'friend:$text',
-        'decision': <String, dynamic>{
-          'scale': helperBudget >= 1000000 ? 'fast-1m' : '6^6',
-          'capacity': helperBudget >= 1000000 ? 1000000 : 46656,
-        },
-        'helpers': <String, dynamic>{'active_workers': 128, 'batches': 7813},
-        'factory': <String, dynamic>{'stages': <String>['master', 'factory', 'team', 'tests', 'release']},
-      };
+  }) async {
+    lastPrompt = text;
+    lastComplexity = complexity;
+    lastHelperBudget = helperBudget;
+    return <String, dynamic>{
+      'text': 'Research OS ตอบกลับ: $text',
+      'decision': <String, dynamic>{'scale': helperBudget >= 1000000 ? 'fast-1m' : '6^6', 'capacity': helperBudget >= 1000000 ? 1000000 : 46656},
+      'helpers': <String, dynamic>{'active_workers': 128, 'batches': 7813},
+    };
+  }
 }
 
 void main() {
-  testWidgets('Owner Friend desktop uses bounded million-helper mode', (tester) async {
+  testWidgets('Research OS AI chat renders controls and sends through the existing API', (tester) async {
     tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -67,28 +67,58 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(OwnerFriendApp(api: FakeOwnerFriendApi()));
+    final api = FakeOwnerFriendApi();
+    await tester.pumpWidget(OwnerFriendApp(api: api));
     await tester.pump();
 
-    // Control Center is the default surface; explicitly open Friend before
-    // asserting Friend-specific controls.
     await tester.tap(find.text('Friend Runtime').first);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('turbo-million')), findsOneWidget);
-    expect(find.byKey(const Key('friend-input')), findsOneWidget);
-    expect(find.byKey(const Key('friend-send')), findsOneWidget);
+    expect(find.text('AI Chat'), findsOneWidget);
+    expect(find.byKey(const Key('ai-chat-input')), findsOneWidget);
+    expect(find.byKey(const Key('ai-chat-send')), findsOneWidget);
+    expect(find.byKey(const Key('ai-chat-mode')), findsOneWidget);
+    expect(find.byKey(const Key('ai-chat-turbo')), findsOneWidget);
+    expect(find.text('ค้นคว้าข้อมูล'), findsOneWidget);
+    expect(find.text('วิเคราะห์ปัญหา'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('friend-input')), 'hello');
-    await tester.tap(find.byKey(const Key('friend-send')));
+    await tester.enterText(find.byKey(const Key('ai-chat-input')), 'ตรวจสอบระบบ Research OS');
+    await tester.tap(find.byKey(const Key('ai-chat-send')));
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('friend:hello'), findsOneWidget);
-    expect(find.text('Brain scale: fast-1m'), findsOneWidget);
-    expect(find.text('Logical capacity: 1000000'), findsOneWidget);
-    expect(find.text('Active workers: 128'), findsOneWidget);
-    expect(find.text('Batches: 7813'), findsOneWidget);
-    expect(find.textContaining('master → factory → team → tests → release'), findsOneWidget);
+    expect(api.lastPrompt, 'ตรวจสอบระบบ Research OS');
+    expect(api.lastHelperBudget, 1000000);
+    expect(find.text('Research OS ตอบกลับ: ตรวจสอบระบบ Research OS'), findsOneWidget);
+    expect(find.textContaining('Brain: fast-1m'), findsOneWidget);
+  });
+
+  testWidgets('Research OS AI chat can attach context to a prompt', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final api = FakeOwnerFriendApi();
+    await tester.pumpWidget(OwnerFriendApp(api: api));
+    await tester.pump();
+    await tester.tap(find.text('Friend Runtime').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('เพิ่มบริบท/ข้อความอ้างอิง'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'ข้อกำหนดระบบ: ต้องรักษาข้อมูลเดิม');
+    await tester.tap(find.text('ใช้บริบทนี้'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('ai-chat-input')), 'ช่วยวางแผนแก้ไข');
+    await tester.tap(find.byKey(const Key('ai-chat-send')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(api.lastPrompt, contains('ข้อกำหนดระบบ: ต้องรักษาข้อมูลเดิม'));
+    expect(api.lastPrompt, contains('ช่วยวางแผนแก้ไข'));
   });
 }
