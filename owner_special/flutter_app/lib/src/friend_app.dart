@@ -12,6 +12,7 @@ import 'launch_desk_page.dart';
 import 'mission_control_desktop_page.dart';
 import 'native_core_workspace_page.dart';
 import 'owner_api.dart';
+import 'research_os_ai_chat_page.dart';
 import 'team_center.dart';
 
 class OwnerFriendApp extends StatefulWidget {
@@ -40,7 +41,7 @@ class _OwnerFriendAppState extends State<OwnerFriendApp> {
     );
     final pages = <Widget>[
       MissionControlDesktopPage(projection: null),
-      _FriendChatPage(api: widget.api, team: _currentTeam),
+      ResearchOsAiChatPage(api: widget.api, teamName: _currentTeam.name),
       LaunchDeskPage(api: widget.api),
       _CapabilitiesPage(api: widget.api, startup: widget.startup),
       _MemoryPage(api: widget.api),
