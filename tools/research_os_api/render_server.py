@@ -40,8 +40,8 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
 
 
 def main() -> int:
-    host = os.getenv("HOST", "127.0.0.1")
-    port = int(os.getenv("PORT", "0"))
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "10000"))
     server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
     actual_port = int(server.server_address[1])
     os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
