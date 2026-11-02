@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 import unittest
 from pathlib import Path
@@ -88,6 +87,14 @@ class CloudLocalContractTests(unittest.TestCase):
         checkpoint["full_transcript"] = "not permitted"
         validator = Draft202012Validator(self.schemas["checkpoint.schema.json"])
         self.assertFalse(validator.is_valid(checkpoint))
+
+    def test_checkpoint_rejects_sensitive_nested_workflow_context(self):
+        validator = Draft202012Validator(self.schemas["checkpoint.schema.json"])
+        for field in ("full_transcript", "reasoning", "access_token"):
+            with self.subTest(field=field):
+                checkpoint = self.load_json(FIXTURE_ROOT / "checkpoint.json")
+                checkpoint["workflow_context"][field] = "not permitted"
+                self.assertFalse(validator.is_valid(checkpoint))
 
 
 if __name__ == "__main__":
