@@ -61,7 +61,30 @@
     },
     "workflow_context": {
       "type": "object",
-      "maxProperties": 64
+      "additionalProperties": false,
+      "maxProperties": 2,
+      "properties": {
+        "completed": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "pending": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      }
     },
     "supersedes_checkpoint_id": {
       "type": [
