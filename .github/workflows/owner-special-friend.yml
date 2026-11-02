@@ -6,6 +6,9 @@ on:
     paths:
       - 'owner_special/**'
       - 'v3/research_os_v3/**'
+      - 'tools/research_os_api/**'
+      - 'scripts/start-research-os-local.ps1'
+      - 'scripts/configure-research-os-tailscale-serve.ps1'
       - '.github/workflows/owner-special-friend.yml'
       - 'current/RESEARCH_OS_PLATFORM_*.json'
       - 'current/PLATFORM_PROJECT_SNAPSHOT_CONTRACT.json'
@@ -15,6 +18,9 @@ on:
     paths:
       - 'owner_special/**'
       - 'v3/research_os_v3/**'
+      - 'tools/research_os_api/**'
+      - 'scripts/start-research-os-local.ps1'
+      - 'scripts/configure-research-os-tailscale-serve.ps1'
       - '.github/workflows/owner-special-friend.yml'
       - 'current/RESEARCH_OS_PLATFORM_*.json'
       - 'current/PLATFORM_PROJECT_SNAPSHOT_CONTRACT.json'
