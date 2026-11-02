@@ -15,6 +15,8 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
+สำหรับตัวติดตั้ง Windows แบบ Service: API Service จะได้รับ `RESEARCH_OS_FRIEND_URL=http://127.0.0.1:8790` จาก ServiceHost และ registry environment ซึ่งตรงกับพอร์ตที่ติดตั้ง `ResearchOSOwnerFriendService`; อย่าใช้ `127.0.0.1:0` เป็น Friend endpoint. ตรวจสุขภาพได้ด้วย `http://127.0.0.1:8787/owner/health` หลังทั้งสอง Service ทำงานแล้ว.
+
 ```powershell
 .\scripts\start-research-os-local.ps1
 ```
