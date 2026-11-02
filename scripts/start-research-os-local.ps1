@@ -9,6 +9,32 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Tailscale Serve configuration on Windows requires an elevated terminal.
+# Re-launch this same script through UAC so users do not need to configure
+# privileges or ports manually.
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  $arguments = @(
+    "-NoProfile",
+    "-ExecutionPolicy Bypass",
+    "-File `"$PSCommandPath`"",
+    "-DataDir `"$DataDir`"",
+    "-HostAddress `"$HostAddress`"",
+    "-Port $Port",
+    "-FriendPort $FriendPort",
+    "-Provider $Provider"
+  )
+  if ($Background) { $arguments += "-Background" }
+  try {
+    $elevated = Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList ($arguments -join " ") -Wait -PassThru
+    exit $elevated.ExitCode
+  } catch {
+    throw "Research OS setup needs Administrator approval to configure Tailscale Serve. No services were started. $($_.Exception.Message)"
+  }
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 # Establish the repository import boundary for every child Python process. The local
 # launcher intentionally starts render_server.py from tools/research_os_api, while
