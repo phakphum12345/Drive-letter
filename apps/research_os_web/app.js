@@ -33,3 +33,52 @@ $('authButton').addEventListener('click',handleAuth);
 $('loginOptionsButton').addEventListener('click',showLoginOptions);
 request('/health').then(data=>{$('health').textContent=data.version||'ONLINE'}).catch(()=>{$('health').textContent='OFFLINE'});
 refreshAuth().catch(()=>{});
+
+
+// Platform workspace navigation and responsive controls.
+function setPlatformView(view,moduleName){
+  const chat=view!=='registry';
+  $('chatView').hidden=!chat;
+  $('registryView').hidden=chat;
+  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===(chat?'chat':'registry')&&(!chat?button.dataset.module===moduleName:!button.dataset.module)));
+  $('pageTitle').textContent=chat?'Research Chat':(moduleName||'Platform Directory');
+  if(!chat)$('registryTitle').textContent=moduleName||'Platform domains';
+  document.body.classList.remove('focus-mode');
+  $('sidebar').classList.remove('open');
+  $('sidebarScrim').classList.remove('open');
+}
+document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('click',()=>{
+  setPlatformView(button.dataset.view,button.dataset.module);
+}));
+$('returnChat').addEventListener('click',()=>setPlatformView('chat'));
+$('openSidebar').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarScrim').classList.add('open')});
+$('closeSidebar').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
+$('sidebarScrim').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
+$('focusMode').addEventListener('click',()=>document.body.classList.toggle('focus-mode'));
+$('clearConversation').addEventListener('click',()=>{
+  if(state.sending)return;
+  state.messages=[];
+  $('messages').innerHTML='<div class="empty-state" id="welcomeState"><div class="welcome-mark">R</div><span class="eyebrow">YOUR RESEARCH DESK</span><h2>What are we solving today?</h2><p>เริ่มจากคำถามหรือปัญหาที่ต้องการค้นคว้า แล้วให้ Research OS ช่วยจัดโครงสร้างการตรวจสอบ</p></div>';
+  $('researchTitle').textContent='เริ่มต้นการวิจัย';
+  $('researchState').textContent='READY';
+});
+const promptInput=$('prompt');
+promptInput.addEventListener('input',()=>{promptInput.style.height='auto';promptInput.style.height=Math.min(promptInput.scrollHeight,180)+'px'});
+promptInput.addEventListener('keydown',event=>{
+  if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();$('researchForm').requestSubmit()}
+});
+document.querySelectorAll('[data-prompt]').forEach(button=>button.addEventListener('click',()=>{
+  promptInput.value=button.dataset.prompt;
+  promptInput.focus();
+  promptInput.dispatchEvent(new Event('input'));
+}));
+const healthIndicator=$('health');
+function updateConnection(ok,version){
+  if(healthIndicator)healthIndicator.textContent=ok?(version||'ONLINE'):'OFFLINE';
+  $('apiLabel').textContent=ok?'API connected':'API unavailable';
+  $('apiDetail').textContent=ok?(version||'Research OS service online'):'Check API endpoint or network';
+  $('apiDot').style.background=ok?'var(--good)':'var(--danger)';
+  $('connectionText').textContent=ok?'API connected':'API offline';
+  $('connectionDot').style.background=ok?'var(--good)':'var(--danger)';
+}
+request('/health').then(data=>updateConnection(true,data.version)).catch(()=>updateConnection(false));
