@@ -1,79 +1,65 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b0d0f">
-  <title>Research OS 3.2 — Wide Research</title>
-  <link rel="stylesheet" href="./app.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020"><meta name="description" content="Research OS unified research and engineering platform">
+<title>Research OS — Control Center</title><link rel="stylesheet" href="./app.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">R</div><div><strong>Research OS</strong><span>3.2 Unified</span></div></div>
-      <button class="new-research" id="newResearch">＋ New research</button>
-      <nav class="nav" aria-label="Workspace">
-        <a class="active" href="#research">⌕ <span>Research</span></a>
-        <a href="#evidence">◈ <span>Evidence</span></a>
-        <a href="#workspace">▦ <span>Workspace</span></a>
-        <a href="#providers">⌘ <span>Providers</span></a>
-      </nav>
-      <div class="nav-section"><span>UNIFIED SYSTEM</span><a href="#evidence">◉ <span>Unified Master</span><em>ON</em></a><a href="#evidence">◇ <span>V3 Bridge</span><em>ON</em></a><a href="#providers">⌘ <span>Providers</span></a></div>
-      <div class="sidebar-bottom"><div class="status-dot"></div><div><b>System online</b><small>Evidence discipline active</small></div></div>
-    </aside>
-
-    <main class="main" id="research">
-      <header class="topbar"><div class="crumb">Research / <b>New investigation</b></div><div class="top-actions"><button class="icon-btn" type="button" aria-label="Keyboard shortcuts">⌘ K</button><button class="avatar" type="button" aria-label="User profile">P</button></div></header>
-
-      <section class="research-home">
-        <div class="welcome">
-          <span class="live-pill"><i></i> RESEARCH OS 3.2</span>
-          <h1>ยินดีต้อนรับกลับครับเพื่อน</h1>
-          <h2>What do you want to<br><span>research today?</span></h2>
-          <p>Define the question, gather evidence, verify claims, synthesize findings, and preserve only knowledge that passes the research loop.</p>
-          <button type="button" class="run-btn" id="startWork">เริ่มงาน <span>→</span></button>
-        </div>
-
-        <section class="account-card" aria-label="Research OS account">
-          <div><span class="eyebrow">ACCOUNT</span><strong id="accountEmail">Not signed in</strong><span id="accountRole" class="role-badge role-user">USER</span></div>
-          <div class="account-actions">
-            <button type="button" class="tool-chip" id="authButton">Sign in</button>
-            <button type="button" class="tool-chip" id="loginOptionsButton">Login options</button>
-            <span id="ownerTools" data-min-role="OWNER" hidden>OWNER controls</span>
-          </div>
-          <div id="loginOptions" class="login-options" hidden aria-label="Login providers"></div>
-        </section>
-
-        <form id="researchForm" class="research-composer">
-          <div class="composer-top"><span class="spark">✦</span><textarea id="prompt" rows="4" required placeholder="Describe the research you want to investigate..."></textarea></div>
-          <div class="composer-bottom"><div class="composer-tools"><button type="button" class="tool-chip enabled" id="deepMode" aria-pressed="true">◉ Deep Research <span>ON</span></button><button type="button" class="tool-chip">＋ Sources</button><button type="button" class="tool-chip">◫ Evidence</button></div><button class="run-btn" type="submit" id="runButton">Start research <span>→</span></button></div>
-        </form>
-
-        <div class="suggestions"><span>Try a research task</span><button type="button" data-prompt="Compare the strongest evidence and explain the key findings">Compare evidence and explain the key findings</button><button type="button" data-prompt="Build a structured research brief with sources and open questions">Build a structured research brief</button><button type="button" data-prompt="Find gaps, contradictions, and unresolved questions">Find gaps and contradictions</button></div>
-
-        <section class="workspace-grid" id="workspace">
-          <div class="research-card output-card">
-            <div class="card-head"><div><span class="eyebrow">CURRENT RESEARCH</span><h2 id="researchTitle">Ready for your investigation</h2></div><span class="state" id="researchState">IDLE</span></div>
-            <div id="messages" class="messages"><div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div></div>
-          </div>
-          <aside class="research-card activity-card" id="evidence">
-            <div class="card-head"><div><span class="eyebrow">RESEARCH LOOP</span><h3>Evidence discipline</h3></div></div>
-            <div class="flow" id="researchFlow">
-              <div class="flow-item active" data-stage="define"><b>01</b><div><strong>Define</strong><small>Question · scope · goal</small></div><i>✓</i></div><div class="flow-line"></div>
-              <div class="flow-item" data-stage="plan"><b>02</b><div><strong>Plan</strong><small>Unified Master</small></div><i>○</i></div><div class="flow-line"></div>
-              <div class="flow-item" data-stage="gather"><b>03</b><div><strong>Gather</strong><small>V3 Bridge · Providers</small></div><i>○</i></div><div class="flow-line"></div>
-              <div class="flow-item" data-stage="verify"><b>04</b><div><strong>Verify</strong><small>Evidence Workspace</small></div><i>○</i></div><div class="flow-line"></div>
-              <div class="flow-item" data-stage="synthesize"><b>05</b><div><strong>Synthesize</strong><small>Findings · contradictions</small></div><i>○</i></div><div class="flow-line"></div>
-              <div class="flow-item" data-stage="remember"><b>06</b><div><strong>Remember</strong><small>Memory / Knowledge</small></div><i>○</i></div>
-            </div>
-            <div class="system-mini"><div><span>API</span><b id="health">checking…</b></div><div><span>Memory</span><b>READY</b></div><div><span>Bridge</span><b>ONLINE</b></div></div>
-          </aside>
-        </section>
-
-        <section class="platform-strip" id="providers"><div><span class="eyebrow">RESEARCH PRINCIPLE</span><h3>Claim → Evidence → Verification → Confidence → Conclusion.</h3></div><div class="platforms"><span>Windows <b>READY</b></span><span>iOS <b>READY</b></span><span>Web <b>ONLINE</b></span><span>API <b>8787</b></span></div></section>
-      </section>
-    </main>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar">
+  <div class="brand"><div class="brand-mark">R</div><div><strong>RESEARCH OS</strong><span>UNIFIED CONTROL CENTER</span></div><button class="mobile-close" id="closeSidebar" aria-label="Close menu">×</button></div>
+  <button class="new-research" id="newResearch" type="button"><span>＋</span> New research</button>
+  <nav class="nav" aria-label="Main navigation">
+    <div class="nav-label">WORKSPACE</div>
+    <button class="nav-link active" type="button" data-view="chat"><span>◉</span> Research Chat <kbd>⌘1</kbd></button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Work Graph"><span>⌘</span> Work Graph</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Experiments & Observe"><span>◷</span> Experiments & Observe</button>
+    <div class="nav-label">RESEARCH & EVIDENCE</div>
+    <button class="nav-link" type="button" data-view="registry" data-module="Sources & Evidence"><span>◇</span> Sources & Evidence</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Hypotheses & Candidates"><span>△</span> Hypotheses & Candidates</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Validation & Preflight"><span>✓</span> Validation & Preflight</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Results & Knowledge"><span>▤</span> Results & Knowledge</button>
+    <div class="nav-label">PLATFORM DOMAINS</div>
+    <button class="nav-link" type="button" data-view="registry" data-module="Product & World"><span>◎</span> Product & World</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Machine & Hardware"><span>▣</span> Machine & Hardware</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Platforms"><span>▦</span> Platforms</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Research Gap & Case"><span>⌕</span> Research Gap & Case</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Runtime & Compatibility"><span>⌁</span> Runtime & Compatibility</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="EFI & OpenCore"><span>◈</span> EFI & OpenCore</button>
+    <div class="nav-label">SYSTEM & GOVERNANCE</div>
+    <button class="nav-link" type="button" data-view="registry" data-module="Unified Master & Orchestration"><span>✳</span> Unified Master</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Agents & Workers"><span>♧</span> Agents & Workers</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Providers"><span>⌘</span> Providers</button>
+    <button class="nav-link" type="button" data-view="registry" data-module="Audit & Human Gate"><span>⛨</span> Audit & Human Gate</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="service-state"><i id="apiDot"></i><div><strong id="apiLabel">Checking API</strong><small id="apiDetail">Connecting to platform service</small></div></div>
+    <div class="account-row"><div class="account-avatar">U</div><div class="account-copy"><strong id="accountEmail">Not signed in</strong><small id="accountRole">USER</small></div><button id="authButton" class="account-action" type="button">Sign in</button></div>
+    <button id="loginOptionsButton" class="login-options-trigger" type="button">Login options</button><div id="loginOptions" class="login-options" hidden aria-label="Login providers"></div>
   </div>
-  <script src="./app.js" defer></script>
-</body>
-</html>
+</aside>
+<div class="sidebar-scrim" id="sidebarScrim"></div>
+<main class="main">
+<header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="openSidebar" type="button" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Research OS</span><b>/</b><strong id="pageTitle">Research Chat</strong></div></div><div class="topbar-right"><span class="connection-pill"><i id="connectionDot"></i><span id="connectionText">Checking connection</span></span><button class="icon-btn" id="focusMode" type="button" title="Toggle focus mode" aria-label="Toggle focus mode">⛶</button></div></header>
+<section class="chat-view active" id="chatView">
+  <div class="conversation-heading"><div><span class="eyebrow">RESEARCH WORKSPACE</span><h1 id="researchTitle">เริ่มต้นการวิจัย</h1><p>กำหนดโจทย์ · ตรวจสอบหลักฐาน · สร้างข้อสรุปที่ตรวจสอบย้อนกลับได้</p></div><div class="heading-actions"><span class="state" id="researchState">READY</span><button class="subtle-button" id="clearConversation" type="button">Clear chat</button></div></div>
+  <div class="conversation-scroll" id="conversationScroll"><div class="messages" id="messages" aria-live="polite">
+    <div class="empty-state" id="welcomeState"><div class="welcome-mark">R</div><span class="eyebrow">YOUR RESEARCH DESK</span><h2>What are we solving today?</h2><p>เริ่มจากคำถามหรือปัญหาที่ต้องการค้นคว้า แล้วให้ Research OS ช่วยจัดโครงสร้างการตรวจสอบ</p><div class="suggestions"><button type="button" data-prompt="วิเคราะห์สถาปัตยกรรม Research OS จาก repository และแยกส่วนที่มีอยู่จริงกับส่วนที่ยังขาด">วิเคราะห์สถาปัตยกรรมแพลตฟอร์ม</button><button type="button" data-prompt="สร้าง research brief พร้อมข้อเท็จจริง หลักฐาน ช่องว่าง และคำถามที่ยังไม่คลี่คลาย">สร้าง Research Brief</button><button type="button" data-prompt="ตรวจสอบความเข้ากันได้ของระบบ โดยระบุแหล่งข้อมูลและระดับความเชื่อมั่น">ตรวจสอบ Compatibility</button></div></div>
+  </div></div>
+  <div class="composer-dock"><form id="researchForm" class="research-composer"><label class="sr-only" for="prompt">Research message</label><textarea id="prompt" rows="1" required placeholder="ส่งข้อความถึง Research OS… (Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"></textarea><div class="composer-bottom"><div class="composer-tools"><button type="button" class="tool-chip enabled" id="deepMode" aria-pressed="true">✳ Deep Research <span>ON</span></button><span class="composer-hint">Claim → Evidence → Verification → Confidence</span></div><button class="run-btn" type="submit" id="runButton">Send <b>↑</b></button></div></form><p class="composer-note">Research OS · ตรวจสอบหลักฐานก่อนนำข้อสรุปไปใช้</p></div>
+</section>
+<section class="registry-view" id="registryView" hidden><div class="registry-heading"><span class="eyebrow">PLATFORM DIRECTORY</span><h1 id="registryTitle">Platform domains</h1><p>ขอบเขตความสามารถของแพลตฟอร์ม · สถานะการเชื่อมต่อต้องยืนยันจาก API และ runtime จริง</p></div><div class="registry-notice"><b>i</b><div><strong>Architecture directory</strong><p>รายการโมดูลนี้ใช้แสดงโครงสร้างระบบ ไม่ได้หมายความว่าทุกโมดูลเปิดใช้งานผ่าน API แล้ว</p></div></div><div class="registry-grid">
+<article class="registry-card"><span>01 / RESEARCH</span><h2>Discover → Research</h2><p>กำหนดโจทย์ ขอบเขต แผนการค้นคว้า และรวบรวมข้อมูล</p></article>
+<article class="registry-card"><span>02 / EVIDENCE</span><h2>Sources → Evidence</h2><p>Provenance, claim mapping, verification, confidence และ contradictions</p></article>
+<article class="registry-card"><span>03 / DECISION</span><h2>Hypothesis → Candidate</h2><p>ตั้งสมมติฐาน ประเมินทางเลือก และเก็บเหตุผลการตัดสินใจ</p></article>
+<article class="registry-card"><span>04 / VALIDATION</span><h2>Validate → Preflight</h2><p>ตรวจ contract, compatibility, policy และ release readiness</p></article>
+<article class="registry-card"><span>05 / GOVERNANCE</span><h2>Human Gate → Experiment</h2><p>อนุมัติโดยมนุษย์ก่อนดำเนินการทดลองหรือเปลี่ยนแปลงระบบ</p></article>
+<article class="registry-card"><span>06 / LEARNING</span><h2>Observe → Result → Knowledge</h2><p>ติดตามผล สรุปบทเรียน และจัดเก็บความรู้ที่ตรวจสอบย้อนกลับได้</p></article>
+<article class="registry-card"><span>07 / ENGINEERING</span><h2>Machine · Hardware · EFI</h2><p>บริบทเครื่อง อุปกรณ์ ระบบปฏิบัติการ Runtime และ EFI/OpenCore</p></article>
+<article class="registry-card"><span>08 / ORCHESTRATION</span><h2>Unified Master · Agents · Providers</h2><p>ประสานงานผู้ให้บริการ เครื่องมือ workers และ audit trail</p></article>
+</div><button class="run-btn return-chat" id="returnChat" type="button">Back to Research Chat →</button></section>
+</main>
+</div>
+<script src="./app.js" defer></script>
+</body></html>
