@@ -244,7 +244,6 @@ class _ResearchOsAiChatPageState extends State<ResearchOsAiChatPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
