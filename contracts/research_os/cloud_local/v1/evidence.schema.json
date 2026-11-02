@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.research-os.local/cloud-local/v1/evidence.schema.json",
+  "title": "Research OS Cloud Local Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "evidence_id",
+    "job_id",
+    "owner_id",
+    "stage_id",
+    "actor_id",
+    "event_type",
+    "occurred_at",
+    "result",
+    "source_sha",
+    "policy_decision_id",
+    "correlation_id"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "job_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "owner_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "event_type": {
+      "enum": [
+        "job.created",
+        "job.assigned",
+        "job.started",
+        "job.checkpointed",
+        "job.waiting_for_local_agent",
+        "job.completed",
+        "job.failed",
+        "job.cancelled",
+        "agent.registered",
+        "agent.heartbeat",
+        "agent.revoked",
+        "policy.evaluated",
+        "artifact.committed"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result": {
+      "enum": [
+        "SUCCESS",
+        "DENIED",
+        "RETRYABLE_FAILURE",
+        "TERMINAL_FAILURE",
+        "INFO"
+      ]
+    },
+    "source_sha": {
+      "type": "string",
+      "pattern": "^([a-fA-F0-9]{40}|[a-fA-F0-9]{64})$"
+    },
+    "policy_decision_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "lease_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{16,64}$"
+    },
+    "artifact_hashes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-fA-F0-9]{64}$"
+      }
+    },
+    "previous_evidence_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    }
+  }
+}
