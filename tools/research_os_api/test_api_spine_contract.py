@@ -75,13 +75,15 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn('default=0)', friend)
         self.assertIn("server.server_address[1]", api)
 
-    def test_native_flutter_and_web_share_the_canonical_tailscale_endpoint(self):
-        expected = "https://phakphumwir.tail4b06c9.ts.net"
+    def test_native_uses_tailscale_while_public_web_uses_render_api(self):
+        native_endpoint = "https://phakphumwir.tail4b06c9.ts.net"
+        public_endpoint = "https://research-os-api-phakphoum-v0wf.onrender.com"
         native = self.read("owner_special/flutter_app/lib/main.dart")
         web = self.read("apps/research_os_web/app.js")
-        self.assertIn(expected, native)
-        self.assertIn(expected, web)
+        self.assertIn(native_endpoint, native)
         self.assertNotIn("onrender.com", native.lower())
+        self.assertIn(public_endpoint, web)
+        self.assertNotIn(".ts.net", web)
 
     def test_local_launcher_automatically_updates_and_verifies_tailscale_serve(self):
         launcher = self.read("scripts/start-research-os-local.ps1")
