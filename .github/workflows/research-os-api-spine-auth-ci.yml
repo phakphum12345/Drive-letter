@@ -7,6 +7,7 @@ on:
       - "tools/research_os_api/**"
       - "owner_special/flutter_app/**"
       - "scripts/start-research-os-local.ps1"
+      - "scripts/configure-research-os-tailscale-serve.ps1"
       - "apps/research_os_web/**"
       - "docs/RESEARCH_OS_WEB_CONNECTIVITY.md"
       - ".github/workflows/research-os-api-spine-auth-ci.yml"
@@ -63,3 +64,31 @@ jobs:
         run: |
           flutter test --reporter expanded
           if ($LASTEXITCODE -ne 0) { throw 'Owner Special flutter tests failed.' }
+  windows-endpoint-launcher:
+    name: Windows dynamic endpoint launcher syntax
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v5
+      - name: Validate Research OS PowerShell launcher syntax
+        shell: pwsh
+        run: |
+          $files = @(
+            'scripts/start-research-os-local.ps1',
+            'scripts/configure-research-os-tailscale-serve.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $env:GITHUB_WORKSPACE $file),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-Host
+              throw "PowerShell syntax validation failed: $file"
+            }
+          }
+          Write-Host 'RESEARCH_OS_WINDOWS_ENDPOINT_LAUNCHER_SYNTAX=PASS'
+
