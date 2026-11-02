@@ -2,7 +2,7 @@ name: Research OS API Spine and Authentication CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, docs/research-os-cloud-local-architecture]
     paths:
       - "tools/research_os_api/**"
       - "contracts/research_os/cloud_local/**"
