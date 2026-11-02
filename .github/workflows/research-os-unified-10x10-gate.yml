@@ -66,6 +66,29 @@ jobs:
             if($LASTEXITCODE -ne 0){throw "Research OS render_server import failed with exit code $LASTEXITCODE"}
           } finally { Pop-Location }
           $env:PYTHONUNBUFFERED='1'
+          # Hosted runners do not have the user's Tailscale node installed. Provide a
+          # deterministic CLI shim so this test exercises the Serve integration contract
+          # without requiring or publishing through a real tailnet.
+          $tailscaleShim=Join-Path $env:RUNNER_TEMP 'tailscale-shim'
+          New-Item -ItemType Directory -Force -Path $tailscaleShim | Out-Null
+          @'
+          @echo off
+          if /I "%~1"=="status" if /I "%~2"=="--json" (
+            echo {"Self":{"DNSName":"phakphumwir.tail4b06c9.ts.net."}}
+            exit /b 0
+          )
+          if /I "%~1"=="serve" if /I "%~2"=="--bg" (
+            echo Serve configured
+            exit /b 0
+          )
+          if /I "%~1"=="serve" if /I "%~2"=="status" (
+            echo https://phakphumwir.tail4b06c9.ts.net
+            echo proxy http://127.0.0.1:8787
+            exit /b 0
+          )
+          exit /b 2
+          '@ | Set-Content (Join-Path $tailscaleShim 'tailscale.cmd') -Encoding ascii
+          $env:PATH="$tailscaleShim;$env:PATH"
           .\scripts\start-research-os-local.ps1 -DataDir $data -Provider mock -Port 8787 -Background
           $pidFile=Join-Path $data 'run\\research-os-api.pid'
           $errLog=Join-Path $data 'logs\\research-os-api.err.log'
