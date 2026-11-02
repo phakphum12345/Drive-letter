@@ -190,6 +190,9 @@ if ($Background) {
   for ($i = 0; $i -lt 60; $i++) {
     if ($process.HasExited) {
       $detail = if (Test-Path $ErrLog) { Get-Content $ErrLog -Tail 40 | Out-String } else { "no stderr log" }
+      if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
+      Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+      Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
       throw "Research OS API exited before becoming ready. $detail"
     }
     try {
@@ -200,15 +203,19 @@ if ($Background) {
   }
   if (-not $apiReady) {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
     throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog"
   }
 
   try {
     & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
-    if ($LASTEXITCODE -ne 0) { throw "Tailscale Serve setup failed with exit code $LASTEXITCODE" }
   } catch {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
     throw
   }
 
@@ -249,7 +256,6 @@ try {
   if (-not $apiReady) { throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog" }
 
   & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
-  if ($LASTEXITCODE -ne 0) { throw "Tailscale Serve setup failed with exit code $LASTEXITCODE" }
   Write-Host "Research OS API is ready at https://$ExpectedServeHostname"
   Write-Host "Press Ctrl+C to stop the local API and Friend Service."
   Wait-Process -Id $foregroundApi.Id
