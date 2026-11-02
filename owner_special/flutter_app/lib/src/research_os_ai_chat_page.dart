@@ -206,30 +206,10 @@ class _ResearchOsAiChatPageState extends State<ResearchOsAiChatPage> {
   }
 
   Future<void> _addContext() async {
-    final controller = TextEditingController(text: _context);
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('เพิ่มบริบทให้ AI'),
-        content: SizedBox(
-          width: 520,
-          child: TextField(
-            controller: controller,
-            minLines: 4,
-            maxLines: 9,
-            decoration: const InputDecoration(
-              hintText: 'วางข้อความหรือรายละเอียดที่ต้องการให้ AI ใช้ประกอบคำตอบ',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('ยกเลิก')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('ใช้บริบทนี้')),
-        ],
-      ),
+      builder: (context) => _ContextDialog(initialText: _context),
     );
-    controller.dispose();
     if (result != null && mounted) {
       setState(() => _context = result);
     }
@@ -546,6 +526,60 @@ class _ResearchOsAiChatPageState extends State<ResearchOsAiChatPage> {
 
   String _time(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+}
+
+class _ContextDialog extends StatefulWidget {
+  const _ContextDialog({required this.initialText});
+
+  final String initialText;
+
+  @override
+  State<_ContextDialog> createState() => _ContextDialogState();
+}
+
+class _ContextDialogState extends State<_ContextDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('เพิ่มบริบทให้ AI'),
+      content: SizedBox(
+        width: 520,
+        child: TextField(
+          controller: _controller,
+          minLines: 4,
+          maxLines: 9,
+          decoration: const InputDecoration(
+            hintText: 'วางข้อความหรือรายละเอียดที่ต้องการให้ AI ใช้ประกอบคำตอบ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('ยกเลิก'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('ใช้บริบทนี้'),
+        ),
+      ],
+    );
+  }
 }
 
 class _ChatTurn {
