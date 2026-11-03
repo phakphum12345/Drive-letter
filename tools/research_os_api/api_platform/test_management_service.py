@@ -65,7 +65,7 @@ class ManagementServiceTests(unittest.TestCase):
         self.assertIn("raw_secret", result)
 
     def test_http_auth_and_crud(self):
-        http = ManagementHTTP(self.service, lambda headers: {"user_id": "owner"} if headers.get("X-Test-Auth") else None)
+        http = ManagementHTTP(self.service, lambda headers: {"user_id": "owner", "role": "OWNER"} if headers.get("X-Test-Auth") else None)
         status, _ = http.dispatch("GET", "/platform/v1/projects", {}, None)
         self.assertEqual(status, 401)
         status, body = http.dispatch("POST", "/platform/v1/organizations", {"X-Test-Auth": "1"}, {"organization_id": "org-1", "name": "Research"})

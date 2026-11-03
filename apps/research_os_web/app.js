@@ -7,7 +7,7 @@ function setStage(stage){const index=stages.indexOf(stage);document.querySelecto
 async function request(path,options={},timeoutMs=65000){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(`${API_BASE_URL}${path}`,{headers:{'Content-Type':'application/json'},credentials:'include',signal:controller.signal,...options});let data;try{data=await response.json()}catch(_){throw new Error(`API returned invalid JSON (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.detail||data.error||`HTTP ${response.status}`);return data}catch(error){if(error.name==='AbortError')throw new Error('Research request timed out after 65 seconds');throw error}finally{clearTimeout(timer)}}
 function setRunning(value){state.sending=value;const button=$('runButton');button.disabled=value;button.innerHTML=value?'กำลังค้นคว้า… <b>◌</b>':'Send <b>↑</b>';$('prompt').disabled=value;if(value)$('researchState').textContent='RUNNING'}
 function roleRank(role){return ({USER:10,PRO:20,OWNER:30})[String(role||'USER').toUpperCase()]||0}
-function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});}
+function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});document.querySelectorAll('[data-admin-only]').forEach(node=>{node.hidden=role!=='OWNER'});if(role!=='OWNER'&&!$('adminView').hidden)setPlatformView('home');}
 async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();await refreshControlCenter();return result}catch(error){state.account=null;renderAccount();showControlCenterSignIn();throw error}}
 function providerLabel(provider){return provider==='google'?'Google':provider==='microsoft'?'Microsoft':'GitHub'}
 function addEmailOtpControls(panel){
@@ -22,7 +22,7 @@ verify.addEventListener('click',async()=>{verify.disabled=true;message.textConte
 }
 async function showLoginOptions(){const panel=$('loginOptions');if(!panel.hidden){panel.hidden=true;return}panel.hidden=false;panel.textContent='Loading login providers…';try{const result=await request('/v1/auth/providers');panel.innerHTML='';for(const provider of result.providers||[]){const button=document.createElement('button');button.type='button';button.className='tool-chip';button.textContent=`Continue with ${providerLabel(provider.id)}${provider.available?'':' (not configured)'}`;button.disabled=!provider.available;button.addEventListener('click',()=>handleProviderLogin(provider.id));panel.appendChild(button)}addEmailOtpControls(panel)}catch(error){panel.textContent=`Login providers unavailable: ${error.message}`}}
 async function handleProviderLogin(provider){if(state.sending)return;try{const result=await request('/v1/auth/providers/login',{method:'POST',body:JSON.stringify({provider})});if(!result.authorization_url)throw new Error('Authorization URL was not returned');window.location.assign(result.authorization_url)}catch(error){addMessage('system',`${providerLabel(provider)} sign-in unavailable: ${error.message}`)}}
-async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
+async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
 async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;$('messages').innerHTML='';state.messages=[];addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();addMessage('assistant',answer||'Research completed without a text response.');setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
 $('researchForm').addEventListener('submit',event=>{event.preventDefault();startResearch($('prompt').value.trim())});
 $('newResearch').addEventListener('click',()=>{setPlatformView('chat');state.sessionId=crypto.randomUUID();state.messages=[];$('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';$('researchTitle').textContent='Ready for your investigation';$('researchState').textContent='IDLE';$('prompt').value='';setStage('define');window.scrollTo({top:0,behavior:'smooth'})});
@@ -123,24 +123,83 @@ async function refreshControlCenter(){
   }finally{$('refreshControlCenter').disabled=false}
 }
 
+function adminItem(container,title,meta){
+  const item=document.createElement('div');item.className='admin-list-item';
+  const heading=document.createElement('strong');heading.textContent=title||'Unnamed resource';
+  const detail=document.createElement('small');detail.textContent=meta||'';
+  item.append(heading,detail);container.appendChild(item);
+}
+async function refreshAdminConsole(){
+  if(!$('adminView')||$('adminView').hidden)return;
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER'){
+    $('adminStatus').textContent='OWNER role required.';
+    setPlatformView('home');return;
+  }
+  $('adminStatus').textContent='กำลังโหลด Management API inventory และ audit log…';
+  $('refreshAdminConsole').disabled=true;
+  try{
+    const values=await Promise.all([
+      request('/platform/v1/'),
+      request('/platform/v1/organizations'),
+      request('/platform/v1/projects'),
+      request('/platform/v1/applications'),
+      request('/platform/v1/apis'),
+      request('/platform/v1/audit')
+    ]);
+    const groups=[
+      {id:'adminOrganizations',count:'adminOrganizationsCount',items:values[1].items||[],key:'organization_id'},
+      {id:'adminProjects',count:'adminProjectsCount',items:values[2].items||[],key:'project_id'},
+      {id:'adminApplications',count:'adminApplicationsCount',items:values[3].items||[],key:'application_id'},
+      {id:'adminApis',count:'adminApisCount',items:values[4].items||[],key:'api_id'}
+    ];
+    groups.forEach(group=>{
+      $(group.count).textContent=String(group.items.length);
+      $(group.id).textContent='';
+      if(!group.items.length)$(group.id).textContent='No resources registered.';
+      group.items.slice(0,20).forEach(item=>{
+        const name=item.name||item.title||item[group.key]||item.id||'Unnamed resource';
+        const identifier=item[group.key]||item.id||'';
+        const stateLabel=item.lifecycle||item.status||'REGISTERED';
+        adminItem($(group.id),name,identifier+' · '+stateLabel);
+      });
+    });
+    const audit=values[5].items||[];
+    $('adminAudit').textContent='';
+    $('adminAuditCount').textContent=audit.length+' records';
+    if(!audit.length)$('adminAudit').textContent='No management audit events recorded.';
+    audit.slice(-20).reverse().forEach(item=>{
+      adminItem($('adminAudit'),(item.action||'event')+' · '+(item.resource||'resource'),(item.actor||'unknown actor')+' · '+(item.outcome||'unknown outcome')+' · '+(item.created_at||item.timestamp||''));
+    });
+    $('adminStatus').textContent='Management API: '+(values[0].status||'ready')+' · inventory is read-only in this release';
+    $('adminLastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+  }catch(error){
+    const message=String(error.message||error);
+    $('adminStatus').textContent=message.includes('owner_required')?'สิทธิ์ OWNER เท่านั้นที่เข้าถึง Admin Console ได้':'โหลด Admin Console ไม่สำเร็จ: '+message;
+  }finally{$('refreshAdminConsole').disabled=false}
+}
+
 // Platform workspace navigation and responsive controls.
 function setPlatformView(view,moduleName){
-  const selected=view||'home';
+  let selected=view||'home';
+  if(selected==='admin'&&String(state.account?.role||'').toUpperCase()!=='OWNER')selected='home';
   $('homeView').hidden=selected!=='home';
   $('chatView').hidden=selected!=='chat';
   $('registryView').hidden=selected!=='registry';
+  $('adminView').hidden=selected!=='admin';
   document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(selected!=='registry'||button.dataset.module===moduleName)));
-  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':(moduleName||'Platform Directory');
+  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
   $('sidebar').classList.remove('open');
   $('sidebarScrim').classList.remove('open');
   if(selected==='home')refreshControlCenter();
+  if(selected==='admin')refreshAdminConsole();
 }
 document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('click',()=>{
   setPlatformView(button.dataset.view,button.dataset.module);
 }));
 $('returnChat').addEventListener('click',()=>setPlatformView('chat'));
+$('refreshAdminConsole').addEventListener('click',refreshAdminConsole);
 $('refreshControlCenter').addEventListener('click',refreshControlCenter);
 $('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
 $('homeViewDirectory').addEventListener('click',()=>setPlatformView('registry'));

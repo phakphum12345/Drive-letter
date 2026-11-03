@@ -5,6 +5,7 @@ on:
     paths:
       - "apps/research_os_web/**"
       - "tools/research_os_api/test_web_control_center.py"
+      - "tools/research_os_api/test_management_http_rbac.py"
       - ".github/workflows/research-os-user-control-center.yml"
 
 permissions:
@@ -24,4 +25,4 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
-        run: python -m unittest tools.research_os_api.test_web_control_center -v
+        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac -v
