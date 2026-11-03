@@ -125,6 +125,26 @@ class CloudLocalHTTP:
                 return self._response(404, error="job_not_found")
             evidence = self.store.list_evidence(owner_id, job_id)
             return self._response(200, evidence=evidence, count=len(evidence))
+        if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["evidence", "resolve"]:
+            job_id = parts[3]
+            job = self.store.get_job(owner_id, job_id)
+            if job is None:
+                return self._response(404, error="job_not_found")
+            from urllib.parse import parse_qs
+            params = parse_qs(query)
+            stage_id = str((params.get("stage_id") or [""])[0]).strip()
+            event_type = str((params.get("event_type") or [""])[0]).strip()
+            if not stage_id or not event_type:
+                raise ValueError("stage_id_and_event_type_required")
+            records = self.store.list_evidence(owner_id, job_id)
+            try:
+                from .evidence_recovery import resolve_evidence
+            except ImportError:  # pragma: no cover - direct unittest discovery
+                from evidence_recovery import resolve_evidence
+            resolved = resolve_evidence(records, owner_id=owner_id, job_id=job_id,
+                                         stage_id=stage_id, event_type=event_type,
+                                         source_sha=str(job.get("source_sha") or ""))
+            return self._response(200, resolution=resolved)
         return self._response(404, error="not_found")
 
     def _post(self, parts: list[str], headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -136,6 +156,11 @@ class CloudLocalHTTP:
             return self._claim(headers, body)
         if parts == ["api", "v1", "evidence"]:
             return self._append_evidence(headers, body)
+        if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["evidence", "recover"]:
+            principal = self._principal(headers)
+            if principal is None:
+                return self._response(401, error="authentication_required")
+            return self._recover_evidence(str(principal["user_id"]), parts[3], body)
         if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "checkpoints":
             return self._create_checkpoint(headers, body, parts[3])
         if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "transition":
@@ -314,6 +339,37 @@ class CloudLocalHTTP:
             owner_id, agent_id, job_id, str(body.get("lease_token") or "").strip(), payload
         )
         return self._response(201, checkpoint=checkpoint) if checkpoint else self._response(409, error="lease_invalid_or_expired")
+
+    def _recover_evidence(self, owner_id: str, job_id: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        job = self.store.get_job(owner_id, job_id)
+        if job is None:
+            return self._response(404, error="job_not_found")
+        stage_id = str(body.get("stage_id") or "").strip()
+        event_type = str(body.get("event_type") or "").strip()
+        if not stage_id or not event_type:
+            raise ValueError("stage_id_and_event_type_required")
+        records = self.store.list_evidence(owner_id, job_id)
+        checkpoints = self.store.list_checkpoints(owner_id, job_id)
+        checkpoint_id = str(body.get("checkpoint_id") or "").strip()
+        checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None) if checkpoint_id else next((item for item in checkpoints if item.get("stage_id") == stage_id and item.get("source_sha") == job.get("source_sha")), None)
+        try:
+            from .evidence_recovery import build_recovered_evidence
+        except ImportError:  # pragma: no cover - direct server execution
+            from evidence_recovery import build_recovered_evidence
+        recovery = build_recovered_evidence(job=job, checkpoints=checkpoints, evidence=records,
+                                            owner_id=owner_id, stage_id=stage_id,
+                                            event_type=event_type, checkpoint=checkpoint,
+                                            actor_id=owner_id)
+        if recovery is None:
+            return self._response(409, status="MISSING", error="insufficient_verified_recovery_sources")
+        existing = next((item for item in records if item.get("recovery_key") == recovery["recovery_key"]), None)
+        if existing:
+            return self._response(200, evidence=existing, status="RECOVERED", reused=True)
+        error = self._validate("evidence", recovery)
+        if error:
+            raise ValueError(error)
+        self.store.append_evidence(owner_id, recovery)
+        return self._response(201, evidence=recovery, status="RECOVERED", reused=False)
 
     def _append_evidence(self, headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         identity = self._agent(headers)
