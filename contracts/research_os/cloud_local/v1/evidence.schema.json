@@ -136,6 +136,11 @@
     "recovery_key": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "recovered_event_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
     }
   }
 }
