@@ -81,6 +81,17 @@ STATIC_ROUTES = {"/": "index.html", "/index.html": "index.html", "/app.css": "ap
 DEFAULT_GITHUB_REPOSITORY = "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH"
 
 _MANAGEMENT_SERVICE: ManagementService | None = None
+_CLOUD_LOCAL_HTTP: Any = None
+
+def _cloud_local_http():
+    global _CLOUD_LOCAL_HTTP
+    if _CLOUD_LOCAL_HTTP is None:
+        try:
+            from tools.research_os_api.cloud_local_http import CloudLocalHTTP
+        except ImportError:
+            from cloud_local_http import CloudLocalHTTP
+        _CLOUD_LOCAL_HTTP = CloudLocalHTTP()
+    return _CLOUD_LOCAL_HTTP
 
 def _management_http() -> ManagementHTTP:
     global _MANAGEMENT_SERVICE
@@ -352,6 +363,10 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = parsed.path
         try:
+            if path.startswith("/api/v1/"):
+                status, payload = _cloud_local_http().dispatch("GET", self.path, self.headers)
+                self._send(status, payload)
+                return
             if path.startswith("/owner/"):
                 self._proxy_friend("GET", path)
                 return
@@ -605,6 +620,10 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             body = self._read_json()
+            if path.startswith("/api/v1/"):
+                status, payload = _cloud_local_http().dispatch("POST", self.path, self.headers, body)
+                self._send(status, payload)
+                return
             if path.startswith("/owner/") or path == "/v1/launch-desk/run":
                 self._proxy_friend("POST", path, body)
                 return
