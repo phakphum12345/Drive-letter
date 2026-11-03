@@ -261,7 +261,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual(recovered["evidence"]["evidence_id"], again["evidence"]["evidence_id"])
 
     def test_evidence_resolver_never_crosses_owner_job_or_source_sha(self):
-        from .evidence_recovery import resolve_evidence
+        try:\n            from .evidence_recovery import resolve_evidence\n        except ImportError:  # pragma: no cover - direct unittest discovery\n            from evidence_recovery import resolve_evidence
         records = [{"evidence_id": "foreign", "owner_id": "user-b", "job_id": "job-x",
                     "stage_id": "stage-1", "event_type": "job.completed", "source_sha": "a" * 40,
                     "evidence_class": "ORIGINAL"}]
