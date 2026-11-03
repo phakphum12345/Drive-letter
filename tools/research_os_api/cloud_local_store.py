@@ -16,7 +16,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from local_storage import data_root
+try:
+    from .local_storage import data_root
+except ImportError:  # pragma: no cover - direct unittest discovery
+    from local_storage import data_root
 
 
 def _now() -> datetime:
