@@ -52,7 +52,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install validation dependencies
-        run: python -m pip install --disable-pip-version-check pyyaml "mcp>=2,<3"
+        run: python -m pip install --disable-pip-version-check pyyaml "mcp>=2,<3" -r tools/research_os_api/contract-requirements.txt
 
       - name: Validate CI Lite workflow file
         shell: bash
