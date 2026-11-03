@@ -164,17 +164,25 @@ class CloudLocalHTTP:
         input_refs = body.get("input_refs", [])
         if not isinstance(input_refs, list):
             raise ValueError("input_refs must be an array")
-        contains_local = classification == "LOCAL_ONLY" or any(
-            isinstance(ref, dict) and ref.get("data_classification") == "LOCAL_ONLY"
-            for ref in input_refs
+        if mode not in {"CLOUD", "LOCAL", "HYBRID", "AUTO"}:
+            raise ValueError("execution_mode is invalid")
+        classifications = {classification}
+        classifications.update(
+            str(ref.get("data_classification") or "").upper()
+            for ref in input_refs if isinstance(ref, dict) and ref.get("data_classification")
         )
+        contains_local = "LOCAL_ONLY" in classifications
         if contains_local and mode not in {"LOCAL", "HYBRID"}:
             return self._response(403, error="locality_policy_denied",
                                   policy="cloud-local.local-only.v1",
                                   detail="LOCAL_ONLY data may only use LOCAL or HYBRID execution.")
-        if mode not in {"CLOUD", "LOCAL", "HYBRID", "AUTO"}:
-            raise ValueError("execution_mode is invalid")
-        policy_id = "cloud-local.local-only.v1" if contains_local else "cloud-local.default.v1"
+        if mode in {"CLOUD", "HYBRID", "AUTO"} and any(
+            value in {"INTERNAL", "CONFIDENTIAL"} for value in classifications
+        ):
+            return self._response(403, error="cloud_data_consent_required",
+                                  policy="cloud-local.cloud-consent.v1",
+                                  detail="Cloud stages are disabled for INTERNAL or CONFIDENTIAL data until an explicit upload-consent policy is implemented.")
+        policy_id = "pd-" + uuid.uuid4().hex
         now = _now()
         payload = {
             "contract_version": "1.0",
