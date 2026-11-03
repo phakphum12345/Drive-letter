@@ -1,10 +1,26 @@
 const API_BASE_URL=(window.RESEARCH_OS_API_BASE_URL||'https://research-os-api-phakphoum-v0wf.onrender.com').replace(/\/$/,'');
-const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null};
+const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null,chatWide:false};
 const stages=['define','plan','gather','verify','synthesize','remember'];
 const $=id=>document.getElementById(id);
 function addMessage(role,text){const node=document.createElement('div');node.className=`message ${role}`;node.textContent=text;$('messages').appendChild(node);node.scrollIntoView({behavior:'smooth',block:'end'});state.messages.push({role,content:text});return node;}
 function setStage(stage){const index=stages.indexOf(stage);document.querySelectorAll('.flow-item[data-stage]').forEach((node,i)=>{node.classList.toggle('active',i===index);node.classList.toggle('complete',i<index);const icon=node.querySelector('i');if(icon)icon.textContent=i<index?'✓':i===index?'●':'○';});}
 async function request(path,options={},timeoutMs=65000){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(`${API_BASE_URL}${path}`,{headers:{'Content-Type':'application/json'},credentials:'include',signal:controller.signal,...options});let data;try{data=await response.json()}catch(_){throw new Error(`API returned invalid JSON (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.detail||data.error||`HTTP ${response.status}`);return data}catch(error){if(error.name==='AbortError')throw new Error('Research request timed out after 65 seconds');throw error}finally{clearTimeout(timer)}}
+function setChatWide(enabled){
+  state.chatWide=Boolean(enabled);
+  document.body.classList.toggle('chat-wide-mode',state.chatWide);
+  const button=$('chatLayoutToggle');
+  if(button){
+    button.setAttribute('aria-pressed',String(state.chatWide));
+    button.textContent=state.chatWide?'↙ กลับหน้าปกติ':'↗ แชทกว้าง';
+    button.setAttribute('aria-label',state.chatWide?'Switch to normal chat':'Switch to wide chat');
+  }
+  try{localStorage.setItem('research-os-chat-layout',state.chatWide?'wide':'normal')}catch(_){}
+}
+function restoreChatLayout(){
+  let wide=false;
+  try{wide=localStorage.getItem('research-os-chat-layout')==='wide'}catch(_){}
+  setChatWide(wide);
+}
 function setRunning(value){state.sending=value;const button=$('runButton');button.disabled=value;button.innerHTML=value?'กำลังค้นคว้า… <b>◌</b>':'Send <b>↑</b>';$('prompt').disabled=value;if(value)$('researchState').textContent='RUNNING'}
 function roleRank(role){return ({USER:10,PRO:20,OWNER:30})[String(role||'USER').toUpperCase()]||0}
 function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});document.querySelectorAll('[data-admin-only]').forEach(node=>{node.hidden=role!=='OWNER'});if(role!=='OWNER'&&!$('adminView').hidden)setPlatformView('home');}
@@ -23,7 +39,7 @@ verify.addEventListener('click',async()=>{verify.disabled=true;message.textConte
 async function showLoginOptions(){const panel=$('loginOptions');if(!panel.hidden){panel.hidden=true;return}panel.hidden=false;panel.textContent='Loading login providers…';try{const result=await request('/v1/auth/providers');panel.innerHTML='';for(const provider of result.providers||[]){const button=document.createElement('button');button.type='button';button.className='tool-chip';button.textContent=`Continue with ${providerLabel(provider.id)}${provider.available?'':' (not configured)'}`;button.disabled=!provider.available;button.addEventListener('click',()=>handleProviderLogin(provider.id));panel.appendChild(button)}addEmailOtpControls(panel)}catch(error){panel.textContent=`Login providers unavailable: ${error.message}`}}
 async function handleProviderLogin(provider){if(state.sending)return;try{const result=await request('/v1/auth/providers/login',{method:'POST',body:JSON.stringify({provider})});if(!result.authorization_url)throw new Error('Authorization URL was not returned');window.location.assign(result.authorization_url)}catch(error){addMessage('system',`${providerLabel(provider)} sign-in unavailable: ${error.message}`)}}
 async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
-async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;$('messages').innerHTML='';state.messages=[];addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();addMessage('assistant',answer||'Research completed without a text response.');setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
+async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();if(state.messages.length===0)$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();addMessage('assistant',answer||'Research completed without a text response.');setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
 $('researchForm').addEventListener('submit',event=>{event.preventDefault();startResearch($('prompt').value.trim())});
 $('newResearch').addEventListener('click',()=>{setPlatformView('chat');state.sessionId=crypto.randomUUID();state.messages=[];$('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';$('researchTitle').textContent='Ready for your investigation';$('researchState').textContent='IDLE';$('prompt').value='';setStage('define');window.scrollTo({top:0,behavior:'smooth'})});
 $('startWork').addEventListener('click',()=>{$('prompt').focus();$('prompt').scrollIntoView({behavior:'smooth',block:'center'})});
@@ -190,6 +206,7 @@ function setPlatformView(view,moduleName){
   $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
+  if(selected==='chat')setChatWide(state.chatWide);else document.body.classList.remove('chat-wide-mode');
   $('sidebar').classList.remove('open');
   $('sidebarScrim').classList.remove('open');
   if(selected==='home')refreshControlCenter();
@@ -207,6 +224,8 @@ $('openSidebar').addEventListener('click',()=>{$('sidebar').classList.add('open'
 $('closeSidebar').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
 $('sidebarScrim').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
 $('focusMode').addEventListener('click',()=>document.body.classList.toggle('focus-mode'));
+$('chatLayoutToggle').addEventListener('click',()=>setChatWide(!state.chatWide));
+restoreChatLayout();
 $('clearConversation').addEventListener('click',()=>{
   if(state.sending)return;
   state.messages=[];
