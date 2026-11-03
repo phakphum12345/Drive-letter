@@ -45,7 +45,8 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
         return None
     valid_evidence = [item for item in evidence if item.get("owner_id") == owner_id
                       and item.get("job_id") == job.get("job_id")
-                      and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
+                      and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))
+                      and item.get("evidence_class", "ORIGINAL") == "ORIGINAL"]
     valid_checkpoints = [item for item in checkpoints if item.get("owner_id") == owner_id
                          and item.get("job_id") == job.get("job_id")
                          and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
