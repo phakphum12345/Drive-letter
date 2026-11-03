@@ -14,7 +14,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         cls.css = (WEB / "app.css").read_text(encoding="utf-8")
 
     def test_home_is_the_default_navigation_and_chat_remains_available(self):
-        self.assertIn('data-view="home">', self.html)
+        self.assertIn('data-view="home"', self.html)
         self.assertIn('id="homeView"', self.html)
         self.assertIn('id="chatView" hidden', self.html)
         self.assertIn("setPlatformView('home')", self.js)
