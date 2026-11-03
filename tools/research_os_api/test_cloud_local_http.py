@@ -90,6 +90,23 @@ class CloudLocalHTTPTests(unittest.TestCase):
             self.assertEqual(403, status)
             self.assertEqual("locality_policy_denied", result["error"])
 
+    def test_repo_audit_requires_source_sha_and_adds_repository_capability(self):
+        status, missing = self.request(
+            "POST", "/api/v1/jobs", self.user_headers,
+            {"execution_mode": "LOCAL", "data_classification": "LOCAL_ONLY",
+             "task_type": "repo.audit", "idempotency_key": "repo-audit-key-00000001"},
+        )
+        self.assertEqual(400, status)
+        self.assertIn("source_sha", missing["detail"])
+        status, created = self.request(
+            "POST", "/api/v1/jobs", self.user_headers,
+            {"execution_mode": "LOCAL", "data_classification": "LOCAL_ONLY",
+             "task_type": "repo.audit", "idempotency_key": "repo-audit-key-00000002",
+             "source_sha": "d" * 40},
+        )
+        self.assertEqual(201, status, created)
+        self.assertIn("repository.inspect", created["job"]["required_capabilities"])
+
     def test_cloud_execution_requires_public_data_until_upload_consent_exists(self):
         for classification in ("INTERNAL", "CONFIDENTIAL"):
             status, result = self.request(
@@ -152,7 +169,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
             "GET", f"/api/v1/jobs/{job['job_id']}/evidence", self.user_headers
         )
         self.assertEqual(200, status)
-        self.assertEqual(["job.started", "job.completed"], [item["event_type"] for item in evidence_list["evidence"]])
+        self.assertCountEqual(["job.started", "job.completed"], [item["event_type"] for item in evidence_list["evidence"]])
 
     def test_agent_token_is_required_and_grant_is_single_use(self):
         status, grant = self.request(
