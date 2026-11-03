@@ -128,7 +128,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
 
         status, running = self.request(
             "POST", f"/api/v1/jobs/{job['job_id']}/transition", agent_headers,
-            {"lease_token": lease, "status": "RUNNING"},
+            {"lease_token": lease, "status": "RUNNING", "stage_id": "repo.audit"},
         )
         self.assertEqual(200, status, running)
         self.assertEqual("RUNNING", running["job"]["status"])
@@ -142,11 +142,17 @@ class CloudLocalHTTPTests(unittest.TestCase):
 
         status, completed = self.request(
             "POST", f"/api/v1/jobs/{job['job_id']}/transition", agent_headers,
-            {"lease_token": lease, "status": "COMPLETED"},
+            {"lease_token": lease, "status": "COMPLETED", "stage_id": "repo.audit"},
         )
         self.assertEqual(200, status, completed)
         self.assertEqual("COMPLETED", completed["job"]["status"])
         self.assertIsNone(completed["job"]["lease_id"])
+        self.assertEqual("job.completed", completed["evidence"]["event_type"])
+        status, evidence_list = self.request(
+            "GET", f"/api/v1/jobs/{job['job_id']}/evidence", self.user_headers
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(["job.started", "job.completed"], [item["event_type"] for item in evidence_list["evidence"]])
 
     def test_agent_token_is_required_and_grant_is_single_use(self):
         status, grant = self.request(
