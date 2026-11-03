@@ -168,6 +168,8 @@ document.querySelectorAll('[data-prompt]').forEach(button=>button.addEventListen
 const healthIndicator=$('health');
 function updateConnection(ok,version){
   if(healthIndicator)healthIndicator.textContent=ok?(version||'ONLINE'):'OFFLINE';
+  if($('homeApiStatus'))$('homeApiStatus').textContent=ok?'Online':'Offline';
+  if($('homeApiDetail'))$('homeApiDetail').textContent=ok?(version||'Research OS API reachable'):'API endpoint unavailable';
   $('apiLabel').textContent=ok?'API connected':'API unavailable';
   $('apiDetail').textContent=ok?(version||'Research OS service online'):'Check API endpoint or network';
   $('apiDot').style.background=ok?'var(--good)':'var(--danger)';
