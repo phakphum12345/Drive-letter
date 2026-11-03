@@ -231,6 +231,42 @@ class CloudLocalStore:
             ).fetchall()
             return [self._payload(row) for row in rows]
 
+    def transition_job(self, owner_id: str, agent_id: str, job_id: str, lease_token: str,
+                       status: str, output_refs: list[dict[str, Any]] | None = None,
+                       checkpoint_id: str | None = None) -> dict[str, Any] | None:
+        now = _now()
+        allowed = {
+            "ASSIGNED": {"RUNNING", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+            "RUNNING": {"CHECKPOINTING", "COMPLETED", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+            "CHECKPOINTING": {"RUNNING", "COMPLETED", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+        }
+        if status not in {"RUNNING", "CHECKPOINTING", "WAITING_FOR_LOCAL_AGENT", "COMPLETED", "FAILED"}:
+            raise ValueError("job_status_transition_invalid")
+        with self._transaction() as db:
+            row = self._execute(db, """SELECT payload,lease_id,lease_expires_at,status,assigned_agent_id
+                FROM cloud_local_jobs WHERE owner_id=? AND job_id=?""", (owner_id, job_id)).fetchone()
+            if (not row or row["assigned_agent_id"] != agent_id or row["lease_id"] != lease_token
+                or not row["lease_expires_at"] or row["lease_expires_at"] <= _stamp(now)):
+                return None
+            if status not in allowed.get(row["status"], set()):
+                raise ValueError("job_status_transition_invalid")
+            payload = self._payload(row)
+            payload.update(status=status, updated_at=_stamp(now))
+            if output_refs is not None:
+                payload["output_refs"] = output_refs
+            if checkpoint_id is not None:
+                payload["checkpoint_id"] = checkpoint_id
+            terminal = status in {"COMPLETED", "FAILED"}
+            if terminal:
+                payload["lease_id"] = None
+                payload["lease_expires_at"] = None
+            self._execute(db, """UPDATE cloud_local_jobs SET status=?,payload=?,updated_at=?,
+                lease_id=?,lease_expires_at=? WHERE owner_id=? AND job_id=? AND lease_id=?""",
+                (status, json.dumps(payload, ensure_ascii=False, sort_keys=True), _stamp(now),
+                 None if terminal else lease_token, None if terminal else row["lease_expires_at"],
+                 owner_id, job_id, lease_token))
+            return payload
+
     def revoke_agent(self, owner_id: str, agent_id: str) -> bool:
         with self._transaction() as db:
             row = self._execute(db, "SELECT payload FROM cloud_local_agents WHERE owner_id=? AND agent_id=?",
