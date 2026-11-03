@@ -189,6 +189,36 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual([evidence], listing["evidence"])
 
+    def test_checkpoint_create_list_and_resume_preflight(self):
+        job = self.create_local_job()
+        agent, headers = self.enroll_agent()
+        status, claim = self.request("POST", "/api/v1/agents/claim", headers, {})
+        self.assertEqual(200, status)
+        lease = claim["job"]["lease_token"]
+        status, running = self.request(
+            "POST", f"/api/v1/jobs/{job['job_id']}/transition", headers,
+            {"lease_token": lease, "status": "RUNNING"},
+        )
+        self.assertEqual(200, status, running)
+        status, saved = self.request(
+            "POST", f"/api/v1/jobs/{job['job_id']}/checkpoints", headers,
+            {"lease_token": lease, "stage_id": "stage-1", "workflow_state": "PAUSED",
+             "next_action": "resume after review", "evidence_refs": []},
+        )
+        self.assertEqual(201, status, saved)
+        checkpoint_id = saved["checkpoint"]["checkpoint_id"]
+        self.assertEqual(agent["agent_id"], saved["checkpoint"]["created_by"])
+        status, listing = self.request(
+            "GET", f"/api/v1/jobs/{job['job_id']}/checkpoints", self.user_headers
+        )
+        self.assertEqual(200, status)
+        self.assertEqual(1, listing["count"])
+        status, resume = self.request(
+            "POST", f"/api/v1/jobs/{job['job_id']}/checkpoints/{checkpoint_id}/resume", self.user_headers, {}
+        )
+        self.assertEqual(200, status)
+        self.assertEqual("READY", resume["resume"]["status"])
+
     def test_owner_can_revoke_agent_and_revoked_token_stops_working(self):
         agent, headers = self.enroll_agent()
         status, result = self.request(
