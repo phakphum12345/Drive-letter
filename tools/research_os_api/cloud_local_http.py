@@ -239,12 +239,16 @@ class CloudLocalHTTP:
         capabilities = body.get("capabilities")
         if capabilities is not None and not isinstance(capabilities, list):
             raise ValueError("capabilities must be an array")
+        candidate = dict(identity["agent"])
+        if capabilities is not None:
+            candidate["capabilities"] = capabilities
+        candidate.update(lifecycle_state="ACTIVE", last_heartbeat_at=_now())
+        error = self._validate("agent", candidate)
+        if error:
+            raise ValueError(error)
         agent = self.store.heartbeat_agent(identity["owner_id"], identity["agent_id"], capabilities)
         if agent is None:
             return self._response(401, error="agent_revoked")
-        error = self._validate("agent", agent)
-        if error:
-            raise ValueError(error)
         return self._response(200, agent=agent)
 
     def _claim(self, headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
