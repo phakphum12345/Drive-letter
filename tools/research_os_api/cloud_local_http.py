@@ -146,7 +146,26 @@ class CloudLocalHTTP:
                                          stage_id=stage_id, event_type=event_type,
                                          source_sha=str(job.get("source_sha") or ""),
                                          checkpoints=checkpoints)
-            return self._response(200, resolution=resolved)
+            audit = self.store.append_recovery_audit(owner_id, {
+                "owner_id": owner_id,
+                "job_id": job_id,
+                "actor_id": owner_id,
+                "stage_id": stage_id,
+                "requested_event_type": event_type,
+                "source_sha": str(job.get("source_sha") or ""),
+                "decision_status": resolved.get("status"),
+                "selected_route": resolved.get("route"),
+                "selected_evidence_id": (resolved.get("evidence") or {}).get("evidence_id"),
+                "checkpoint_id": resolved.get("checkpoint_id"),
+                "source_refs": resolved.get("recovery_sources", []),
+                "reason": {
+                    "FOUND": "matching evidence resolved",
+                    "RECOVERY_AVAILABLE": "primary evidence missing; verified checkpoint available",
+                    "PARTIAL": "related evidence exists but requested event is missing",
+                    "MISSING": "no verified evidence or checkpoint matched",
+                }.get(resolved.get("status"), "resolver returned an unclassified status"),
+            })
+            return self._response(200, resolution=resolved, audit_id=audit["audit_id"])
         return self._response(404, error="not_found")
 
     def _post(self, parts: list[str], headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
