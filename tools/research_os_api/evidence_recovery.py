@@ -73,7 +73,7 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
         "result": "INFO", "source_sha": source_sha,
         "policy_decision_id": job["policy_decision_id"], "correlation_id": job["correlation_id"],
         "artifact_hashes": hashes, "previous_evidence_id": previous,
-        "evidence_class": "RECOVERED", "recovery_sources": sources,
+        "evidence_class": "RECOVERED", "recovered_event_type": event_type, "recovery_sources": sources,
         "recovery_reason": "requested evidence route was missing; reconstructed from verified same-job checkpoint/evidence metadata",
         "recovery_key": recovery_key,
     }
