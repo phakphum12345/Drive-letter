@@ -328,6 +328,23 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual("MISSING", result["status"])
         self.assertIsNone(result["evidence"])
 
+    def test_evidence_resolver_does_not_trust_recovered_record_without_provenance(self):
+        try:
+            from .evidence_recovery import resolve_evidence
+        except ImportError:
+            from evidence_recovery import resolve_evidence
+        recovered = {
+            "evidence_id": "recovered-unverified", "owner_id": "user-a", "job_id": "job-x",
+            "stage_id": "stage-1", "event_type": "evidence.recovered",
+            "recovered_event_type": "job.completed", "source_sha": "b" * 40,
+            "evidence_class": "RECOVERED",
+        }
+        result = resolve_evidence([recovered], owner_id="user-a", job_id="job-x",
+                                  stage_id="stage-1", event_type="job.completed",
+                                  source_sha="b" * 40)
+        self.assertEqual("MISSING", result["status"])
+        self.assertIsNone(result["evidence"])
+
     def test_evidence_resolver_does_not_trust_unverified_replica(self):
         try:
             from .evidence_recovery import resolve_evidence
