@@ -11,6 +11,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import agent_server
+from agent_runtime import AgentTaskQueue, SharedContextStore
 from agent_orchestrator import AgentOrchestrator
 from auth_session import issue_session
 
@@ -23,6 +24,9 @@ class AgentServerTests(unittest.TestCase):
         self.session = issue_session({"sub": "agent-test-user", "email": "agent-test@example.test", "role": "owner"})
         self.temp_dir = tempfile.TemporaryDirectory()
         agent_server.ORCHESTRATOR = AgentOrchestrator(
+            runtime=AgentTaskQueue(
+                context_store=SharedContextStore(self.temp_dir.name),
+            ),
             storage_path=Path(self.temp_dir.name) / "agents" / "orchestrations.json",
         )
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), agent_server.AgentResearchOSHandler)

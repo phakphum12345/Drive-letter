@@ -111,6 +111,11 @@ class CloudLocalStore:
                 owner_id TEXT NOT NULL, evidence_id TEXT NOT NULL, job_id TEXT NOT NULL,
                 occurred_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner_id,evidence_id))""",
             "CREATE INDEX IF NOT EXISTS idx_cloud_local_evidence_job ON cloud_local_evidence(owner_id,job_id,occurred_at)",
+            """CREATE TABLE IF NOT EXISTS cloud_local_recovery_audit (
+                owner_id TEXT NOT NULL, audit_id TEXT NOT NULL, job_id TEXT NOT NULL,
+                occurred_at TEXT NOT NULL, payload TEXT NOT NULL,
+                PRIMARY KEY(owner_id,audit_id))""",
+            "CREATE INDEX IF NOT EXISTS idx_cloud_local_recovery_audit_job ON cloud_local_recovery_audit(owner_id,job_id,occurred_at)",
             """CREATE TABLE IF NOT EXISTS cloud_local_evidence_recovery_keys (
                 owner_id TEXT NOT NULL, recovery_key TEXT NOT NULL, evidence_id TEXT NOT NULL,
                 PRIMARY KEY(owner_id,recovery_key))""",
