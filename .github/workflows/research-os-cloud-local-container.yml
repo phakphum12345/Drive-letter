@@ -1,0 +1,71 @@
+name: Research OS Cloud Local API Container
+
+on:
+  pull_request:
+    paths:
+      - "deploy/cloud/**"
+      - ".dockerignore"
+      - "tools/research_os_api/cloud_local_*.py"
+      - "tools/research_os_api/*cloud_local*.py"
+      - "tools/research_os_api/contract-requirements.txt"
+      - "tools/research_os_api/cloud-local-requirements.txt"
+      - ".github/workflows/research-os-cloud-local-container.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-os-cloud-local-container-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build production API image
+        run: docker build --pull -f deploy/cloud/Dockerfile.api -t research-os-api:ci .
+      - name: Start cloud-mode API without database configuration
+        run: |
+          docker run -d --name research-os-api-ci \
+            -e RESEARCH_OS_RUNTIME_MODE=cloud \
+            -e PORT=8080 \
+            -p 127.0.0.1:18080:8080 \
+            research-os-api:ci
+      - name: Verify health and fail-closed storage behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = "http://127.0.0.1:18080"
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen(base + "/health", timeout=2) as response:
+                      assert response.status == 200
+                  break
+              except Exception:
+                  time.sleep(1)
+          else:
+              raise SystemExit("API health endpoint did not become ready")
+
+          request = urllib.request.Request(base + "/api/v1/jobs", data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+          try:
+              urllib.request.urlopen(request, timeout=3)
+          except urllib.error.HTTPError as error:
+              assert error.code == 503, f"expected fail-closed 503, got {error.code}"
+          else:
+              raise SystemExit("cloud API unexpectedly accepted requests without PostgreSQL")
+          PY
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs research-os-api-ci || true
+      - name: Stop container
+        if: always()
+        run: docker rm -f research-os-api-ci || true
