@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cloud_local_store import CloudLocalStore
+try:
+    from .cloud_local_store import CloudLocalStore
+except ImportError:  # pragma: no cover - direct unittest discovery
+    from cloud_local_store import CloudLocalStore
 
 
 def sample_job(owner="user-a", job_id="job-1", key="idempotency-key-0001"):
