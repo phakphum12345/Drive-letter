@@ -11,7 +11,8 @@ INSTALL = (ROOT / "scripts" / "research-os-agent-service.ps1").read_text(encodin
 
 class ResearchOSLocalAgentSafetyTests(unittest.TestCase):
     def test_agent_is_a_windows_service_with_no_inbound_listener(self):
-        self.assertIn('UseWindowsService(options => options.ServiceName = "ResearchOSLocalAgent")', PROGRAM)
+        self.assertIn('const string ServiceName = "ResearchOSLocalAgent"', PROGRAM)
+        self.assertIn('.UseWindowsService(options => options.ServiceName = ServiceName)', PROGRAM)
         for forbidden in ("HttpListener", "TcpListener", "WebApplication", "Kestrel", "HttpServer"):
             self.assertNotIn(forbidden, PROGRAM)
 
@@ -40,7 +41,9 @@ class ResearchOSLocalAgentSafetyTests(unittest.TestCase):
         self.assertIn('"repo.audit"', PROGRAM)
         self.assertIn("source_sha_mismatch", PROGRAM)
         self.assertIn("repository.inspect", PROGRAM)
-        self.assertIn("No arbitrary", PROGRAM + (AGENT / "README.md").read_text(encoding="utf-8"))
+        self.assertIn("unsupported_task_type", PROGRAM)
+        self.assertIn("no arbitrary command was executed", PROGRAM)
+        self.assertIn("never runs arbitrary shell", (AGENT / "README.md").read_text(encoding="utf-8"))
 
     def test_service_install_defaults_to_manual_start_and_local_system(self):
         self.assertIn("'start= demand'", INSTALL)
