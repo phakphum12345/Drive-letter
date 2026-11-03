@@ -17,6 +17,7 @@
     <button class="nav-link" type="button" data-view="registry" data-module="Projects & Files"><span>▣</span> Projects & Files</button>
     <button class="nav-link" type="button" data-view="registry" data-module="History & Activity"><span>◷</span> History & Activity</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Settings & Account"><span>⚙</span> Settings & Account</button>
+    <button class="nav-link" type="button" data-view="admin" data-admin-only hidden><span>▤</span> Admin Console</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Work Graph"><span>⌘</span> Work Graph</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Experiments & Observe"><span>◷</span> Experiments & Observe</button>
     <div class="nav-label">RESEARCH & EVIDENCE</div>
@@ -63,6 +64,13 @@
     <article class="home-panel"><header><div><span class="eyebrow">AUDIT TRAIL</span><h2>Recent evidence</h2></div><span class="panel-meta" id="homeEvidenceSummary">Append-only</span></header><div id="homeEvidence" class="home-list"><div class="home-empty">No evidence loaded yet.</div></div></article>
   </div>
   <div class="home-actions"><button class="run-btn" id="homeStartResearch" type="button">เริ่ม Research <b>→</b></button><button class="subtle-button" id="homeViewDirectory" type="button">Platform directory</button></div>
+</section>
+<section class="admin-view" id="adminView" hidden>
+  <div class="admin-heading"><div><span class="eyebrow">OWNER WORKSPACE</span><h1>Admin Console</h1><p>ภาพรวมทรัพยากรแพลตฟอร์มและ Audit จาก Management API · OWNER only</p></div><div class="admin-heading-actions"><span id="adminLastUpdated">Not loaded</span><button class="subtle-button" id="refreshAdminConsole" type="button">↻ Refresh</button></div></div>
+  <div class="admin-status" id="adminStatus" role="status" aria-live="polite">กำลังตรวจสอบสิทธิ์และโหลดข้อมูล…</div>
+  <div class="admin-metrics"><article class="admin-metric"><span>ORGANIZATIONS</span><strong id="adminOrganizationsCount">—</strong></article><article class="admin-metric"><span>PROJECTS</span><strong id="adminProjectsCount">—</strong></article><article class="admin-metric"><span>APPLICATIONS</span><strong id="adminApplicationsCount">—</strong></article><article class="admin-metric"><span>APIS</span><strong id="adminApisCount">—</strong></article></div>
+  <div class="admin-grid"><article class="admin-panel"><header><div><span class="eyebrow">TENANCY</span><h2>Organizations</h2></div></header><div id="adminOrganizations" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">WORKSPACE</span><h2>Projects</h2></div></header><div id="adminProjects" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">INTEGRATIONS</span><h2>Applications</h2></div></header><div id="adminApplications" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">CATALOG</span><h2>APIs</h2></div></header><div id="adminApis" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel admin-audit-panel"><header><div><span class="eyebrow">GOVERNANCE</span><h2>Management audit</h2></div><span class="panel-meta" id="adminAuditCount">Read-only</span></header><div id="adminAudit" class="admin-list"><div class="home-empty">No audit data loaded.</div></div></article></div>
+  <p class="admin-note">หน้าจอนี้เป็น read-only inventory ในเฟสแรก ยังไม่เปิดคำสั่งเปลี่ยน Role, User, Policy หรือการจัดการ Credential จากหน้าเว็บ จนกว่าจะมี durable persistence และ audit/approval flow ครบ</p>
 </section>
 <section class="chat-view active" id="chatView" hidden>
   <div class="conversation-heading"><div><span class="eyebrow">RESEARCH WORKSPACE</span><h1 id="researchTitle">เริ่มต้นการวิจัย</h1><p>กำหนดโจทย์ · ตรวจสอบหลักฐาน · สร้างข้อสรุปที่ตรวจสอบย้อนกลับได้</p></div><div class="heading-actions"><span class="state" id="researchState">READY</span><button class="subtle-button" id="startWork" type="button">เริ่มงาน</button><button class="subtle-button" id="clearConversation" type="button">Clear chat</button></div></div>
