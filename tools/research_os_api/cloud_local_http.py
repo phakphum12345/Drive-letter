@@ -362,14 +362,12 @@ class CloudLocalHTTP:
                                             actor_id=owner_id)
         if recovery is None:
             return self._response(409, status="MISSING", error="insufficient_verified_recovery_sources")
-        existing = next((item for item in records if item.get("recovery_key") == recovery["recovery_key"]), None)
-        if existing:
-            return self._response(200, evidence=existing, status="RECOVERED", reused=True)
         error = self._validate("evidence", recovery)
         if error:
             raise ValueError(error)
-        self.store.append_evidence(owner_id, recovery)
-        return self._response(201, evidence=recovery, status="RECOVERED", reused=False)
+        stored, created = self.store.append_recovered_evidence(owner_id, recovery)
+        return self._response(201 if created else 200, evidence=stored,
+                              status="RECOVERED", reused=not created)
 
     def _append_evidence(self, headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         identity = self._agent(headers)
