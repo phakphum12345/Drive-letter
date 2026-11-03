@@ -95,6 +95,47 @@ class CloudLocalStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "agent_not_active"):
             self.store.claim_local_job("user-a", agent["agent_id"])
 
+    def test_checkpoints_are_lease_fenced_append_only_and_owner_scoped(self):
+        agent, _ = self.enroll()
+        source_job = sample_job()
+        source_job["source_sha"] = "b" * 40
+        self.store.create_job(source_job)
+        claimed = self.store.claim_local_job("user-a", agent["agent_id"])
+        running = self.store.transition_job("user-a", agent["agent_id"], claimed["job_id"], claimed["lease_token"], "RUNNING")
+        self.assertEqual("RUNNING", running["status"])
+        checkpoint = {
+            "contract_version": "1.0", "checkpoint_id": "cp-1", "job_id": "job-1",
+            "owner_id": "user-a", "stage_id": "stage-1", "source_sha": "b" * 40,
+            "workflow_state": "PAUSED", "next_action": "resume after review",
+            "evidence_refs": [], "created_at": "2026-11-03T00:00:00Z", "created_by": agent["agent_id"],
+        }
+        saved = self.store.create_checkpoint("user-a", agent["agent_id"], "job-1", claimed["lease_token"], checkpoint)
+        self.assertEqual("cp-1", saved["checkpoint_id"])
+        self.assertEqual("CHECKPOINTING", self.store.get_job("user-a", "job-1")["status"])
+        self.assertEqual([checkpoint], self.store.list_checkpoints("user-a", "job-1"))
+        self.assertEqual("READY", self.store.resume_checkpoint("user-a", "job-1", "cp-1")["status"])
+        self.assertIsNone(self.store.resume_checkpoint("user-b", "job-1", "cp-1"))
+        with self.assertRaises(Exception):
+            self.store.create_checkpoint("user-a", agent["agent_id"], "job-1", claimed["lease_token"], checkpoint)
+
+    def test_deferred_checkpoint_never_promotes_to_ready_on_resume(self):
+        agent, _ = self.enroll()
+        source_job = sample_job()
+        source_job["source_sha"] = "c" * 40
+        self.store.create_job(source_job)
+        claimed = self.store.claim_local_job("user-a", agent["agent_id"])
+        self.store.transition_job("user-a", agent["agent_id"], "job-1", claimed["lease_token"], "RUNNING")
+        checkpoint = {
+            "contract_version": "1.0", "checkpoint_id": "cp-deferred", "job_id": "job-1",
+            "owner_id": "user-a", "stage_id": "stage-1", "source_sha": "c" * 40,
+            "workflow_state": "DEFERRED", "next_action": "wait for approval",
+            "evidence_refs": [], "created_at": "2026-11-03T00:00:00Z", "created_by": agent["agent_id"],
+        }
+        self.store.create_checkpoint("user-a", agent["agent_id"], "job-1", claimed["lease_token"], checkpoint)
+        result = self.store.resume_checkpoint("user-a", "job-1", "cp-deferred")
+        self.assertEqual("HOLD", result["status"])
+        self.assertIn("checkpoint_not_resumable", result["failures"])
+
     def test_evidence_is_append_only_and_owner_scoped(self):
         evidence = {
             "contract_version": "1.0", "evidence_id": "ev-1", "job_id": "job-1",

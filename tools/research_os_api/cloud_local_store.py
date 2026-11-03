@@ -111,6 +111,11 @@ class CloudLocalStore:
                 owner_id TEXT NOT NULL, evidence_id TEXT NOT NULL, job_id TEXT NOT NULL,
                 occurred_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner_id,evidence_id))""",
             "CREATE INDEX IF NOT EXISTS idx_cloud_local_evidence_job ON cloud_local_evidence(owner_id,job_id,occurred_at)",
+            """CREATE TABLE IF NOT EXISTS cloud_local_checkpoints (
+                owner_id TEXT NOT NULL, job_id TEXT NOT NULL, checkpoint_id TEXT NOT NULL,
+                created_at TEXT NOT NULL, payload TEXT NOT NULL,
+                PRIMARY KEY(owner_id,checkpoint_id), UNIQUE(owner_id,job_id,checkpoint_id))""",
+            "CREATE INDEX IF NOT EXISTS idx_cloud_local_checkpoints_job ON cloud_local_checkpoints(owner_id,job_id,created_at)",
         )
         with self._transaction() as db:
             for statement in ddl:
@@ -341,6 +346,72 @@ class CloudLocalStore:
             self._execute(db, "UPDATE cloud_local_jobs SET lease_expires_at=?,payload=?,updated_at=? WHERE owner_id=? AND job_id=? AND lease_id=?",
                 (expiry, json.dumps(payload, ensure_ascii=False, sort_keys=True), _stamp(now), owner_id, job_id, lease_token))
             return payload
+
+    def create_checkpoint(self, owner_id: str, agent_id: str, job_id: str,
+                         lease_token: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        now = _now()
+        stamp = _stamp(now)
+        with self._transaction() as db:
+            row = self._execute(db, """SELECT payload,lease_id,lease_expires_at,status,assigned_agent_id
+                FROM cloud_local_jobs WHERE owner_id=? AND job_id=?""", (owner_id, job_id)).fetchone()
+            if (not row or row["assigned_agent_id"] != agent_id or row["lease_id"] != lease_token
+                or row["status"] not in {"RUNNING", "CHECKPOINTING"} or not row["lease_expires_at"]
+                or row["lease_expires_at"] <= stamp):
+                return None
+            job = self._payload(row)
+            if payload.get("owner_id") != owner_id or payload.get("job_id") != job_id:
+                raise ValueError("checkpoint_owner_or_job_mismatch")
+            if not job.get("source_sha") or payload.get("source_sha") != job.get("source_sha"):
+                raise ValueError("checkpoint_source_sha_mismatch")
+            supersedes = payload.get("supersedes_checkpoint_id")
+            if supersedes:
+                parent = self._execute(db, """SELECT payload FROM cloud_local_checkpoints
+                    WHERE owner_id=? AND job_id=? AND checkpoint_id=?""",
+                    (owner_id, job_id, supersedes)).fetchone()
+                if parent is None:
+                    raise ValueError("superseded_checkpoint_not_found")
+            encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            self._execute(db, "INSERT INTO cloud_local_checkpoints VALUES (?,?,?,?,?)",
+                (owner_id, job_id, payload["checkpoint_id"], stamp, encoded))
+            job.update(checkpoint_id=payload["checkpoint_id"], status="CHECKPOINTING", updated_at=stamp)
+            self._execute(db, """UPDATE cloud_local_jobs SET status='CHECKPOINTING',payload=?,updated_at=?
+                WHERE owner_id=? AND job_id=? AND lease_id=?""",
+                (json.dumps(job, ensure_ascii=False, sort_keys=True), stamp, owner_id, job_id, lease_token))
+            return payload
+
+    def list_checkpoints(self, owner_id: str, job_id: str) -> list[dict[str, Any]]:
+        with self._reader() as db:
+            rows = self._execute(db, """SELECT payload FROM cloud_local_checkpoints
+                WHERE owner_id=? AND job_id=? ORDER BY created_at DESC""", (owner_id, job_id)).fetchall()
+            return [self._payload(row) for row in rows]
+
+    def resume_checkpoint(self, owner_id: str, job_id: str, checkpoint_id: str) -> dict[str, Any] | None:
+        job = self.get_job(owner_id, job_id)
+        if job is None:
+            return None
+        records = self.list_checkpoints(owner_id, job_id)
+        checkpoint = next((item for item in records if item.get("checkpoint_id") == checkpoint_id), None)
+        if checkpoint is None:
+            return None
+        failures = []
+        if checkpoint.get("source_sha") != job.get("source_sha"):
+            failures.append("source_sha_mismatch")
+        if checkpoint.get("workflow_state") == "COMPLETED":
+            failures.append("checkpoint_already_completed")
+        if checkpoint.get("workflow_state") in {"BLOCKED", "DEFERRED"}:
+            failures.append("checkpoint_not_resumable")
+        if job.get("status") in {"COMPLETED", "FAILED", "CANCELLED"}:
+            failures.append("job_is_terminal")
+        if any(item.get("supersedes_checkpoint_id") == checkpoint_id for item in records):
+            failures.append("checkpoint_superseded")
+        return {
+            "status": "HOLD" if failures else "READY",
+            "checkpoint": checkpoint,
+            "job_status": job.get("status"),
+            "source_sha": job.get("source_sha"),
+            "failures": failures,
+            "next_action": "repair_checkpoint_then_reverify" if failures else checkpoint["next_action"],
+        }
 
     def append_evidence(self, owner_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self._transaction() as db:

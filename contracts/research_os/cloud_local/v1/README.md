@@ -39,8 +39,8 @@ python -m unittest tools.research_os_api.test_cloud_local_contract -v
 
 ## 04. Deliberately not included
 
-- Cloud + Local v1 routes exist under `/api/v1` for owner-scoped job create/read/cancel, Agent grant/enrollment/heartbeat/claim/revocation, lease renew/transition and evidence read/write.
+- Cloud + Local v1 routes exist under `/api/v1` for owner-scoped job create/read/cancel, Agent grant/enrollment/heartbeat/claim/revocation, lease renew/transition, checkpoint create/list/resume-preflight and evidence read/write.
 - Local development uses SQLite; cloud mode requires PostgreSQL and fails closed when `RESEARCH_OS_DATABASE_URL` is absent.
-- Cloud job execution workers, checkpoint persistence/routes, background recovery, Agent Windows service packaging and hybrid stage orchestration are not yet implemented.
+- Cloud job execution workers, scheduled lease recovery, outbox delivery, Agent Windows service packaging and hybrid stage orchestration are not yet implemented. Checkpoint resume is a read-only preflight; it does not start execution.
 - No Azure resources, cloud database, broker or existing JSON data migration are provisioned.
 - No public inbound Windows Friend listener is introduced; Local Agent outbound transport is a follow-up.
