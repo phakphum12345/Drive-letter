@@ -230,5 +230,59 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual("agent_authentication_required", denied["error"])
 
 
+
+    def test_evidence_recovery_is_provenance_labeled_and_idempotent(self):
+        job = self.create_local_job()
+        agent, headers = self.enroll_agent()
+        status, claim = self.request("POST", "/api/v1/agents/claim", headers, {})
+        self.assertEqual(200, status)
+        lease = claim["job"]["lease_token"]
+        status, started = self.request(
+            "POST", f"/api/v1/jobs/{job['job_id']}/transition", headers,
+            {"lease_token": lease, "status": "RUNNING"},
+        )
+        self.assertEqual(200, status, started)
+        status, checkpoint = self.request(
+            "POST", f"/api/v1/jobs/{job['job_id']}/checkpoints", headers,
+            {"lease_token": lease, "stage_id": "stage-recovery", "workflow_state": "PAUSED",
+             "next_action": "resume", "evidence_refs": []},
+        )
+        self.assertEqual(201, status, checkpoint)
+        path = f"/api/v1/jobs/{job['job_id']}/evidence/recover"
+        payload = {"stage_id": "stage-recovery", "event_type": "artifact.committed"}
+        status, recovered = self.request("POST", path, self.user_headers, payload)
+        self.assertEqual(201, status, recovered)
+        self.assertEqual("RECOVERED", recovered["status"])
+        self.assertEqual("RECOVERED", recovered["evidence"]["evidence_class"])
+        self.assertIn(checkpoint["checkpoint"]["checkpoint_id"], recovered["evidence"]["recovery_sources"])
+        status, again = self.request("POST", path, self.user_headers, payload)
+        self.assertEqual(200, status, again)
+        self.assertTrue(again["reused"])
+        self.assertEqual(recovered["evidence"]["evidence_id"], again["evidence"]["evidence_id"])
+
+    def test_evidence_resolver_never_crosses_owner_job_or_source_sha(self):
+        from .evidence_recovery import resolve_evidence
+        records = [{"evidence_id": "foreign", "owner_id": "user-b", "job_id": "job-x",
+                    "stage_id": "stage-1", "event_type": "job.completed", "source_sha": "a" * 40,
+                    "evidence_class": "ORIGINAL"}]
+        result = resolve_evidence(records, owner_id="user-a", job_id="job-x",
+                                  stage_id="stage-1", event_type="job.completed", source_sha="a" * 40)
+        self.assertEqual("MISSING", result["status"])
+        self.assertIsNone(result["evidence"])
+
+    def test_evidence_resolver_prefers_original_then_fallback(self):
+        from .evidence_recovery import resolve_evidence
+        base = {"owner_id": "user-a", "job_id": "job-x", "stage_id": "stage-1",
+                "event_type": "job.completed", "source_sha": "b" * 40}
+        recovered = dict(base, evidence_id="recovered", evidence_class="RECOVERED")
+        original = dict(base, evidence_id="original", evidence_class="ORIGINAL")
+        self.assertEqual("FALLBACK", resolve_evidence([recovered], owner_id="user-a",
+            job_id="job-x", stage_id="stage-1", event_type="job.completed",
+            source_sha="b" * 40)["route"])
+        self.assertEqual("PRIMARY", resolve_evidence([recovered, original], owner_id="user-a",
+            job_id="job-x", stage_id="stage-1", event_type="job.completed",
+            source_sha="b" * 40)["route"])
+
+
 if __name__ == "__main__":
     unittest.main()
