@@ -14,8 +14,9 @@ def _sha(value: Any) -> bool:
 
 
 def resolve_evidence(records: list[dict[str, Any]], *, owner_id: str, job_id: str,
-                     stage_id: str, event_type: str, source_sha: str) -> dict[str, Any]:
-    """Prefer exact original, then verified same-stage evidence; never cross owner/job/SHA."""
+                     stage_id: str, event_type: str, source_sha: str,
+                     checkpoints: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Resolve primary evidence, verified recovered evidence, then checkpoint fallback."""
     scoped = [item for item in records if item.get("owner_id") == owner_id
               and item.get("job_id") == job_id and item.get("stage_id") == stage_id
               and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
@@ -27,7 +28,16 @@ def resolve_evidence(records: list[dict[str, Any]], *, owner_id: str, job_id: st
                      if (item.get("event_type") == event_type or item.get("recovered_event_type") == event_type)
                      and item.get("evidence_class") in {"REPLICA", "RECOVERED"}), None)
     if fallback:
-        return {"status": "FOUND", "route": "FALLBACK", "evidence": fallback}
+        return {"status": "FOUND", "route": "EVIDENCE_FALLBACK", "evidence": fallback}
+    verified_checkpoints = [item for item in (checkpoints or [])
+                            if item.get("owner_id") == owner_id and item.get("job_id") == job_id
+                            and item.get("stage_id") == stage_id and item.get("source_sha") == source_sha
+                            and _sha(item.get("source_sha"))]
+    if verified_checkpoints:
+        latest = verified_checkpoints[-1]
+        return {"status": "RECOVERY_AVAILABLE", "route": "CHECKPOINT_FALLBACK",
+                "checkpoint_id": latest.get("checkpoint_id"),
+                "recovery_sources": [item.get("checkpoint_id") for item in verified_checkpoints]}
     related = [item for item in scoped if item.get("event_type") != event_type]
     if related:
         return {"status": "PARTIAL", "route": "RELATED_EVIDENCE",
@@ -50,7 +60,9 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
     valid_checkpoints = [item for item in checkpoints if item.get("owner_id") == owner_id
                          and item.get("job_id") == job.get("job_id")
                          and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
-    if checkpoint is not None and checkpoint not in valid_checkpoints:
+    if checkpoint is not None and (
+        checkpoint not in valid_checkpoints or checkpoint.get("stage_id") != stage_id
+    ):
         return None
     stage_evidence = [item for item in valid_evidence if item.get("stage_id") == stage_id]
     stage_checkpoints = [item for item in valid_checkpoints if item.get("stage_id") == stage_id]
