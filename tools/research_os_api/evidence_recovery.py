@@ -24,7 +24,7 @@ def resolve_evidence(records: list[dict[str, Any]], *, owner_id: str, job_id: st
     if exact:
         return {"status": "FOUND", "route": "PRIMARY", "evidence": exact}
     fallback = next((item for item in reversed(scoped)
-                     if item.get("event_type") == event_type
+                     if (item.get("event_type") == event_type or item.get("recovered_event_type") == event_type)
                      and item.get("evidence_class") in {"REPLICA", "RECOVERED"}), None)
     if fallback:
         return {"status": "FOUND", "route": "FALLBACK", "evidence": fallback}
@@ -45,7 +45,8 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
         return None
     valid_evidence = [item for item in evidence if item.get("owner_id") == owner_id
                       and item.get("job_id") == job.get("job_id")
-                      and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
+                      and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))
+                      and item.get("evidence_class", "ORIGINAL") == "ORIGINAL"]
     valid_checkpoints = [item for item in checkpoints if item.get("owner_id") == owner_id
                          and item.get("job_id") == job.get("job_id")
                          and item.get("source_sha") == source_sha and _sha(item.get("source_sha"))]
@@ -62,7 +63,6 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
     key_material = {"owner_id": owner_id, "job_id": job["job_id"], "stage_id": stage_id,
                     "event_type": event_type, "source_sha": source_sha, "sources": sources}
     recovery_key = hashlib.sha256(json.dumps(key_material, sort_keys=True).encode()).hexdigest()
-    chosen = checkpoint or (stage_checkpoints[0] if stage_checkpoints else None)
     hashes = sorted({value for item in stage_checkpoints for value in item.get("artifact_hashes", [])})
     previous = stage_evidence[-1].get("evidence_id") if stage_evidence else None
     return {
@@ -73,7 +73,8 @@ def build_recovered_evidence(*, job: dict[str, Any], checkpoints: list[dict[str,
         "result": "INFO", "source_sha": source_sha,
         "policy_decision_id": job["policy_decision_id"], "correlation_id": job["correlation_id"],
         "artifact_hashes": hashes, "previous_evidence_id": previous,
-        "evidence_class": "RECOVERED", "recovered_event_type": event_type, "recovery_sources": sources,
+        "evidence_class": "RECOVERED", "recovered_event_type": event_type,
+        "recovery_sources": sources,
         "recovery_reason": "requested evidence route was missing; reconstructed from verified same-job checkpoint/evidence metadata",
         "recovery_key": recovery_key,
     }
