@@ -364,8 +364,11 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         path = parsed.path
         try:
             if path.startswith("/api/v1/"):
-                status, payload = _cloud_local_http().dispatch("GET", self.path, self.headers)
-                self._send(status, payload)
+                try:
+                    status, payload = _cloud_local_http().dispatch("GET", self.path, self.headers)
+                    self._send(status, payload)
+                except RuntimeError:
+                    self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "cloud_local_storage_not_configured"})
                 return
             if path.startswith("/owner/"):
                 self._proxy_friend("GET", path)
@@ -621,8 +624,11 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         try:
             body = self._read_json()
             if path.startswith("/api/v1/"):
-                status, payload = _cloud_local_http().dispatch("POST", self.path, self.headers, body)
-                self._send(status, payload)
+                try:
+                    status, payload = _cloud_local_http().dispatch("POST", self.path, self.headers, body)
+                    self._send(status, payload)
+                except RuntimeError:
+                    self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "cloud_local_storage_not_configured"})
                 return
             if path.startswith("/owner/") or path == "/v1/launch-desk/run":
                 self._proxy_friend("POST", path, body)
