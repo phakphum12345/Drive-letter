@@ -113,7 +113,7 @@ sealed class LocalAgentWorker : BackgroundService
 
         try
         {
-            await _api.TransitionAsync(job, "RUNNING", "agent.dispatch", [], cancellationToken);
+            await _api.TransitionAsync(job, _configuration.AgentToken!, "RUNNING", "agent.dispatch", [], cancellationToken);
 
             if (!string.Equals(job.TaskType, "repo.audit", StringComparison.Ordinal))
                 throw new InvalidOperationException("unsupported_task_type");
@@ -125,7 +125,7 @@ sealed class LocalAgentWorker : BackgroundService
                 _configuration.WorkspaceRoot, job.SourceSha, cancellationToken);
 
             // The API commits the state transition and lifecycle evidence in one DB transaction.
-            await _api.TransitionAsync(job, "COMPLETED", "repo.audit", [artifactHash], cancellationToken);
+            await _api.TransitionAsync(job, _configuration.AgentToken!, "COMPLETED", "repo.audit", [artifactHash], cancellationToken);
             _logger.LogInformation("Read-only repository audit completed for job {JobId}.", job.JobId);
         }
         catch (Exception ex)
@@ -133,7 +133,7 @@ sealed class LocalAgentWorker : BackgroundService
             _logger.LogWarning(ex, "Local job {JobId} failed safely; no arbitrary command was executed.", job.JobId);
             try
             {
-                await _api.TransitionAsync(job, "FAILED", "agent.failure", [], cancellationToken);
+                await _api.TransitionAsync(job, _configuration.AgentToken!, "FAILED", "agent.failure", [], cancellationToken);
             }
             catch (Exception transitionError)
             {
@@ -189,7 +189,7 @@ sealed class LocalAgentApiClient
             : null;
     }
 
-    public async Task TransitionAsync(CloudLocalJob job, string status, string stageId,
+    public async Task TransitionAsync(CloudLocalJob job, string agentToken, string status, string stageId,
         string[] artifactHashes, CancellationToken ct)
     {
         using var response = await PostAsync(
@@ -201,19 +201,17 @@ sealed class LocalAgentApiClient
                 stage_id = stageId,
                 artifact_hashes = artifactHashes
             },
-            null,
-            ct,
-            job.LeaseToken);
+            agentToken,
+            ct);
     }
 
     private async Task<JsonDocument> PostAsync(string path, object body, string? bearerToken,
-        CancellationToken ct, string? leaseToken = null)
+        CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_baseUri, path));
         request.Content = JsonContent.Create(body);
-        var token = bearerToken ?? leaseToken;
-        if (!string.IsNullOrWhiteSpace(token))
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
 
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
