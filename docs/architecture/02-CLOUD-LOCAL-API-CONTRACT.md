@@ -158,10 +158,13 @@ Implemented in the current API slice (session-authenticated user routes or beare
 | POST | `/api/v1/agents/claim` | Claim a matching LOCAL/HYBRID job for the same owner |
 | POST | `/api/v1/jobs/{job_id}/lease/renew` | Renew the active lease with the current fencing token |
 | POST | `/api/v1/jobs/{job_id}/transition` | Commit a lease-fenced job state transition |
+| POST | `/api/v1/jobs/{job_id}/checkpoints` | Persist a schema-validated checkpoint under the active Agent lease |
+| GET | `/api/v1/jobs/{job_id}/checkpoints` | List owner-scoped append-only checkpoints |
+| POST | `/api/v1/jobs/{job_id}/checkpoints/{checkpoint_id}/resume` | Read-only resume preflight; returns HOLD for stale, superseded, blocked, deferred or terminal state |
 | POST | `/api/v1/evidence` | Append validated Agent evidence |
 | GET | `/api/v1/jobs/{job_id}/evidence` | Read owner-scoped evidence |
 
-Not yet implemented: Cloud worker claim/dispatch, checkpoint commit/resume, outbox delivery, scheduled lease recovery and Local Agent Windows service transport. Cloud/AUTO jobs remain queued until a Cloud worker is deployed.
+Not yet implemented: Cloud worker claim/dispatch, automatic checkpoint recovery, outbox delivery, scheduled lease recovery and Local Agent Windows service transport. Checkpoint resume is preflight-only and never promotes DEFERRED/BLOCKED work or executes a job. Cloud/AUTO jobs remain queued until a Cloud worker is deployed.
 
 These routes are implemented in the current API slice. Remaining routes and semantics stay planned; the presence of a job record does not imply that a Cloud worker is available or that a side effect has been authorized.
 
