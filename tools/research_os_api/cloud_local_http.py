@@ -136,7 +136,7 @@ class CloudLocalHTTP:
             if not stage_id or not event_type:
                 raise ValueError("stage_id_and_event_type_required")
             records = self.store.list_evidence(owner_id, job_id)
-            from .evidence_recovery import resolve_evidence
+            try:\n                from .evidence_recovery import resolve_evidence\n            except ImportError:  # pragma: no cover - direct unittest discovery\n                from evidence_recovery import resolve_evidence
             resolved = resolve_evidence(records, owner_id=owner_id, job_id=job_id,
                                          stage_id=stage_id, event_type=event_type,
                                          source_sha=str(job.get("source_sha") or ""))
@@ -338,7 +338,7 @@ class CloudLocalHTTP:
         checkpoints = self.store.list_checkpoints(owner_id, job_id)
         checkpoint_id = str(body.get("checkpoint_id") or "").strip()
         checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None) if checkpoint_id else next((item for item in checkpoints if item.get("stage_id") == stage_id and item.get("source_sha") == job.get("source_sha")), None)
-        from .evidence_recovery import build_recovered_evidence
+        try:\n            from .evidence_recovery import build_recovered_evidence\n        except ImportError:  # pragma: no cover - direct server execution\n            from evidence_recovery import build_recovered_evidence
         recovery = build_recovered_evidence(job=job, checkpoints=checkpoints, evidence=records,
                                             owner_id=owner_id, stage_id=stage_id,
                                             event_type=event_type, checkpoint=checkpoint,
