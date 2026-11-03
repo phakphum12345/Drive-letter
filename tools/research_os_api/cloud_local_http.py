@@ -298,9 +298,25 @@ class CloudLocalHTTP:
             job = self.store.renew_lease(owner_id, agent_id, job_id, lease,
                                          int(body.get("lease_seconds", 60)))
         else:
+            current = self.store.get_job(owner_id, job_id)
+            if current is None:
+                return self._response(404, error="job_not_found")
+            candidate = dict(current)
+            candidate["status"] = str(body.get("status") or "").upper()
+            candidate["updated_at"] = _now()
+            if body.get("output_refs") is not None:
+                candidate["output_refs"] = body["output_refs"]
+            if body.get("checkpoint_id") is not None:
+                candidate["checkpoint_id"] = body["checkpoint_id"]
+            if candidate["status"] in {"COMPLETED", "FAILED"}:
+                candidate["lease_id"] = None
+                candidate["lease_expires_at"] = None
+            error = self._validate("job", candidate)
+            if error:
+                raise ValueError(error)
             job = self.store.transition_job(
-                owner_id, agent_id, job_id, lease, str(body.get("status") or "").upper(),
-                output_refs=body.get("output_refs"), checkpoint_id=body.get("checkpoint_id"),
+                owner_id, agent_id, job_id, lease, candidate["status"],
+                output_refs=candidate.get("output_refs"), checkpoint_id=candidate.get("checkpoint_id"),
             )
         return self._response(200, job=job) if job else self._response(409, error="lease_invalid_or_expired")
 
