@@ -398,6 +398,8 @@ class CloudLocalStore:
             failures.append("source_sha_mismatch")
         if checkpoint.get("workflow_state") == "COMPLETED":
             failures.append("checkpoint_already_completed")
+        if checkpoint.get("workflow_state") in {"BLOCKED", "DEFERRED"}:
+            failures.append("checkpoint_not_resumable")
         if job.get("status") in {"COMPLETED", "FAILED", "CANCELLED"}:
             failures.append("job_is_terminal")
         if any(item.get("supersedes_checkpoint_id") == checkpoint_id for item in records):
