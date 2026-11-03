@@ -137,13 +137,15 @@ class CloudLocalHTTP:
             if not stage_id or not event_type:
                 raise ValueError("stage_id_and_event_type_required")
             records = self.store.list_evidence(owner_id, job_id)
+            checkpoints = self.store.list_checkpoints(owner_id, job_id)
             try:
                 from .evidence_recovery import resolve_evidence
             except ImportError:  # pragma: no cover - direct unittest discovery
                 from evidence_recovery import resolve_evidence
             resolved = resolve_evidence(records, owner_id=owner_id, job_id=job_id,
                                          stage_id=stage_id, event_type=event_type,
-                                         source_sha=str(job.get("source_sha") or ""))
+                                         source_sha=str(job.get("source_sha") or ""),
+                                         checkpoints=checkpoints)
             return self._response(200, resolution=resolved)
         return self._response(404, error="not_found")
 
@@ -351,7 +353,9 @@ class CloudLocalHTTP:
         records = self.store.list_evidence(owner_id, job_id)
         checkpoints = self.store.list_checkpoints(owner_id, job_id)
         checkpoint_id = str(body.get("checkpoint_id") or "").strip()
-        checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None) if checkpoint_id else next((item for item in checkpoints if item.get("stage_id") == stage_id and item.get("source_sha") == job.get("source_sha")), None)
+        checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == checkpoint_id), None) if checkpoint_id else next((item for item in reversed(checkpoints) if item.get("stage_id") == stage_id and item.get("source_sha") == job.get("source_sha")), None)
+        if checkpoint_id and (checkpoint is None or checkpoint.get("stage_id") != stage_id):
+            return self._response(409, recovery_status="MISSING", error="checkpoint_not_found_for_stage")
         try:
             from .evidence_recovery import build_recovered_evidence
         except ImportError:  # pragma: no cover - direct server execution
