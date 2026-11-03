@@ -90,6 +90,19 @@ class CloudLocalHTTPTests(unittest.TestCase):
             self.assertEqual(403, status)
             self.assertEqual("locality_policy_denied", result["error"])
 
+    def test_cloud_execution_requires_public_data_until_upload_consent_exists(self):
+        for classification in ("INTERNAL", "CONFIDENTIAL"):
+            status, result = self.request(
+                "POST", "/api/v1/jobs", self.user_headers,
+                {
+                    "execution_mode": "CLOUD", "data_classification": classification,
+                    "task_type": "repo.audit", "idempotency_key": "consent-key-" + classification.lower() + "-0001",
+                    "source_sha": "a" * 40,
+                },
+            )
+            self.assertEqual(403, status)
+            self.assertEqual("cloud_data_consent_required", result["error"])
+
     def test_user_authentication_is_required_for_job_creation(self):
         status, result = self.request(
             "POST", "/api/v1/jobs", {},
