@@ -37,7 +37,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
             "execution_mode": "LOCAL",
             "data_classification": "LOCAL_ONLY",
             "task_type": "repo.audit",
-            "required_capabilities": ["filesystem.read"],
+            "required_capabilities": ["repository.inspect"],
             "idempotency_key": "idempotency-key-00000001",
             "source_sha": "a" * 40,
             "owner_id": "attacker-controlled",
@@ -47,7 +47,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual(201, status, result)
         return result["job"]
 
-    def enroll_agent(self):
+    def enroll_agent(self, capabilities=None):
         status, grant = self.request(
             "POST", "/api/v1/agents/enrollment-grants", self.user_headers, {"ttl_seconds": 600}
         )
@@ -58,7 +58,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
                 "enrollment_token": grant["enrollment_token"],
                 "device_id": "device-1",
                 "protocol_versions": ["1.0"],
-                "capabilities": [{"name": "filesystem.read", "version": "1"}],
+                "capabilities": capabilities if capabilities is not None else [{"name": "repository.inspect", "version": "1"}],
                 "os_name": "Windows",
                 "os_version": "11",
                 "agent_version": "1.0.0",
@@ -170,6 +170,14 @@ class CloudLocalHTTPTests(unittest.TestCase):
         )
         self.assertEqual(200, status)
         self.assertCountEqual(["job.started", "job.completed"], [item["event_type"] for item in evidence_list["evidence"]])
+
+
+    def test_agent_without_repository_inspect_cannot_claim_repo_audit(self):
+        self.create_local_job()
+        _, headers = self.enroll_agent(capabilities=[{"name": "filesystem.read", "version": "1"}])
+        status, claim = self.request("POST", "/api/v1/agents/claim", headers, {})
+        self.assertEqual(200, status, claim)
+        self.assertIsNone(claim["job"])
 
     def test_agent_token_is_required_and_grant_is_single_use(self):
         status, grant = self.request(
