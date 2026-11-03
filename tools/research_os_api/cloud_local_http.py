@@ -195,6 +195,16 @@ class CloudLocalHTTP:
                                   policy="cloud-local.cloud-consent.v1",
                                   detail="Cloud stages are disabled for INTERNAL or CONFIDENTIAL data until an explicit upload-consent policy is implemented.")
         policy_id = "pd-" + uuid.uuid4().hex
+        task_type = str(body.get("task_type") or "").strip()
+        required_capabilities = list(body.get("required_capabilities", []))
+        source_sha = body.get("source_sha")
+        if task_type == "repo.audit":
+            if mode not in {"LOCAL", "HYBRID"}:
+                return self._response(403, error="local_task_requires_local_execution")
+            if not source_sha:
+                raise ValueError("repo.audit requires source_sha")
+            if "repository.inspect" not in required_capabilities:
+                required_capabilities.append("repository.inspect")
         now = _now()
         payload = {
             "contract_version": "1.0",
@@ -207,8 +217,8 @@ class CloudLocalHTTP:
             "job_id": "job-" + uuid.uuid4().hex,
             "execution_mode": mode,
             "status": "WAITING_FOR_LOCAL_AGENT" if mode in {"LOCAL", "HYBRID"} else "QUEUED",
-            "task_type": str(body.get("task_type") or "").strip(),
-            "required_capabilities": body.get("required_capabilities", []),
+            "task_type": task_type,
+            "required_capabilities": required_capabilities,
             "data_classification": classification,
             "idempotency_key": str(body.get("idempotency_key") or "").strip(),
             "input_refs": input_refs,
