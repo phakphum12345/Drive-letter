@@ -111,6 +111,9 @@ class CloudLocalStore:
                 owner_id TEXT NOT NULL, evidence_id TEXT NOT NULL, job_id TEXT NOT NULL,
                 occurred_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner_id,evidence_id))""",
             "CREATE INDEX IF NOT EXISTS idx_cloud_local_evidence_job ON cloud_local_evidence(owner_id,job_id,occurred_at)",
+            """CREATE TABLE IF NOT EXISTS cloud_local_evidence_recovery_keys (
+                owner_id TEXT NOT NULL, recovery_key TEXT NOT NULL, evidence_id TEXT NOT NULL,
+                PRIMARY KEY(owner_id,recovery_key))""",
             """CREATE TABLE IF NOT EXISTS cloud_local_checkpoints (
                 owner_id TEXT NOT NULL, job_id TEXT NOT NULL, checkpoint_id TEXT NOT NULL,
                 created_at TEXT NOT NULL, payload TEXT NOT NULL,
@@ -426,6 +429,28 @@ class CloudLocalStore:
                 (owner_id, payload["evidence_id"], payload["job_id"], payload["occurred_at"],
                  json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
         return payload
+
+    def append_recovered_evidence(self, owner_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Atomically deduplicate recovered evidence by owner-scoped provenance key."""
+        recovery_key = str(payload.get("recovery_key") or "")
+        if not recovery_key:
+            raise ValueError("recovery_key_required")
+        with self._transaction() as db:
+            inserted = self._execute(db, """INSERT INTO cloud_local_evidence_recovery_keys
+                (owner_id,recovery_key,evidence_id) VALUES (?,?,?) ON CONFLICT(owner_id,recovery_key) DO NOTHING""",
+                (owner_id, recovery_key, payload["evidence_id"]))
+            if inserted.rowcount == 0:
+                row = self._execute(db, """SELECT e.payload FROM cloud_local_evidence e
+                    JOIN cloud_local_evidence_recovery_keys k
+                      ON k.owner_id=e.owner_id AND k.evidence_id=e.evidence_id
+                    WHERE k.owner_id=? AND k.recovery_key=?""", (owner_id, recovery_key)).fetchone()
+                if row is None:
+                    raise RuntimeError("recovery_key_registry_inconsistent")
+                return self._payload(row), False
+            self._execute(db, "INSERT INTO cloud_local_evidence VALUES (?,?,?,?,?)",
+                (owner_id, payload["evidence_id"], payload["job_id"], payload["occurred_at"],
+                 json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
+            return payload, True
 
     def list_evidence(self, owner_id: str, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
         with self._reader() as db:
