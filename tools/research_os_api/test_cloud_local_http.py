@@ -328,6 +328,22 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual("MISSING", result["status"])
         self.assertIsNone(result["evidence"])
 
+    def test_evidence_resolver_does_not_trust_unverified_replica(self):
+        try:
+            from .evidence_recovery import resolve_evidence
+        except ImportError:
+            from evidence_recovery import resolve_evidence
+        replica = {
+            "evidence_id": "replica-unverified", "owner_id": "user-a", "job_id": "job-x",
+            "stage_id": "stage-1", "event_type": "job.completed", "source_sha": "b" * 40,
+            "evidence_class": "REPLICA",
+        }
+        result = resolve_evidence([replica], owner_id="user-a", job_id="job-x",
+                                  stage_id="stage-1", event_type="job.completed",
+                                  source_sha="b" * 40)
+        self.assertEqual("MISSING", result["status"])
+        self.assertIsNone(result["evidence"])
+
     def test_evidence_resolver_prefers_original_then_fallback(self):
         try:
             from .evidence_recovery import resolve_evidence
@@ -336,7 +352,9 @@ class CloudLocalHTTPTests(unittest.TestCase):
         base = {"owner_id": "user-a", "job_id": "job-x", "stage_id": "stage-1",
                 "event_type": "job.completed", "source_sha": "b" * 40}
         recovered = dict(base, evidence_id="recovered", event_type="evidence.recovered",
-                         recovered_event_type="job.completed", evidence_class="RECOVERED")
+                         recovered_event_type="job.completed", evidence_class="RECOVERED",
+                         recovery_sources=["cp-verified"], recovery_reason="verified checkpoint fallback",
+                         recovery_key="c" * 64)
         original = dict(base, evidence_id="original", evidence_class="ORIGINAL")
         self.assertEqual("EVIDENCE_FALLBACK", resolve_evidence([recovered], owner_id="user-a",
             job_id="job-x", stage_id="stage-1", event_type="job.completed",
