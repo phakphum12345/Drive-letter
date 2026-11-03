@@ -22,6 +22,17 @@ class APISpineContractTests(unittest.TestCase):
         self.assertNotIn("researchOsBaseUrl", client)
         self.assertIn("$baseUrl/v1/ai/generate", client)
 
+    def test_windows_service_passes_the_installed_friend_service_endpoint(self):
+        service_host = self.read("tools/research_os_service/Program.cs")
+        service_installer = self.read("scripts/research-os-service.ps1")
+        api = self.read("tools/research_os_api/server.py")
+        owner_installer = self.read("installer/research-os.iss")
+        self.assertIn('Environment.GetEnvironmentVariable("RESEARCH_OS_FRIEND_URL") ?? "http://127.0.0.1:8790"', service_host)
+        self.assertIn('RESEARCH_OS_FRIEND_URL=http://127.0.0.1:8790', service_installer)
+        self.assertIn('os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790")', api)
+        self.assertIn("-Port 8790", owner_installer)
+        self.assertNotIn("http://127.0.0.1:0", api)
+
     def test_friend_routes_are_gateway_proxied(self):
         server = self.read("tools/research_os_api/server.py")
         self.assertIn('if path.startswith("/owner/"):', server)
