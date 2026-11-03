@@ -125,6 +125,12 @@ class CloudLocalHTTP:
                 return self._response(404, error="job_not_found")
             evidence = self.store.list_evidence(owner_id, job_id)
             return self._response(200, evidence=evidence, count=len(evidence))
+        if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["evidence", "recovery-audit"]:
+            job_id = parts[3]
+            if self.store.get_job(owner_id, job_id) is None:
+                return self._response(404, error="job_not_found")
+            audit = self.store.list_recovery_audit(owner_id, job_id)
+            return self._response(200, audit=audit, count=len(audit))
         if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["evidence", "resolve"]:
             job_id = parts[3]
             job = self.store.get_job(owner_id, job_id)
