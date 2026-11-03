@@ -24,9 +24,21 @@ def resolve_evidence(records: list[dict[str, Any]], *, owner_id: str, job_id: st
                   and item.get("evidence_class", "ORIGINAL") == "ORIGINAL"), None)
     if exact:
         return {"status": "FOUND", "route": "PRIMARY", "evidence": exact}
-    fallback = next((item for item in reversed(scoped)
-                     if (item.get("event_type") == event_type or item.get("recovered_event_type") == event_type)
-                     and item.get("evidence_class") in {"REPLICA", "RECOVERED"}), None)
+    def verified_recovery(item: dict[str, Any]) -> bool:
+        key = str(item.get("recovery_key") or "")
+        sources = item.get("recovery_sources")
+        return (
+            item.get("evidence_class") == "RECOVERED"
+            and item.get("event_type") == "evidence.recovered"
+            and item.get("recovered_event_type") == event_type
+            and isinstance(sources, list) and bool(sources)
+            and bool(str(item.get("recovery_reason") or "").strip())
+            and len(key) == 64 and all(ch in "0123456789abcdef" for ch in key)
+        )
+
+    # REPLICA is deliberately not trusted until a byte-for-byte artifact verifier
+    # exists; a class label alone is not proof that a replica matches its source.
+    fallback = next((item for item in reversed(scoped) if verified_recovery(item)), None)
     if fallback:
         return {"status": "FOUND", "route": "EVIDENCE_FALLBACK", "evidence": fallback}
     verified_checkpoints = [item for item in (checkpoints or [])
