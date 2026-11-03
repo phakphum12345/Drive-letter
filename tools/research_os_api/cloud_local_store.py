@@ -171,6 +171,14 @@ class CloudLocalStore:
                           (_digest(token), owner_id, expires, _stamp(now)))
         return token
 
+    def enrollment_grant_owner(self, grant_token: str) -> str | None:
+        with self._reader() as db:
+            row = self._execute(db, """SELECT owner_id,expires_at,used_at
+                FROM cloud_local_enrollment_grants WHERE grant_hash=?""", (_digest(grant_token),)).fetchone()
+            if not row or row["used_at"] is not None or row["expires_at"] <= _stamp():
+                return None
+            return str(row["owner_id"])
+
     def enroll_agent(self, grant_token: str, *, owner_id: str, device_id: str,
                      protocol_versions: list[str], capabilities: list[dict[str, str]],
                      os_name: str, agent_version: str, os_version: str = "") -> tuple[dict[str, Any], str]:
