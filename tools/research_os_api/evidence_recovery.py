@@ -50,7 +50,12 @@ def resolve_evidence(records: list[dict[str, Any]], *, owner_id: str, job_id: st
         return {"status": "RECOVERY_AVAILABLE", "route": "CHECKPOINT_FALLBACK",
                 "checkpoint_id": latest.get("checkpoint_id"),
                 "recovery_sources": [item.get("checkpoint_id") for item in verified_checkpoints]}
-    related = [item for item in scoped if item.get("event_type") != event_type]
+    # Only ORIGINAL records can establish that related evidence exists. Unverified
+    # RECOVERED records and REPLICA records must not be promoted to PARTIAL merely
+    # because their event label differs from the requested event.
+    related = [item for item in scoped
+               if item.get("event_type") != event_type
+               and item.get("evidence_class", "ORIGINAL") == "ORIGINAL"]
     if related:
         return {"status": "PARTIAL", "route": "RELATED_EVIDENCE",
                 "evidence": related[-1], "missing_event_type": event_type}
