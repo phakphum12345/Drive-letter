@@ -61,7 +61,8 @@
         "agent.heartbeat",
         "agent.revoked",
         "policy.evaluated",
-        "artifact.committed"
+        "artifact.committed",
+        "evidence.recovered"
       ]
     },
     "occurred_at": {
@@ -109,6 +110,32 @@
         "null"
       ],
       "maxLength": 128
+    },
+    "evidence_class": {
+      "type": "string",
+      "enum": [
+        "ORIGINAL",
+        "REPLICA",
+        "RECOVERED"
+      ]
+    },
+    "recovery_sources": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "recovery_reason": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "recovery_key": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
     }
   }
 }
