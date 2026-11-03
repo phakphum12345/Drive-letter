@@ -129,6 +129,10 @@ class CloudLocalHTTP:
             return self._claim(headers, body)
         if parts == ["api", "v1", "evidence"]:
             return self._append_evidence(headers, body)
+        if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "transition":
+            return self._agent_job_action(headers, body, parts[3], "transition")
+        if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["lease", "renew"]:
+            return self._agent_job_action(headers, body, parts[3], "lease")
 
         principal = self._principal(headers)
         if principal is None:
@@ -195,8 +199,6 @@ class CloudLocalHTTP:
         for optional in ("source_sha", "stage_id"):
             if body.get(optional) is not None:
                 payload[optional] = body[optional]
-        if payload["source_sha"] if "source_sha" in payload else False:
-            pass
         error = self._validate("job", payload)
         if error:
             raise ValueError(error)
