@@ -39,7 +39,7 @@ class CloudLocalHTTP:
         except ImportError as exc:
             raise RuntimeError("Cloud + Local API requires contract-requirements.txt") from exc
         self._validators = {}
-        for name in ("job", "agent", "evidence"):
+        for name in ("job", "agent", "evidence", "checkpoint"):
             schema = json.loads((_SCHEMA_ROOT / f"{name}.schema.json").read_text(encoding="utf-8"))
             self._validators[name] = Draft202012Validator(schema, format_checker=FormatChecker())
 
@@ -112,6 +112,12 @@ class CloudLocalHTTP:
         if len(parts) == 4 and parts[:3] == ["api", "v1", "jobs"]:
             job = self.store.get_job(owner_id, parts[3])
             return self._response(200, job=job) if job else self._response(404, error="job_not_found")
+        if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "checkpoints":
+            job_id = parts[3]
+            if self.store.get_job(owner_id, job_id) is None:
+                return self._response(404, error="job_not_found")
+            checkpoints = self.store.list_checkpoints(owner_id, job_id)
+            return self._response(200, checkpoints=checkpoints, count=len(checkpoints))
         if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "evidence":
             job_id = parts[3]
             if self.store.get_job(owner_id, job_id) is None:
@@ -129,6 +135,8 @@ class CloudLocalHTTP:
             return self._claim(headers, body)
         if parts == ["api", "v1", "evidence"]:
             return self._append_evidence(headers, body)
+        if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "checkpoints":
+            return self._create_checkpoint(headers, body, parts[3])
         if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "transition":
             return self._agent_job_action(headers, body, parts[3], "transition")
         if len(parts) == 6 and parts[:3] == ["api", "v1", "jobs"] and parts[4:] == ["lease", "renew"]:
@@ -144,6 +152,9 @@ class CloudLocalHTTP:
             token = self.store.create_enrollment_grant(owner_id, ttl)
             return self._response(201, enrollment_token=token, expires_in_seconds=max(60, min(ttl, 3600)),
                                   owner_id=owner_id, single_use=True)
+        if len(parts) == 7 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "checkpoints" and parts[6] == "resume":
+            result = self.store.resume_checkpoint(owner_id, parts[3], parts[5])
+            return self._response(200, resume=result) if result else self._response(404, error="checkpoint_not_found")
         if parts == ["api", "v1", "jobs"]:
             return self._create_job(owner_id, body)
         if len(parts) == 5 and parts[:3] == ["api", "v1", "jobs"] and parts[4] == "cancel":
@@ -258,6 +269,40 @@ class CloudLocalHTTP:
         job = self.store.claim_local_job(identity["owner_id"], identity["agent_id"],
                                          int(body.get("lease_seconds", 60)))
         return self._response(200, job=job)
+
+    def _create_checkpoint(self, headers: Any, body: dict[str, Any], job_id: str) -> tuple[int, dict[str, Any]]:
+        identity = self._agent(headers)
+        if identity is None:
+            return self._response(401, error="agent_authentication_required")
+        owner_id, agent_id = identity["owner_id"], identity["agent_id"]
+        job = self.store.get_job(owner_id, job_id)
+        if job is None:
+            return self._response(404, error="job_not_found")
+        if not job.get("source_sha"):
+            raise ValueError("job_source_sha_required_for_checkpoint")
+        payload = {
+            "contract_version": "1.0",
+            "checkpoint_id": "cp-" + uuid.uuid4().hex,
+            "job_id": job_id,
+            "owner_id": owner_id,
+            "stage_id": str(body.get("stage_id") or "").strip(),
+            "source_sha": job["source_sha"],
+            "workflow_state": str(body.get("workflow_state") or "").upper(),
+            "next_action": str(body.get("next_action") or "").strip(),
+            "evidence_refs": body.get("evidence_refs") or [],
+            "created_at": _now(),
+            "created_by": agent_id,
+        }
+        for optional in ("workflow_context", "supersedes_checkpoint_id", "artifact_hashes"):
+            if body.get(optional) is not None:
+                payload[optional] = body[optional]
+        error = self._validate("checkpoint", payload)
+        if error:
+            raise ValueError(error)
+        checkpoint = self.store.create_checkpoint(
+            owner_id, agent_id, job_id, str(body.get("lease_token") or "").strip(), payload
+        )
+        return self._response(201, checkpoint=checkpoint) if checkpoint else self._response(409, error="lease_invalid_or_expired")
 
     def _append_evidence(self, headers: Any, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         identity = self._agent(headers)
