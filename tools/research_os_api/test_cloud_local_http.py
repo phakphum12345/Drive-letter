@@ -293,7 +293,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual(recovered["evidence"]["evidence_id"], again["evidence"]["evidence_id"])
         status, resolved = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-recovery&event_type=artifact.committed", self.user_headers)
         self.assertEqual(200, status, resolved)
-        self.assertEqual("FALLBACK", resolved["resolution"]["route"])
+        self.assertEqual("EVIDENCE_FALLBACK", resolved["resolution"]["route"])
         # Exact original wins over a checkpoint-only recovery route.
         status, empty = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-missing&event_type=artifact.committed", self.user_headers)
         self.assertEqual(200, status, empty)
@@ -322,7 +322,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
         recovered = dict(base, evidence_id="recovered", event_type="evidence.recovered",
                          recovered_event_type="job.completed", evidence_class="RECOVERED")
         original = dict(base, evidence_id="original", evidence_class="ORIGINAL")
-        self.assertEqual("FALLBACK", resolve_evidence([recovered], owner_id="user-a",
+        self.assertEqual("EVIDENCE_FALLBACK", resolve_evidence([recovered], owner_id="user-a",
             job_id="job-x", stage_id="stage-1", event_type="job.completed",
             source_sha="b" * 40)["route"])
         self.assertEqual("PRIMARY", resolve_evidence([recovered, original], owner_id="user-a",
