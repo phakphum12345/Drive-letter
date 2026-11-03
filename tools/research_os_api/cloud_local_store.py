@@ -222,6 +222,15 @@ class CloudLocalStore:
                 (json.dumps(payload, ensure_ascii=False, sort_keys=True), stamp, owner_id, agent_id))
             return payload
 
+    def list_agents(self, owner_id: str) -> list[dict[str, Any]]:
+        with self._reader() as db:
+            rows = self._execute(
+                db,
+                "SELECT payload FROM cloud_local_agents WHERE owner_id=? ORDER BY created_at DESC",
+                (owner_id,),
+            ).fetchall()
+            return [self._payload(row) for row in rows]
+
     def revoke_agent(self, owner_id: str, agent_id: str) -> bool:
         with self._transaction() as db:
             row = self._execute(db, "SELECT payload FROM cloud_local_agents WHERE owner_id=? AND agent_id=?",
