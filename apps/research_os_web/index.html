@@ -12,7 +12,8 @@
   <button class="new-research" id="newResearch" type="button"><span>＋</span> New research</button>
   <nav class="nav" aria-label="Main navigation">
     <div class="nav-label">WORKSPACE</div>
-    <button class="nav-link active" type="button" data-view="chat"><span>◉</span> Research Chat <kbd>⌘1</kbd></button>
+    <button class="nav-link active" type="button" data-view="home"><span>⌂</span> Control Center</button>
+    <button class="nav-link" type="button" data-view="chat"><span>◉</span> Research Chat <kbd>⌘1</kbd></button>
     <button class="nav-link" type="button" data-view="registry" data-module="Work Graph"><span>⌘</span> Work Graph</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Experiments & Observe"><span>◷</span> Experiments & Observe</button>
     <div class="nav-label">RESEARCH & EVIDENCE</div>
@@ -43,7 +44,24 @@
 <div class="sidebar-scrim" id="sidebarScrim"></div>
 <main class="main">
 <header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="openSidebar" type="button" aria-label="Open menu">☰</button><div class="breadcrumb"><span>Research OS</span><b>/</b><strong id="pageTitle">Research Chat</strong></div></div><div class="topbar-right"><span class="connection-pill"><i id="connectionDot"></i><span id="connectionText">Checking connection</span></span><button class="icon-btn" id="focusMode" type="button" title="Toggle focus mode" aria-label="Toggle focus mode">⛶</button></div></header>
-<section class="chat-view active" id="chatView">
+<section class="home-view" id="homeView">
+  <div class="home-heading"><div><span class="eyebrow">PLATFORM OVERVIEW</span><h1>Control Center</h1><p>สถานะระบบ งานของคุณ อุปกรณ์ Local Agent และหลักฐานการทำงานจาก API จริง</p></div><div class="home-heading-actions"><span id="homeLastUpdated">ยังไม่ได้ตรวจสอบ</span><button class="subtle-button" id="refreshControlCenter" type="button">↻ Refresh</button></div></div>
+  <div class="home-status" id="homeStatus" role="status" aria-live="polite">กำลังตรวจสอบสถานะแพลตฟอร์ม…</div>
+  <div class="home-metrics">
+    <article class="home-metric"><span>API SERVICE</span><strong id="homeApiStatus">Checking</strong><small id="homeApiDetail">Connecting to Research OS</small></article>
+    <article class="home-metric"><span>CLOUD WORKERS</span><strong id="homeCloudStatus">Not deployed</strong><small id="homeCloudDetail">Cloud execution worker is not active yet</small></article>
+    <article class="home-metric"><span>LOCAL AGENTS</span><strong id="homeAgentCount">—</strong><small id="homeAgentDetail">Sign in to load registered devices</small></article>
+    <article class="home-metric"><span>MY JOBS</span><strong id="homeJobCount">—</strong><small id="homeJobDetail">Sign in to load job activity</small></article>
+  </div>
+  <div class="home-grid">
+    <article class="home-panel"><header><div><span class="eyebrow">EXECUTION</span><h2>My jobs</h2></div><span class="panel-meta" id="homeJobSummary">Waiting for data</span></header><div id="homeJobs" class="home-list"><div class="home-empty">Sign in to view your jobs.</div></div></article>
+    <article class="home-panel"><header><div><span class="eyebrow">DEVICES</span><h2>Local Agents</h2></div><span class="panel-meta" id="homeAgentSummary">Waiting for data</span></header><div id="homeAgents" class="home-list"><div class="home-empty">Sign in to view registered devices.</div></div></article>
+    <article class="home-panel"><header><div><span class="eyebrow">GOVERNANCE</span><h2>Security & human gate</h2></div><span class="panel-meta">Policy status</span></header><ul class="home-security-list"><li><span>Owner-scoped access</span><strong class="state-ok">Enforced</strong></li><li><span>LOCAL_ONLY data to Cloud/AUTO</span><strong class="state-ok">Blocked</strong></li><li><span>INTERNAL / CONFIDENTIAL Cloud upload</span><strong class="state-warn">Consent required</strong></li><li><span>Human approval workflow</span><strong class="state-warn">Not connected</strong></li></ul><p class="home-panel-note">การบันทึกงานไม่ได้อนุญาตให้ทำ side effect หรือ release โดยอัตโนมัติ</p></article>
+    <article class="home-panel"><header><div><span class="eyebrow">AUDIT TRAIL</span><h2>Recent evidence</h2></div><span class="panel-meta" id="homeEvidenceSummary">Append-only</span></header><div id="homeEvidence" class="home-list"><div class="home-empty">No evidence loaded yet.</div></div></article>
+  </div>
+  <div class="home-actions"><button class="run-btn" id="homeStartResearch" type="button">เริ่ม Research <b>→</b></button><button class="subtle-button" id="homeViewDirectory" type="button">Platform directory</button></div>
+</section>
+<section class="chat-view active" id="chatView" hidden>
   <div class="conversation-heading"><div><span class="eyebrow">RESEARCH WORKSPACE</span><h1 id="researchTitle">เริ่มต้นการวิจัย</h1><p>กำหนดโจทย์ · ตรวจสอบหลักฐาน · สร้างข้อสรุปที่ตรวจสอบย้อนกลับได้</p></div><div class="heading-actions"><span class="state" id="researchState">READY</span><button class="subtle-button" id="startWork" type="button">เริ่มงาน</button><button class="subtle-button" id="clearConversation" type="button">Clear chat</button></div></div>
   <div class="conversation-scroll" id="conversationScroll"><div class="messages" id="messages" aria-live="polite">
     <div class="empty-state" id="welcomeState"><div class="welcome-mark">R</div><span class="eyebrow">YOUR RESEARCH DESK</span><h2>ยินดีต้อนรับกลับครับเพื่อน</h2><p>เริ่มจากคำถามหรือปัญหาที่ต้องการค้นคว้า แล้วให้ Research OS ช่วยจัดโครงสร้างการตรวจสอบ</p><div class="suggestions"><button type="button" data-prompt="วิเคราะห์สถาปัตยกรรม Research OS จาก repository และแยกส่วนที่มีอยู่จริงกับส่วนที่ยังขาด">วิเคราะห์สถาปัตยกรรมแพลตฟอร์ม</button><button type="button" data-prompt="สร้าง research brief พร้อมข้อเท็จจริง หลักฐาน ช่องว่าง และคำถามที่ยังไม่คลี่คลาย">สร้าง Research Brief</button><button type="button" data-prompt="ตรวจสอบความเข้ากันได้ของระบบ โดยระบุแหล่งข้อมูลและระดับความเชื่อมั่น">ตรวจสอบ Compatibility</button></div></div>
