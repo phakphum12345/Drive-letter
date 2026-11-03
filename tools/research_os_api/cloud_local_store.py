@@ -42,7 +42,7 @@ class CloudLocalStore:
         if configured.startswith(("postgres://", "postgresql://")):
             self.backend, self.database_url, self.sqlite_path = "postgres", configured, None
         else:
-            if os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud":
+            if sqlite_path is None and (os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud"):
                 raise RuntimeError("RESEARCH_OS_DATABASE_URL must point to PostgreSQL in cloud mode; ephemeral SQLite fallback is disabled")
             self.backend, self.database_url = "sqlite", None
             raw = sqlite_path or (configured.removeprefix("sqlite:///") if configured.startswith("sqlite:///") else "")
