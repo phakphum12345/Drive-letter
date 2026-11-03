@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     autoDeploy: true
-    buildCommand: python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
+    buildCommand: python -m pip install -r tools/research_os_api/contract-requirements.txt -r tools/research_os_api/cloud-local-requirements.txt && python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
     startCommand: cd tools/research_os_api && python render_server.py
     healthCheckPath: /health
     envVars:
