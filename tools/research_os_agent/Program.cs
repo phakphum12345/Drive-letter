@@ -158,7 +158,7 @@ sealed class LocalAgentApiClient
 
     public async Task<string> EnrollAsync(AgentConfiguration config, List<AgentCapability> capabilities, CancellationToken ct)
     {
-        var response = await PostAsync("api/v1/agents/enroll", new
+        using var response = await PostAsync("api/v1/agents/enroll", new
         {
             enrollment_token = config.EnrollmentToken,
             device_id = config.DeviceId,
