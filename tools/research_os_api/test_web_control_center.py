@@ -45,6 +45,15 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("detail.textContent=meta||''", self.js)
         self.assertNotIn("homeJobs.innerHTML", self.js)
 
+    def test_admin_console_is_owner_only_and_uses_management_api(self):
+        self.assertIn('data-view="admin" data-admin-only hidden', self.html)
+        self.assertIn('id="adminView" hidden', self.html)
+        self.assertIn("document.querySelectorAll('[data-admin-only]')", self.js)
+        self.assertIn("role!=='OWNER'", self.js)
+        self.assertIn("request('/platform/v1/organizations')", self.js)
+        self.assertIn("request('/platform/v1/audit')", self.js)
+        self.assertIn("read-only inventory", self.html)
+
     def test_dashboard_has_mobile_responsive_layout(self):
         self.assertIn(".home-view", self.css)
         self.assertIn(".home-metrics", self.css)
