@@ -1,6 +1,7 @@
 """Authenticated HTTP dispatch for the Research OS Cloud + Local v1 API."""
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
@@ -194,6 +195,16 @@ class CloudLocalHTTP:
                                   policy="cloud-local.cloud-consent.v1",
                                   detail="Cloud stages are disabled for INTERNAL or CONFIDENTIAL data until an explicit upload-consent policy is implemented.")
         policy_id = "pd-" + uuid.uuid4().hex
+        task_type = str(body.get("task_type") or "").strip()
+        required_capabilities = list(body.get("required_capabilities", []))
+        source_sha = body.get("source_sha")
+        if task_type == "repo.audit":
+            if mode not in {"LOCAL", "HYBRID"}:
+                return self._response(403, error="local_task_requires_local_execution")
+            if not source_sha:
+                raise ValueError("repo.audit requires source_sha")
+            if "repository.inspect" not in required_capabilities:
+                required_capabilities.append("repository.inspect")
         now = _now()
         payload = {
             "contract_version": "1.0",
@@ -206,8 +217,8 @@ class CloudLocalHTTP:
             "job_id": "job-" + uuid.uuid4().hex,
             "execution_mode": mode,
             "status": "WAITING_FOR_LOCAL_AGENT" if mode in {"LOCAL", "HYBRID"} else "QUEUED",
-            "task_type": str(body.get("task_type") or "").strip(),
-            "required_capabilities": body.get("required_capabilities", []),
+            "task_type": task_type,
+            "required_capabilities": required_capabilities,
             "data_classification": classification,
             "idempotency_key": str(body.get("idempotency_key") or "").strip(),
             "input_refs": input_refs,
@@ -346,6 +357,7 @@ class CloudLocalHTTP:
         if action == "lease":
             job = self.store.renew_lease(owner_id, agent_id, job_id, lease,
                                          int(body.get("lease_seconds", 60)))
+            return self._response(200, job=job) if job else self._response(409, error="lease_invalid_or_expired")
         else:
             current = self.store.get_job(owner_id, job_id)
             if current is None:
@@ -363,9 +375,38 @@ class CloudLocalHTTP:
             error = self._validate("job", candidate)
             if error:
                 raise ValueError(error)
+            evidence = None
+            stage_id = str(body.get("stage_id") or "").strip()
+            if stage_id:
+                source_sha = str(current.get("source_sha") or "")
+                if not source_sha:
+                    raise ValueError("job_source_sha_required_for_transition_evidence")
+                event_types = {
+                    "RUNNING": ("job.started", "INFO"),
+                    "CHECKPOINTING": ("job.checkpointed", "INFO"),
+                    "WAITING_FOR_LOCAL_AGENT": ("job.waiting_for_local_agent", "INFO"),
+                    "COMPLETED": ("job.completed", "SUCCESS"),
+                    "FAILED": ("job.failed", "TERMINAL_FAILURE"),
+                }
+                event_type, result = event_types[candidate["status"]]
+                evidence = {
+                    "contract_version": "1.0", "evidence_id": "ev-" + uuid.uuid4().hex,
+                    "job_id": job_id, "owner_id": owner_id, "stage_id": stage_id,
+                    "actor_id": agent_id, "event_type": event_type, "occurred_at": _now(),
+                    "result": result, "source_sha": source_sha,
+                    "policy_decision_id": current["policy_decision_id"],
+                    "correlation_id": current["correlation_id"],
+                    "lease_fingerprint": hashlib.sha256(lease.encode("utf-8")).hexdigest(),
+                }
+                if body.get("artifact_hashes") is not None:
+                    evidence["artifact_hashes"] = body["artifact_hashes"]
+                error = self._validate("evidence", evidence)
+                if error:
+                    raise ValueError(error)
             job = self.store.transition_job(
                 owner_id, agent_id, job_id, lease, candidate["status"],
                 output_refs=candidate.get("output_refs"), checkpoint_id=candidate.get("checkpoint_id"),
+                evidence=evidence,
             )
-        return self._response(200, job=job) if job else self._response(409, error="lease_invalid_or_expired")
+        return self._response(200, job=job, evidence=evidence) if job else self._response(409, error="lease_invalid_or_expired")
 
