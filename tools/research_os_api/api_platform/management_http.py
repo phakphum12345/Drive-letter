@@ -39,6 +39,8 @@ class ManagementHTTP:
         principal = self.authenticate(headers)
         if principal is None:
             return 401, {"error": "invalid_session"}
+        if str(principal.get("role") or "").strip().upper() != "OWNER":
+            return 403, {"error": "owner_required"}
         actor = str(principal.get("user_id") or principal.get("email") or "unknown")
         method = method.upper()
         parts = self._segments(path)
