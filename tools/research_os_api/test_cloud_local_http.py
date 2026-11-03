@@ -300,6 +300,16 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual("EVIDENCE_FALLBACK", audit[0]["selected_route"])
         self.assertEqual("artifact.committed", audit[0]["requested_event_type"])
         self.assertNotIn("lease_token", audit[0])
+        status, audit_response = self.request(
+            "GET", f"/api/v1/jobs/{job['job_id']}/evidence/recovery-audit", self.user_headers
+        )
+        self.assertEqual(200, status, audit_response)
+        self.assertEqual(1, audit_response["count"])
+        status, foreign_audit = self.request(
+            "GET", f"/api/v1/jobs/{job['job_id']}/evidence/recovery-audit",
+            {"X-Test-User": "user-b"},
+        )
+        self.assertEqual(404, status)
         # Exact original wins over a checkpoint-only recovery route.
         status, empty = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-missing&event_type=artifact.committed", self.user_headers)
         self.assertEqual(200, status, empty)
