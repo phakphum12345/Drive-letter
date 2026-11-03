@@ -8,7 +8,7 @@ async function request(path,options={},timeoutMs=65000){const controller=new Abo
 function setRunning(value){state.sending=value;const button=$('runButton');button.disabled=value;button.innerHTML=value?'กำลังค้นคว้า… <b>◌</b>':'Send <b>↑</b>';$('prompt').disabled=value;if(value)$('researchState').textContent='RUNNING'}
 function roleRank(role){return ({USER:10,PRO:20,OWNER:30})[String(role||'USER').toUpperCase()]||0}
 function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});}
-async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();return result}catch(error){state.account=null;renderAccount();throw error}}
+async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();await refreshControlCenter();return result}catch(error){state.account=null;renderAccount();showControlCenterSignIn();throw error}}
 function providerLabel(provider){return provider==='google'?'Google':provider==='microsoft'?'Microsoft':'GitHub'}
 function addEmailOtpControls(panel){
 const heading=document.createElement('p');heading.textContent='Or sign in with Email OTP';panel.appendChild(heading);
@@ -18,14 +18,14 @@ const code=document.createElement('input');code.type='text';code.inputMode='nume
 const verify=document.createElement('button');verify.type='button';verify.className='tool-chip';verify.textContent='Verify code';verify.hidden=true;panel.appendChild(verify);
 const message=document.createElement('small');message.setAttribute('role','status');panel.appendChild(message);
 send.addEventListener('click',async()=>{send.disabled=true;message.textContent='Sending…';try{await request('/v1/auth/email-otp/start',{method:'POST',body:JSON.stringify({email:email.value.trim()})});code.hidden=false;verify.hidden=false;message.textContent='If SMTP is configured, a code has been sent. It expires in 5 minutes.'}catch(error){message.textContent=error.message}finally{send.disabled=false}});
-verify.addEventListener('click',async()=>{verify.disabled=true;message.textContent='Verifying…';try{const result=await request('/v1/auth/email-otp/verify',{method:'POST',body:JSON.stringify({email:email.value.trim(),code:code.value.trim()})});state.account=result.account||null;renderAccount();panel.hidden=true;addMessage('system','Email OTP sign-in complete.')}catch(error){message.textContent=error.message}finally{verify.disabled=false}});
+verify.addEventListener('click',async()=>{verify.disabled=true;message.textContent='Verifying…';try{const result=await request('/v1/auth/email-otp/verify',{method:'POST',body:JSON.stringify({email:email.value.trim(),code:code.value.trim()})});state.account=result.account||null;renderAccount();panel.hidden=true;addMessage('system','Email OTP sign-in complete.');refreshControlCenter()}catch(error){message.textContent=error.message}finally{verify.disabled=false}});
 }
 async function showLoginOptions(){const panel=$('loginOptions');if(!panel.hidden){panel.hidden=true;return}panel.hidden=false;panel.textContent='Loading login providers…';try{const result=await request('/v1/auth/providers');panel.innerHTML='';for(const provider of result.providers||[]){const button=document.createElement('button');button.type='button';button.className='tool-chip';button.textContent=`Continue with ${providerLabel(provider.id)}${provider.available?'':' (not configured)'}`;button.disabled=!provider.available;button.addEventListener('click',()=>handleProviderLogin(provider.id));panel.appendChild(button)}addEmailOtpControls(panel)}catch(error){panel.textContent=`Login providers unavailable: ${error.message}`}}
 async function handleProviderLogin(provider){if(state.sending)return;try{const result=await request('/v1/auth/providers/login',{method:'POST',body:JSON.stringify({provider})});if(!result.authorization_url)throw new Error('Authorization URL was not returned');window.location.assign(result.authorization_url)}catch(error){addMessage('system',`${providerLabel(provider)} sign-in unavailable: ${error.message}`)}}
-async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
+async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
 async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;$('messages').innerHTML='';state.messages=[];addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();addMessage('assistant',answer||'Research completed without a text response.');setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
 $('researchForm').addEventListener('submit',event=>{event.preventDefault();startResearch($('prompt').value.trim())});
-$('newResearch').addEventListener('click',()=>{state.sessionId=crypto.randomUUID();state.messages=[];$('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';$('researchTitle').textContent='Ready for your investigation';$('researchState').textContent='IDLE';$('prompt').value='';setStage('define');window.scrollTo({top:0,behavior:'smooth'})});
+$('newResearch').addEventListener('click',()=>{setPlatformView('chat');state.sessionId=crypto.randomUUID();state.messages=[];$('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';$('researchTitle').textContent='Ready for your investigation';$('researchState').textContent='IDLE';$('prompt').value='';setStage('define');window.scrollTo({top:0,behavior:'smooth'})});
 $('startWork').addEventListener('click',()=>{$('prompt').focus();$('prompt').scrollIntoView({behavior:'smooth',block:'center'})});
 $('deepMode').addEventListener('click',event=>{state.deepMode=!state.deepMode;const on=event.currentTarget.querySelector('span');on.textContent=state.deepMode?'ON':'OFF';event.currentTarget.classList.toggle('enabled',state.deepMode);event.currentTarget.setAttribute('aria-pressed',String(state.deepMode))});
 $('authButton').addEventListener('click',handleAuth);
@@ -33,22 +33,117 @@ $('loginOptionsButton').addEventListener('click',showLoginOptions);
 refreshAuth().catch(()=>{});
 
 
+function showControlCenterSignIn(message){
+  $('homeStatus').textContent=message||'ลงชื่อเข้าใช้เพื่อดูงาน อุปกรณ์ และหลักฐานของคุณ';
+  $('homeAgentCount').textContent='—';$('homeAgentDetail').textContent='Sign in required';
+  $('homeJobCount').textContent='—';$('homeJobDetail').textContent='Sign in required';
+  $('homeJobs').textContent='Sign in to view your jobs.';
+  $('homeAgents').textContent='Sign in to view registered devices.';
+  $('homeEvidence').textContent='Sign in to view evidence.';
+  $('homeJobSummary').textContent='Not signed in';$('homeAgentSummary').textContent='Not signed in';
+}
+function homeItem(container,title,meta,status){
+  const item=document.createElement('div');item.className='home-list-item';
+  const copy=document.createElement('div');copy.className='home-list-copy';
+  const heading=document.createElement('strong');heading.textContent=title||'Untitled';
+  const detail=document.createElement('small');detail.textContent=meta||'';
+  copy.append(heading,detail);item.appendChild(copy);
+  if(status){const badge=document.createElement('span');badge.className='home-status-tag status-'+String(status).toLowerCase().replace(/[^a-z0-9_-]/g,'');badge.textContent=status;item.appendChild(badge)}
+  container.appendChild(item);
+}
+function formatHomeTime(value){
+  const date=value?new Date(value):null;
+  return date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable';
+}
+async function refreshControlCenter(){
+  if(!$('homeView')||$('homeView').hidden)return;
+  if(!state.account||!state.account.email){showControlCenterSignIn();return}
+  $('homeStatus').textContent='กำลังโหลดข้อมูลจริงจาก Research OS API…';
+  $('refreshControlCenter').disabled=true;
+  try{
+    const health=await request('/health');
+    updateConnection(true,health.version);
+    $('homeApiStatus').textContent='Online';
+    $('homeApiDetail').textContent=health.version||'Research OS API reachable';
+    const results=await Promise.all([
+      request('/api/v1/jobs?limit=20'),
+      request('/api/v1/agents')
+    ]);
+    const jobs=Array.isArray(results[0].jobs)?results[0].jobs:[];
+    const agents=Array.isArray(results[1].agents)?results[1].agents:[];
+    const counts=jobs.reduce((acc,job)=>{const key=String(job.status||'UNKNOWN');acc[key]=(acc[key]||0)+1;return acc},{});
+    const running=(counts.RUNNING||0)+(counts.ASSIGNED||0)+(counts.CHECKPOINTING||0);
+    const waiting=(counts.WAITING_FOR_LOCAL_AGENT||0)+(counts.QUEUED||0)+(counts.RETRY_WAIT||0);
+    const connected=agents.filter(agent=>{
+      if(agent.lifecycle_state!=='ACTIVE')return false;
+      const stamp=Date.parse(agent.last_heartbeat_at||agent.registered_at||'');
+      return Number.isFinite(stamp)&&Date.now()-stamp<120000;
+    });
+    const stale=agents.filter(agent=>agent.lifecycle_state==='ACTIVE'&&!connected.includes(agent));
+    $('homeAgentCount').textContent=String(connected.length);
+    $('homeAgentDetail').textContent=agents.length+' registered · '+stale.length+' without recent heartbeat · '+agents.filter(a=>a.lifecycle_state==='REVOKED').length+' revoked';
+    $('homeJobCount').textContent=String(jobs.length);
+    $('homeJobDetail').textContent=running+' active · '+waiting+' queued/waiting · '+(counts.COMPLETED||0)+' completed';
+    $('homeJobSummary').textContent=running+' active · '+waiting+' waiting';
+    $('homeAgentSummary').textContent=connected.length+' connected · '+stale.length+' stale';
+    $('homeJobs').textContent='';
+    if(!jobs.length)$('homeJobs').textContent='ยังไม่มีงานในบัญชีนี้';
+    jobs.slice(0,8).forEach(job=>homeItem($('homeJobs'),job.task_type||job.job_id,job.job_id+' · '+formatHomeTime(job.updated_at||job.created_at),job.status));
+    $('homeAgents').textContent='';
+    if(!agents.length)$('homeAgents').textContent='ยังไม่มี Local Agent ที่ลงทะเบียน';
+    agents.slice(0,8).forEach(agent=>{
+      const stamp=Date.parse(agent.last_heartbeat_at||agent.registered_at||'');
+      const label=agent.lifecycle_state==='REVOKED'?'REVOKED':agent.lifecycle_state==='ACTIVE'&&Number.isFinite(stamp)&&Date.now()-stamp<120000?'CONNECTED':'NO RECENT HEARTBEAT';
+      homeItem($('homeAgents'),agent.device_id||agent.agent_id,(agent.os_name||'Unknown OS')+' · '+formatHomeTime(agent.last_heartbeat_at),label);
+    });
+    $('homeEvidence').textContent='';
+    const evidenceResults=await Promise.allSettled(jobs.slice(0,5).map(job=>request('/api/v1/jobs/'+encodeURIComponent(job.job_id)+'/evidence')));
+    const evidence=evidenceResults.flatMap(result=>result.status==='fulfilled'?(result.value.evidence||[]):[]).sort((a,b)=>Date.parse(b.occurred_at)-Date.parse(a.occurred_at)).slice(0,8);
+    if(!evidence.length)$('homeEvidence').textContent='ยังไม่มี evidence ที่บันทึกไว้';
+    evidence.forEach(item=>homeItem($('homeEvidence'),item.event_type,item.job_id+' · '+formatHomeTime(item.occurred_at),item.result));
+    $('homeStatus').textContent='ข้อมูลโหลดจาก API จริงแล้ว · ตัวเลขแสดงเฉพาะงานและอุปกรณ์ที่ API ส่งกลับ';
+    $('homeLastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+    $('homeCloudStatus').textContent='Not deployed';
+    $('homeCloudDetail').textContent='Cloud worker ยังไม่เปิดใช้งาน · งาน CLOUD/AUTO จะคงอยู่ในคิว';
+  }catch(error){
+    const message=String(error.message||error);
+    if(message.includes('authentication_required')||message.includes('401')){
+      showControlCenterSignIn('Session ไม่พร้อมใช้งาน กรุณา Sign in ใหม่เพื่อโหลดข้อมูล');
+    }else if(message.includes('cloud_local_storage_not_configured')||message.includes('503')){
+      $('homeStatus').textContent='Cloud + Local storage ยังไม่ถูกตั้งค่า PostgreSQL จึงยังไม่สามารถโหลดงานและอุปกรณ์ได้';
+      $('homeJobs').textContent='Storage not configured — no demo data is shown.';
+      $('homeAgents').textContent='Storage not configured — no demo data is shown.';
+      $('homeEvidence').textContent='Storage not configured — no demo data is shown.';
+      $('homeJobCount').textContent='Unavailable';$('homeAgentCount').textContent='Unavailable';
+      $('homeJobDetail').textContent='Waiting for PostgreSQL configuration';
+      $('homeAgentDetail').textContent='Waiting for PostgreSQL configuration';
+    }else{
+      $('homeStatus').textContent='โหลดข้อมูลไม่สำเร็จ: '+message;
+    }
+  }finally{$('refreshControlCenter').disabled=false}
+}
+
 // Platform workspace navigation and responsive controls.
 function setPlatformView(view,moduleName){
-  const chat=view!=='registry';
-  $('chatView').hidden=!chat;
-  $('registryView').hidden=chat;
-  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===(chat?'chat':'registry')&&(!chat?button.dataset.module===moduleName:!button.dataset.module)));
-  $('pageTitle').textContent=chat?'Research Chat':(moduleName||'Platform Directory');
-  if(!chat)$('registryTitle').textContent=moduleName||'Platform domains';
+  const selected=view||'home';
+  $('homeView').hidden=selected!=='home';
+  $('chatView').hidden=selected!=='chat';
+  $('registryView').hidden=selected!=='registry';
+  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(selected!=='registry'||button.dataset.module===moduleName)));
+  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':(moduleName||'Platform Directory');
+  if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
   $('sidebar').classList.remove('open');
   $('sidebarScrim').classList.remove('open');
+  if(selected==='home')refreshControlCenter();
 }
 document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('click',()=>{
   setPlatformView(button.dataset.view,button.dataset.module);
 }));
 $('returnChat').addEventListener('click',()=>setPlatformView('chat'));
+$('refreshControlCenter').addEventListener('click',refreshControlCenter);
+$('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
+$('homeViewDirectory').addEventListener('click',()=>setPlatformView('registry'));
 $('openSidebar').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarScrim').classList.add('open')});
 $('closeSidebar').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
 $('sidebarScrim').addEventListener('click',()=>{$('sidebar').classList.remove('open');$('sidebarScrim').classList.remove('open')});
@@ -73,6 +168,8 @@ document.querySelectorAll('[data-prompt]').forEach(button=>button.addEventListen
 const healthIndicator=$('health');
 function updateConnection(ok,version){
   if(healthIndicator)healthIndicator.textContent=ok?(version||'ONLINE'):'OFFLINE';
+  if($('homeApiStatus'))$('homeApiStatus').textContent=ok?'Online':'Offline';
+  if($('homeApiDetail'))$('homeApiDetail').textContent=ok?(version||'Research OS API reachable'):'API endpoint unavailable';
   $('apiLabel').textContent=ok?'API connected':'API unavailable';
   $('apiDetail').textContent=ok?(version||'Research OS service online'):'Check API endpoint or network';
   $('apiDot').style.background=ok?'var(--good)':'var(--danger)';
@@ -80,3 +177,4 @@ function updateConnection(ok,version){
   $('connectionDot').style.background=ok?'var(--good)':'var(--danger)';
 }
 request('/health').then(data=>updateConnection(true,data.version)).catch(()=>updateConnection(false));
+setPlatformView('home');
