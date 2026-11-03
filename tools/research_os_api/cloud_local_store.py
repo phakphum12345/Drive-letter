@@ -42,7 +42,7 @@ class CloudLocalStore:
         if configured.startswith(("postgres://", "postgresql://")):
             self.backend, self.database_url, self.sqlite_path = "postgres", configured, None
         else:
-            if os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud":
+            if sqlite_path is None and (os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud"):
                 raise RuntimeError("RESEARCH_OS_DATABASE_URL must point to PostgreSQL in cloud mode; ephemeral SQLite fallback is disabled")
             self.backend, self.database_url = "sqlite", None
             raw = sqlite_path or (configured.removeprefix("sqlite:///") if configured.startswith("sqlite:///") else "")
@@ -111,6 +111,9 @@ class CloudLocalStore:
                 owner_id TEXT NOT NULL, evidence_id TEXT NOT NULL, job_id TEXT NOT NULL,
                 occurred_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner_id,evidence_id))""",
             "CREATE INDEX IF NOT EXISTS idx_cloud_local_evidence_job ON cloud_local_evidence(owner_id,job_id,occurred_at)",
+            """CREATE TABLE IF NOT EXISTS cloud_local_evidence_recovery_keys (
+                owner_id TEXT NOT NULL, recovery_key TEXT NOT NULL, evidence_id TEXT NOT NULL,
+                PRIMARY KEY(owner_id,recovery_key))""",
             """CREATE TABLE IF NOT EXISTS cloud_local_checkpoints (
                 owner_id TEXT NOT NULL, job_id TEXT NOT NULL, checkpoint_id TEXT NOT NULL,
                 created_at TEXT NOT NULL, payload TEXT NOT NULL,
@@ -248,7 +251,8 @@ class CloudLocalStore:
 
     def transition_job(self, owner_id: str, agent_id: str, job_id: str, lease_token: str,
                        status: str, output_refs: list[dict[str, Any]] | None = None,
-                       checkpoint_id: str | None = None) -> dict[str, Any] | None:
+                       checkpoint_id: str | None = None,
+                       evidence: dict[str, Any] | None = None) -> dict[str, Any] | None:
         now = _now()
         allowed = {
             "ASSIGNED": {"RUNNING", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
@@ -285,6 +289,12 @@ class CloudLocalStore:
                  None if terminal or release_for_wait else lease_token,
                  None if terminal or release_for_wait else row["lease_expires_at"],
                  owner_id, job_id, lease_token))
+            if evidence is not None:
+                if evidence.get("owner_id") != owner_id or evidence.get("job_id") != job_id:
+                    raise ValueError("transition_evidence_scope_mismatch")
+                self._execute(db, "INSERT INTO cloud_local_evidence VALUES (?,?,?,?,?)",
+                    (owner_id, evidence["evidence_id"], job_id, evidence["occurred_at"],
+                     json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
             return payload
 
     def revoke_agent(self, owner_id: str, agent_id: str) -> bool:
@@ -419,6 +429,28 @@ class CloudLocalStore:
                 (owner_id, payload["evidence_id"], payload["job_id"], payload["occurred_at"],
                  json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
         return payload
+
+    def append_recovered_evidence(self, owner_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Atomically deduplicate recovered evidence by owner-scoped provenance key."""
+        recovery_key = str(payload.get("recovery_key") or "")
+        if not recovery_key:
+            raise ValueError("recovery_key_required")
+        with self._transaction() as db:
+            inserted = self._execute(db, """INSERT INTO cloud_local_evidence_recovery_keys
+                (owner_id,recovery_key,evidence_id) VALUES (?,?,?) ON CONFLICT(owner_id,recovery_key) DO NOTHING""",
+                (owner_id, recovery_key, payload["evidence_id"]))
+            if inserted.rowcount == 0:
+                row = self._execute(db, """SELECT e.payload FROM cloud_local_evidence e
+                    JOIN cloud_local_evidence_recovery_keys k
+                      ON k.owner_id=e.owner_id AND k.evidence_id=e.evidence_id
+                    WHERE k.owner_id=? AND k.recovery_key=?""", (owner_id, recovery_key)).fetchone()
+                if row is None:
+                    raise RuntimeError("recovery_key_registry_inconsistent")
+                return self._payload(row), False
+            self._execute(db, "INSERT INTO cloud_local_evidence VALUES (?,?,?,?,?)",
+                (owner_id, payload["evidence_id"], payload["job_id"], payload["occurred_at"],
+                 json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
+            return payload, True
 
     def list_evidence(self, owner_id: str, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
         with self._reader() as db:
