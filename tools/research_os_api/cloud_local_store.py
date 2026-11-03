@@ -248,7 +248,8 @@ class CloudLocalStore:
 
     def transition_job(self, owner_id: str, agent_id: str, job_id: str, lease_token: str,
                        status: str, output_refs: list[dict[str, Any]] | None = None,
-                       checkpoint_id: str | None = None) -> dict[str, Any] | None:
+                       checkpoint_id: str | None = None,
+                       evidence: dict[str, Any] | None = None) -> dict[str, Any] | None:
         now = _now()
         allowed = {
             "ASSIGNED": {"RUNNING", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
@@ -285,6 +286,12 @@ class CloudLocalStore:
                  None if terminal or release_for_wait else lease_token,
                  None if terminal or release_for_wait else row["lease_expires_at"],
                  owner_id, job_id, lease_token))
+            if evidence is not None:
+                if evidence.get("owner_id") != owner_id or evidence.get("job_id") != job_id:
+                    raise ValueError("transition_evidence_scope_mismatch")
+                self._execute(db, "INSERT INTO cloud_local_evidence VALUES (?,?,?,?,?)",
+                    (owner_id, evidence["evidence_id"], job_id, evidence["occurred_at"],
+                     json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
             return payload
 
     def revoke_agent(self, owner_id: str, agent_id: str) -> bool:
