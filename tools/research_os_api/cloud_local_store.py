@@ -42,7 +42,7 @@ class CloudLocalStore:
         if configured.startswith(("postgres://", "postgresql://")):
             self.backend, self.database_url, self.sqlite_path = "postgres", configured, None
         else:
-            if os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud":
+            if sqlite_path is None and (os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud"):
                 raise RuntimeError("RESEARCH_OS_DATABASE_URL must point to PostgreSQL in cloud mode; ephemeral SQLite fallback is disabled")
             self.backend, self.database_url = "sqlite", None
             raw = sqlite_path or (configured.removeprefix("sqlite:///") if configured.startswith("sqlite:///") else "")
@@ -111,6 +111,14 @@ class CloudLocalStore:
                 owner_id TEXT NOT NULL, evidence_id TEXT NOT NULL, job_id TEXT NOT NULL,
                 occurred_at TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner_id,evidence_id))""",
             "CREATE INDEX IF NOT EXISTS idx_cloud_local_evidence_job ON cloud_local_evidence(owner_id,job_id,occurred_at)",
+            """CREATE TABLE IF NOT EXISTS cloud_local_evidence_recovery_keys (
+                owner_id TEXT NOT NULL, recovery_key TEXT NOT NULL, evidence_id TEXT NOT NULL,
+                PRIMARY KEY(owner_id,recovery_key))""",
+            """CREATE TABLE IF NOT EXISTS cloud_local_recovery_audit (
+                owner_id TEXT NOT NULL, audit_id TEXT NOT NULL, job_id TEXT NOT NULL,
+                occurred_at TEXT NOT NULL, payload TEXT NOT NULL,
+                PRIMARY KEY(owner_id,audit_id))""",
+            "CREATE INDEX IF NOT EXISTS idx_cloud_local_recovery_audit_job ON cloud_local_recovery_audit(owner_id,job_id,occurred_at)",
             """CREATE TABLE IF NOT EXISTS cloud_local_checkpoints (
                 owner_id TEXT NOT NULL, job_id TEXT NOT NULL, checkpoint_id TEXT NOT NULL,
                 created_at TEXT NOT NULL, payload TEXT NOT NULL,
@@ -427,8 +435,50 @@ class CloudLocalStore:
                  json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
         return payload
 
+    def append_recovered_evidence(self, owner_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Atomically deduplicate recovered evidence by owner-scoped provenance key."""
+        recovery_key = str(payload.get("recovery_key") or "")
+        if not recovery_key:
+            raise ValueError("recovery_key_required")
+        with self._transaction() as db:
+            inserted = self._execute(db, """INSERT INTO cloud_local_evidence_recovery_keys
+                (owner_id,recovery_key,evidence_id) VALUES (?,?,?) ON CONFLICT(owner_id,recovery_key) DO NOTHING""",
+                (owner_id, recovery_key, payload["evidence_id"]))
+            if inserted.rowcount == 0:
+                row = self._execute(db, """SELECT e.payload FROM cloud_local_evidence e
+                    JOIN cloud_local_evidence_recovery_keys k
+                      ON k.owner_id=e.owner_id AND k.evidence_id=e.evidence_id
+                    WHERE k.owner_id=? AND k.recovery_key=?""", (owner_id, recovery_key)).fetchone()
+                if row is None:
+                    raise RuntimeError("recovery_key_registry_inconsistent")
+                return self._payload(row), False
+            self._execute(db, "INSERT INTO cloud_local_evidence VALUES (?,?,?,?,?)",
+                (owner_id, payload["evidence_id"], payload["job_id"], payload["occurred_at"],
+                 json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
+            return payload, True
+
     def list_evidence(self, owner_id: str, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
         with self._reader() as db:
             rows = self._execute(db, """SELECT payload FROM cloud_local_evidence WHERE owner_id=? AND job_id=?
                 ORDER BY occurred_at LIMIT ?""", (owner_id, job_id, max(1, min(int(limit), 250)))).fetchall()
+            return [self._payload(row) for row in rows]
+
+    def append_recovery_audit(self, owner_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Append a redacted, owner-scoped audit record for each evidence resolution attempt."""
+        if payload.get("owner_id") != owner_id or not payload.get("job_id"):
+            raise ValueError("recovery_audit_scope_mismatch")
+        record = dict(payload)
+        record.setdefault("audit_id", "audit-" + uuid.uuid4().hex)
+        record.setdefault("occurred_at", _stamp())
+        encoded = json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        with self._transaction() as db:
+            self._execute(db, "INSERT INTO cloud_local_recovery_audit VALUES (?,?,?,?,?)",
+                          (owner_id, record["audit_id"], record["job_id"], record["occurred_at"], encoded))
+        return record
+
+    def list_recovery_audit(self, owner_id: str, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self._reader() as db:
+            rows = self._execute(db, """SELECT payload FROM cloud_local_recovery_audit
+                WHERE owner_id=? AND job_id=? ORDER BY occurred_at LIMIT ?""",
+                (owner_id, job_id, max(1, min(int(limit), 250)))).fetchall()
             return [self._payload(row) for row in rows]
