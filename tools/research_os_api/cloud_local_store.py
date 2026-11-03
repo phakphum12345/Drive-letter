@@ -42,6 +42,8 @@ class CloudLocalStore:
         if configured.startswith(("postgres://", "postgresql://")):
             self.backend, self.database_url, self.sqlite_path = "postgres", configured, None
         else:
+            if os.getenv("RENDER", "").strip().lower() == "true" or os.getenv("RESEARCH_OS_RUNTIME_MODE", "").strip().lower() == "cloud":
+                raise RuntimeError("RESEARCH_OS_DATABASE_URL must point to PostgreSQL in cloud mode; ephemeral SQLite fallback is disabled")
             self.backend, self.database_url = "sqlite", None
             raw = sqlite_path or (configured.removeprefix("sqlite:///") if configured.startswith("sqlite:///") else "")
             self.sqlite_path = Path(raw).expanduser() if raw else data_root() / "cloud_local.sqlite3"
@@ -171,6 +173,14 @@ class CloudLocalStore:
                           (_digest(token), owner_id, expires, _stamp(now)))
         return token
 
+    def enrollment_grant_owner(self, grant_token: str) -> str | None:
+        with self._reader() as db:
+            row = self._execute(db, """SELECT owner_id,expires_at,used_at
+                FROM cloud_local_enrollment_grants WHERE grant_hash=?""", (_digest(grant_token),)).fetchone()
+            if not row or row["used_at"] is not None or row["expires_at"] <= _stamp():
+                return None
+            return str(row["owner_id"])
+
     def enroll_agent(self, grant_token: str, *, owner_id: str, device_id: str,
                      protocol_versions: list[str], capabilities: list[dict[str, str]],
                      os_name: str, agent_version: str, os_version: str = "") -> tuple[dict[str, Any], str]:
@@ -220,6 +230,56 @@ class CloudLocalStore:
             self._execute(db, """UPDATE cloud_local_agents SET lifecycle_state='ACTIVE',payload=?,last_heartbeat_at=?
                 WHERE owner_id=? AND agent_id=?""",
                 (json.dumps(payload, ensure_ascii=False, sort_keys=True), stamp, owner_id, agent_id))
+            return payload
+
+    def list_agents(self, owner_id: str) -> list[dict[str, Any]]:
+        with self._reader() as db:
+            rows = self._execute(
+                db,
+                "SELECT payload FROM cloud_local_agents WHERE owner_id=? ORDER BY created_at DESC",
+                (owner_id,),
+            ).fetchall()
+            return [self._payload(row) for row in rows]
+
+    def transition_job(self, owner_id: str, agent_id: str, job_id: str, lease_token: str,
+                       status: str, output_refs: list[dict[str, Any]] | None = None,
+                       checkpoint_id: str | None = None) -> dict[str, Any] | None:
+        now = _now()
+        allowed = {
+            "ASSIGNED": {"RUNNING", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+            "RUNNING": {"CHECKPOINTING", "COMPLETED", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+            "CHECKPOINTING": {"RUNNING", "COMPLETED", "FAILED", "WAITING_FOR_LOCAL_AGENT"},
+        }
+        if status not in {"RUNNING", "CHECKPOINTING", "WAITING_FOR_LOCAL_AGENT", "COMPLETED", "FAILED"}:
+            raise ValueError("job_status_transition_invalid")
+        with self._transaction() as db:
+            row = self._execute(db, """SELECT payload,lease_id,lease_expires_at,status,assigned_agent_id
+                FROM cloud_local_jobs WHERE owner_id=? AND job_id=?""", (owner_id, job_id)).fetchone()
+            if (not row or row["assigned_agent_id"] != agent_id or row["lease_id"] != lease_token
+                or not row["lease_expires_at"] or row["lease_expires_at"] <= _stamp(now)):
+                return None
+            if status not in allowed.get(row["status"], set()):
+                raise ValueError("job_status_transition_invalid")
+            payload = self._payload(row)
+            payload.update(status=status, updated_at=_stamp(now))
+            if output_refs is not None:
+                payload["output_refs"] = output_refs
+            if checkpoint_id is not None:
+                payload["checkpoint_id"] = checkpoint_id
+            terminal = status in {"COMPLETED", "FAILED"}
+            release_for_wait = status == "WAITING_FOR_LOCAL_AGENT"
+            if terminal or release_for_wait:
+                payload["lease_id"] = None
+                payload["lease_expires_at"] = None
+            if release_for_wait:
+                payload["assigned_worker_id"] = None
+            self._execute(db, """UPDATE cloud_local_jobs SET status=?,payload=?,updated_at=?,
+                assigned_agent_id=?,lease_id=?,lease_expires_at=? WHERE owner_id=? AND job_id=? AND lease_id=?""",
+                (status, json.dumps(payload, ensure_ascii=False, sort_keys=True), _stamp(now),
+                 None if release_for_wait else agent_id,
+                 None if terminal or release_for_wait else lease_token,
+                 None if terminal or release_for_wait else row["lease_expires_at"],
+                 owner_id, job_id, lease_token))
             return payload
 
     def revoke_agent(self, owner_id: str, agent_id: str) -> bool:
@@ -273,7 +333,7 @@ class CloudLocalStore:
             row = self._execute(db, """SELECT payload,lease_id,lease_expires_at,status,assigned_agent_id
                 FROM cloud_local_jobs WHERE owner_id=? AND job_id=?""", (owner_id, job_id)).fetchone()
             if (not row or row["assigned_agent_id"] != agent_id or row["lease_id"] != lease_token
-                or row["status"] not in {"ASSIGNED", "RUNNING"} or not row["lease_expires_at"]
+                or row["status"] not in {"ASSIGNED", "RUNNING", "CHECKPOINTING"} or not row["lease_expires_at"]
                 or row["lease_expires_at"] <= _stamp(now)):
                 return None
             payload = self._payload(row)

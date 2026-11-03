@@ -2,7 +2,7 @@
 
 **Document ID:** ROS-CL-02  
 **Revision:** 1.0-draft  
-**Status:** Proposed schema; implementation must be versioned separately  
+**Status:** Contract v1 with a partial HTTP/storage implementation; production activation is gated on PostgreSQL, Cloud workers and Local Agent deployment  
 **Date:** 2026-11-03  
 **Baseline SHA:** `63e863b6823e26d044ac6a524503c795a4bc9165`
 
@@ -16,7 +16,7 @@ Define a stable boundary between the shared Control Plane, Cloud workers and Loc
 - Agent enrollment, heartbeat, revocation and offline recovery.
 - Backward-compatible schema evolution.
 
-This is a design contract. No endpoint or schema in this document is claimed to exist in the current runtime.
+The schemas remain the normative data contract. A first HTTP/storage slice is now wired into the primary API; it is not yet a production-ready Cloud + Local runtime. Cloud mode fails closed without PostgreSQL. No worker, Windows Agent service, checkpoint API or data migration is included in this slice.
 
 ## 02. Contract envelope
 
@@ -142,23 +142,28 @@ Security requirements:
 
 ## 07. Proposed API surface
 
-These are proposed route names, not existing endpoints:
+Implemented in the current API slice (session-authenticated user routes or bearer-authenticated Agent routes as appropriate):
 
 | Method | Proposed route | Purpose |
 |---|---|---|
-| POST | `/api/v1/jobs` | Create a job after policy validation |
+| POST | `/api/v1/jobs` | Create an owner-scoped job; locality and cloud-consent policy are enforced |
+| GET | `/api/v1/jobs` | List jobs for the authenticated owner |
 | GET | `/api/v1/jobs/{job_id}` | Read authorized job state |
-| POST | `/api/v1/jobs/{job_id}/cancel` | Request authorized cancellation |
-| POST | `/api/v1/agents/enroll` | Redeem a single-use enrollment grant |
-| POST | `/api/v1/agents/heartbeat` | Update agent health/capabilities |
-| POST | `/api/v1/agents/claim` | Claim an eligible local assignment |
-| POST | `/api/v1/jobs/{job_id}/lease/renew` | Renew the active lease |
-| POST | `/api/v1/jobs/{job_id}/checkpoint` | Commit a checkpoint |
-| POST | `/api/v1/jobs/{job_id}/complete` | Commit completion and output refs |
-| POST | `/api/v1/jobs/{job_id}/fail` | Report retryable or terminal failure |
-| GET | `/api/v1/jobs/{job_id}/events` | Read authorized event history |
+| POST | `/api/v1/jobs/{job_id}/cancel` | Cancel an owner-scoped job |
+| POST | `/api/v1/agents/enrollment-grants` | Issue a short-lived, single-use grant to an authenticated owner |
+| POST | `/api/v1/agents/enroll` | Redeem a grant; return an Agent bearer token once |
+| GET | `/api/v1/agents` | List the authenticated owner's registered Agents |
+| POST | `/api/v1/agents/{agent_id}/revoke` | Revoke an Agent credential |
+| POST | `/api/v1/agents/heartbeat` | Update Agent health/capabilities |
+| POST | `/api/v1/agents/claim` | Claim a matching LOCAL/HYBRID job for the same owner |
+| POST | `/api/v1/jobs/{job_id}/lease/renew` | Renew the active lease with the current fencing token |
+| POST | `/api/v1/jobs/{job_id}/transition` | Commit a lease-fenced job state transition |
+| POST | `/api/v1/evidence` | Append validated Agent evidence |
+| GET | `/api/v1/jobs/{job_id}/evidence` | Read owner-scoped evidence |
 
-Exact route layout may change during implementation, but semantics and security invariants must not.
+Not yet implemented: Cloud worker claim/dispatch, checkpoint commit/resume, outbox delivery, scheduled lease recovery and Local Agent Windows service transport. Cloud/AUTO jobs remain queued until a Cloud worker is deployed.
+
+These routes are implemented in the current API slice. Remaining routes and semantics stay planned; the presence of a job record does not imply that a Cloud worker is available or that a side effect has been authorized.
 
 ## 08. Checkpoint contract
 
@@ -219,14 +224,14 @@ Error responses must include a safe message and correlation ID, never secrets or
 
 ## 12. Acceptance tests required before implementation is production-ready
 
-- [ ] Owner A cannot read, claim, checkpoint or complete Owner B's job.
-- [ ] A Local Agent cannot claim a Cloud-only or unsupported-capability job.
-- [ ] A Cloud worker cannot claim a `LOCAL_ONLY` job.
+- [x] Owner A cannot read or mutate Owner B's job through the implemented owner-scoped routes.
+- [x] A Local Agent cannot claim a Cloud-only or unsupported-capability job.
+- [x] A Cloud worker cannot claim a `LOCAL_ONLY` job (no Cloud worker route exists yet; admission policy also rejects Cloud mode for LOCAL_ONLY data).
 - [ ] Offline Local Agent causes a safe wait, not silent Cloud fallback.
 - [ ] Expired lease can be reclaimed and stale worker commits are rejected.
 - [ ] Duplicate delivery does not repeat a side effect.
 - [ ] Checkpoint resume rejects changed source SHA and superseded checkpoint.
-- [ ] Agent revocation prevents new claims and lease renewals.
+- [x] Agent revocation prevents new claims and lease renewals.
 - [ ] Secrets and local file contents do not appear in logs/evidence by default.
-- [ ] Restarting API/worker processes does not lose jobs, checkpoints or evidence.
+- [ ] Restarting API/worker processes does not lose jobs, checkpoints or evidence (SQLite/PostgreSQL store is implemented; restart/restore integration still needs E2E verification).
 - [ ] Contract fixtures pass across supported Agent/API versions.

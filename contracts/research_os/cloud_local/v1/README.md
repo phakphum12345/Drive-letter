@@ -2,7 +2,7 @@
 
 **Contract set:** ROS-CL-CONTRACT  
 **Version:** 1.0.0-draft  
-**Status:** Proposed; no production endpoint consumes these schemas yet  
+**Status:** Runtime v1 API subset implemented; cloud production remains disabled until PostgreSQL and worker deployment are configured  
 **Parent architecture:** ROS-CL-00 through ROS-CL-03
 
 ## 01. Files
@@ -39,8 +39,8 @@ python -m unittest tools.research_os_api.test_cloud_local_contract -v
 
 ## 04. Deliberately not included
 
-- No API routes or runtime dispatch implementation.
-- No credential issuance or Local Agent enrollment flow.
-- No database, broker, cloud resource or storage migration.
-- No public network listener or change to Owner Friend.
-- No production compatibility guarantee until a separate implementation PR adds contract negotiation and endpoint tests.
+- Cloud + Local v1 routes exist under `/api/v1` for owner-scoped job create/read/cancel, Agent grant/enrollment/heartbeat/claim/revocation, lease renew/transition and evidence read/write.
+- Local development uses SQLite; cloud mode requires PostgreSQL and fails closed when `RESEARCH_OS_DATABASE_URL` is absent.
+- Cloud job execution workers, checkpoint persistence/routes, background recovery, Agent Windows service packaging and hybrid stage orchestration are not yet implemented.
+- No Azure resources, cloud database, broker or existing JSON data migration are provisioned.
+- No public inbound Windows Friend listener is introduced; Local Agent outbound transport is a follow-up.
