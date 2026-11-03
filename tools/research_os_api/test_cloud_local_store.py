@@ -150,6 +150,33 @@ class CloudLocalStoreTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.store.append_evidence("user-a", evidence)
 
+    def test_recovery_registry_is_atomic_under_concurrent_retries(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        key = "f" * 64
+
+        def recover(index):
+            payload = {
+                "contract_version": "1.0",
+                "evidence_id": f"ev-rec-concurrent-{index}",
+                "job_id": "job-concurrent",
+                "owner_id": "user-a",
+                "occurred_at": "2026-11-03T00:00:00Z",
+                "evidence_class": "RECOVERED",
+                "recovery_key": key,
+            }
+            return self.store.append_recovered_evidence("user-a", payload)
+
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            results = list(pool.map(recover, range(12)))
+
+        evidence_ids = {item[0]["evidence_id"] for item in results}
+        created_count = sum(1 for _, created in results if created)
+        self.assertEqual(1, len(evidence_ids))
+        self.assertEqual(1, created_count)
+        self.assertEqual(1, len(self.store.list_evidence("user-a", "job-concurrent")))
+
+
 
 if __name__ == "__main__":
     unittest.main()
