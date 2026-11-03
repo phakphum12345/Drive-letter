@@ -150,6 +150,54 @@ class CloudLocalStoreTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.store.append_evidence("user-a", evidence)
 
+    def test_recovery_registry_is_atomic_under_concurrent_retries(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        key = "f" * 64
+
+        def recover(index):
+            payload = {
+                "contract_version": "1.0",
+                "evidence_id": f"ev-rec-concurrent-{index}",
+                "job_id": "job-concurrent",
+                "owner_id": "user-a",
+                "occurred_at": "2026-11-03T00:00:00Z",
+                "evidence_class": "RECOVERED",
+                "recovery_key": key,
+            }
+            return self.store.append_recovered_evidence("user-a", payload)
+
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            results = list(pool.map(recover, range(12)))
+
+        evidence_ids = {item[0]["evidence_id"] for item in results}
+        created_count = sum(1 for _, created in results if created)
+        self.assertEqual(1, len(evidence_ids))
+        self.assertEqual(1, created_count)
+        self.assertEqual(1, len(self.store.list_evidence("user-a", "job-concurrent")))
+
+
+    def test_recovery_audit_is_append_only_and_owner_scoped(self):
+        record = {
+            "owner_id": "user-a",
+            "job_id": "job-audit",
+            "actor_id": "user-a",
+            "requested_event_type": "artifact.committed",
+            "selected_route": "CHECKPOINT_FALLBACK",
+            "decision_status": "RECOVERY_AVAILABLE",
+            "source_refs": ["cp-verified"],
+            "reason": "primary evidence missing",
+        }
+        saved = self.store.append_recovery_audit("user-a", record)
+        self.assertTrue(saved["audit_id"])
+        self.assertEqual([saved], self.store.list_recovery_audit("user-a", "job-audit"))
+        self.assertEqual([], self.store.list_recovery_audit("user-b", "job-audit"))
+        with self.assertRaises(Exception):
+            self.store.append_recovery_audit("user-a", dict(record, audit_id=saved["audit_id"]))
+        with self.assertRaisesRegex(ValueError, "recovery_audit_scope_mismatch"):
+            self.store.append_recovery_audit("user-b", record)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -457,3 +457,23 @@ class CloudLocalStore:
             rows = self._execute(db, """SELECT payload FROM cloud_local_evidence WHERE owner_id=? AND job_id=?
                 ORDER BY occurred_at LIMIT ?""", (owner_id, job_id, max(1, min(int(limit), 250)))).fetchall()
             return [self._payload(row) for row in rows]
+
+    def append_recovery_audit(self, owner_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Append a redacted, owner-scoped audit record for each evidence resolution attempt."""
+        if payload.get("owner_id") != owner_id or not payload.get("job_id"):
+            raise ValueError("recovery_audit_scope_mismatch")
+        record = dict(payload)
+        record.setdefault("audit_id", "audit-" + uuid.uuid4().hex)
+        record.setdefault("occurred_at", _stamp())
+        encoded = json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        with self._transaction() as db:
+            self._execute(db, "INSERT INTO cloud_local_recovery_audit VALUES (?,?,?,?,?)",
+                          (owner_id, record["audit_id"], record["job_id"], record["occurred_at"], encoded))
+        return record
+
+    def list_recovery_audit(self, owner_id: str, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self._reader() as db:
+            rows = self._execute(db, """SELECT payload FROM cloud_local_recovery_audit
+                WHERE owner_id=? AND job_id=? ORDER BY occurred_at LIMIT ?""",
+                (owner_id, job_id, max(1, min(int(limit), 250)))).fetchall()
+            return [self._payload(row) for row in rows]

@@ -142,5 +142,32 @@
       "minLength": 1,
       "maxLength": 128
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidence_class": {
+            "const": "RECOVERED"
+          }
+        },
+        "required": [
+          "evidence_class"
+        ]
+      },
+      "then": {
+        "required": [
+          "recovery_sources",
+          "recovery_reason",
+          "recovery_key",
+          "recovered_event_type"
+        ],
+        "properties": {
+          "event_type": {
+            "const": "evidence.recovered"
+          }
+        }
+      }
+    }
+  ]
 }
