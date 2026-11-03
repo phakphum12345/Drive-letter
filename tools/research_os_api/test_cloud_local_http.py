@@ -294,6 +294,10 @@ class CloudLocalHTTPTests(unittest.TestCase):
         status, resolved = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-recovery&event_type=artifact.committed", self.user_headers)
         self.assertEqual(200, status, resolved)
         self.assertEqual("FALLBACK", resolved["resolution"]["route"])
+        # Exact original wins over a checkpoint-only recovery route.
+        status, empty = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-missing&event_type=artifact.committed", self.user_headers)
+        self.assertEqual(200, status, empty)
+        self.assertEqual("MISSING", empty["resolution"]["status"])
 
     def test_evidence_resolver_never_crosses_owner_job_or_source_sha(self):
         try:
@@ -324,6 +328,36 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual("PRIMARY", resolve_evidence([recovered, original], owner_id="user-a",
             job_id="job-x", stage_id="stage-1", event_type="job.completed",
             source_sha="b" * 40)["route"])
+
+
+
+    def test_resolver_switches_to_verified_checkpoint_when_primary_evidence_missing(self):
+        try:
+            from .evidence_recovery import resolve_evidence
+        except ImportError:
+            from evidence_recovery import resolve_evidence
+        checkpoint = {"checkpoint_id": "cp-1", "owner_id": "owner-1", "job_id": "job-1",
+                      "stage_id": "stage-1", "source_sha": "c" * 40}
+        result = resolve_evidence([], owner_id="owner-1", job_id="job-1",
+                                  stage_id="stage-1", event_type="artifact.committed",
+                                  source_sha="c" * 40, checkpoints=[checkpoint])
+        self.assertEqual("RECOVERY_AVAILABLE", result["status"])
+        self.assertEqual("CHECKPOINT_FALLBACK", result["route"])
+        self.assertEqual("cp-1", result["checkpoint_id"])
+
+    def test_recovery_rejects_checkpoint_from_another_stage(self):
+        try:
+            from .evidence_recovery import build_recovered_evidence
+        except ImportError:
+            from evidence_recovery import build_recovered_evidence
+        job = {"owner_id": "owner-1", "job_id": "job-1", "source_sha": "d" * 40,
+               "policy_decision_id": "policy-1", "correlation_id": "corr-1"}
+        checkpoint = {"checkpoint_id": "cp-other", "owner_id": "owner-1", "job_id": "job-1",
+                      "stage_id": "stage-other", "source_sha": "d" * 40}
+        result = build_recovered_evidence(job=job, checkpoints=[checkpoint], evidence=[],
+            owner_id="owner-1", stage_id="stage-requested", event_type="artifact.committed",
+            checkpoint=checkpoint, actor_id="owner-1")
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":
