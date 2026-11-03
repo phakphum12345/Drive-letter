@@ -37,7 +37,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
             "execution_mode": "LOCAL",
             "data_classification": "LOCAL_ONLY",
             "task_type": "repo.audit",
-            "required_capabilities": ["filesystem.read"],
+            "required_capabilities": ["repository.inspect"],
             "idempotency_key": "idempotency-key-00000001",
             "source_sha": "a" * 40,
             "owner_id": "attacker-controlled",
@@ -47,7 +47,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertEqual(201, status, result)
         return result["job"]
 
-    def enroll_agent(self):
+    def enroll_agent(self, capabilities=None):
         status, grant = self.request(
             "POST", "/api/v1/agents/enrollment-grants", self.user_headers, {"ttl_seconds": 600}
         )
@@ -58,7 +58,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
                 "enrollment_token": grant["enrollment_token"],
                 "device_id": "device-1",
                 "protocol_versions": ["1.0"],
-                "capabilities": [{"name": "filesystem.read", "version": "1"}],
+                "capabilities": capabilities if capabilities is not None else [{"name": "repository.inspect", "version": "1"}],
                 "os_name": "Windows",
                 "os_version": "11",
                 "agent_version": "1.0.0",
@@ -89,6 +89,23 @@ class CloudLocalHTTPTests(unittest.TestCase):
             )
             self.assertEqual(403, status)
             self.assertEqual("locality_policy_denied", result["error"])
+
+    def test_repo_audit_requires_source_sha_and_adds_repository_capability(self):
+        status, missing = self.request(
+            "POST", "/api/v1/jobs", self.user_headers,
+            {"execution_mode": "LOCAL", "data_classification": "LOCAL_ONLY",
+             "task_type": "repo.audit", "idempotency_key": "repo-audit-key-00000001"},
+        )
+        self.assertEqual(400, status)
+        self.assertIn("source_sha", missing["detail"])
+        status, created = self.request(
+            "POST", "/api/v1/jobs", self.user_headers,
+            {"execution_mode": "LOCAL", "data_classification": "LOCAL_ONLY",
+             "task_type": "repo.audit", "idempotency_key": "repo-audit-key-00000002",
+             "source_sha": "d" * 40},
+        )
+        self.assertEqual(201, status, created)
+        self.assertIn("repository.inspect", created["job"]["required_capabilities"])
 
     def test_cloud_execution_requires_public_data_until_upload_consent_exists(self):
         for classification in ("INTERNAL", "CONFIDENTIAL"):
@@ -128,7 +145,7 @@ class CloudLocalHTTPTests(unittest.TestCase):
 
         status, running = self.request(
             "POST", f"/api/v1/jobs/{job['job_id']}/transition", agent_headers,
-            {"lease_token": lease, "status": "RUNNING"},
+            {"lease_token": lease, "status": "RUNNING", "stage_id": "repo.audit"},
         )
         self.assertEqual(200, status, running)
         self.assertEqual("RUNNING", running["job"]["status"])
@@ -142,11 +159,25 @@ class CloudLocalHTTPTests(unittest.TestCase):
 
         status, completed = self.request(
             "POST", f"/api/v1/jobs/{job['job_id']}/transition", agent_headers,
-            {"lease_token": lease, "status": "COMPLETED"},
+            {"lease_token": lease, "status": "COMPLETED", "stage_id": "repo.audit"},
         )
         self.assertEqual(200, status, completed)
         self.assertEqual("COMPLETED", completed["job"]["status"])
         self.assertIsNone(completed["job"]["lease_id"])
+        self.assertEqual("job.completed", completed["evidence"]["event_type"])
+        status, evidence_list = self.request(
+            "GET", f"/api/v1/jobs/{job['job_id']}/evidence", self.user_headers
+        )
+        self.assertEqual(200, status)
+        self.assertCountEqual(["job.started", "job.completed"], [item["event_type"] for item in evidence_list["evidence"]])
+
+
+    def test_agent_without_repository_inspect_cannot_claim_repo_audit(self):
+        self.create_local_job()
+        _, headers = self.enroll_agent(capabilities=[{"name": "filesystem.read", "version": "1"}])
+        status, claim = self.request("POST", "/api/v1/agents/claim", headers, {})
+        self.assertEqual(200, status, claim)
+        self.assertIsNone(claim["job"])
 
     def test_agent_token_is_required_and_grant_is_single_use(self):
         status, grant = self.request(
@@ -252,16 +283,23 @@ class CloudLocalHTTPTests(unittest.TestCase):
         payload = {"stage_id": "stage-recovery", "event_type": "artifact.committed"}
         status, recovered = self.request("POST", path, self.user_headers, payload)
         self.assertEqual(201, status, recovered)
-        self.assertEqual("RECOVERED", recovered["status"])
+        self.assertEqual("RECOVERED", recovered["recovery_status"])
         self.assertEqual("RECOVERED", recovered["evidence"]["evidence_class"])
+        self.assertEqual("artifact.committed", recovered["evidence"]["recovered_event_type"])
         self.assertIn(checkpoint["checkpoint"]["checkpoint_id"], recovered["evidence"]["recovery_sources"])
         status, again = self.request("POST", path, self.user_headers, payload)
         self.assertEqual(200, status, again)
         self.assertTrue(again["reused"])
         self.assertEqual(recovered["evidence"]["evidence_id"], again["evidence"]["evidence_id"])
+        status, resolved = self.request("GET", f"/api/v1/jobs/{job['job_id']}/evidence/resolve?stage_id=stage-recovery&event_type=artifact.committed", self.user_headers)
+        self.assertEqual(200, status, resolved)
+        self.assertEqual("FALLBACK", resolved["resolution"]["route"])
 
     def test_evidence_resolver_never_crosses_owner_job_or_source_sha(self):
-        try:\n            from .evidence_recovery import resolve_evidence\n        except ImportError:  # pragma: no cover - direct unittest discovery\n            from evidence_recovery import resolve_evidence
+        try:
+            from .evidence_recovery import resolve_evidence
+        except ImportError:
+            from evidence_recovery import resolve_evidence
         records = [{"evidence_id": "foreign", "owner_id": "user-b", "job_id": "job-x",
                     "stage_id": "stage-1", "event_type": "job.completed", "source_sha": "a" * 40,
                     "evidence_class": "ORIGINAL"}]
@@ -271,10 +309,14 @@ class CloudLocalHTTPTests(unittest.TestCase):
         self.assertIsNone(result["evidence"])
 
     def test_evidence_resolver_prefers_original_then_fallback(self):
-        from .evidence_recovery import resolve_evidence
+        try:
+            from .evidence_recovery import resolve_evidence
+        except ImportError:
+            from evidence_recovery import resolve_evidence
         base = {"owner_id": "user-a", "job_id": "job-x", "stage_id": "stage-1",
                 "event_type": "job.completed", "source_sha": "b" * 40}
-        recovered = dict(base, evidence_id="recovered", evidence_class="RECOVERED")
+        recovered = dict(base, evidence_id="recovered", event_type="evidence.recovered",
+                         recovered_event_type="job.completed", evidence_class="RECOVERED")
         original = dict(base, evidence_id="original", evidence_class="ORIGINAL")
         self.assertEqual("FALLBACK", resolve_evidence([recovered], owner_id="user-a",
             job_id="job-x", stage_id="stage-1", event_type="job.completed",
