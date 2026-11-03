@@ -357,6 +357,7 @@ class CloudLocalHTTP:
         if action == "lease":
             job = self.store.renew_lease(owner_id, agent_id, job_id, lease,
                                          int(body.get("lease_seconds", 60)))
+            return self._response(200, job=job) if job else self._response(409, error="lease_invalid_or_expired")
         else:
             current = self.store.get_job(owner_id, job_id)
             if current is None:
