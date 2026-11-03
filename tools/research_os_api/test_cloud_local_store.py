@@ -193,7 +193,9 @@ class CloudLocalStoreTests(unittest.TestCase):
         self.assertEqual([saved], self.store.list_recovery_audit("user-a", "job-audit"))
         self.assertEqual([], self.store.list_recovery_audit("user-b", "job-audit"))
         with self.assertRaises(Exception):
-            self.store.append_recovery_audit("user-b", dict(record, audit_id=saved["audit_id"]))
+            self.store.append_recovery_audit("user-a", dict(record, audit_id=saved["audit_id"]))
+        with self.assertRaisesRegex(ValueError, "recovery_audit_scope_mismatch"):
+            self.store.append_recovery_audit("user-b", record)
 
 
 
