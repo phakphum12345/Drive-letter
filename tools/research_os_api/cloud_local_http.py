@@ -1,6 +1,7 @@
 """Authenticated HTTP dispatch for the Research OS Cloud + Local v1 API."""
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
@@ -384,7 +385,7 @@ class CloudLocalHTTP:
                     "result": result, "source_sha": source_sha,
                     "policy_decision_id": current["policy_decision_id"],
                     "correlation_id": current["correlation_id"],
-                    "lease_fingerprint": __import__("hashlib").sha256(lease.encode("utf-8")).hexdigest(),
+                    "lease_fingerprint": hashlib.sha256(lease.encode("utf-8")).hexdigest(),
                 }
                 if body.get("artifact_hashes") is not None:
                     evidence["artifact_hashes"] = body["artifact_hashes"]
