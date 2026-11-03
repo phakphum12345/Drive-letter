@@ -267,13 +267,18 @@ class CloudLocalStore:
             if checkpoint_id is not None:
                 payload["checkpoint_id"] = checkpoint_id
             terminal = status in {"COMPLETED", "FAILED"}
-            if terminal:
+            release_for_wait = status == "WAITING_FOR_LOCAL_AGENT"
+            if terminal or release_for_wait:
                 payload["lease_id"] = None
                 payload["lease_expires_at"] = None
+            if release_for_wait:
+                payload["assigned_worker_id"] = None
             self._execute(db, """UPDATE cloud_local_jobs SET status=?,payload=?,updated_at=?,
-                lease_id=?,lease_expires_at=? WHERE owner_id=? AND job_id=? AND lease_id=?""",
+                assigned_agent_id=?,lease_id=?,lease_expires_at=? WHERE owner_id=? AND job_id=? AND lease_id=?""",
                 (status, json.dumps(payload, ensure_ascii=False, sort_keys=True), _stamp(now),
-                 None if terminal else lease_token, None if terminal else row["lease_expires_at"],
+                 None if release_for_wait else agent_id,
+                 None if terminal or release_for_wait else lease_token,
+                 None if terminal or release_for_wait else row["lease_expires_at"],
                  owner_id, job_id, lease_token))
             return payload
 
@@ -328,7 +333,7 @@ class CloudLocalStore:
             row = self._execute(db, """SELECT payload,lease_id,lease_expires_at,status,assigned_agent_id
                 FROM cloud_local_jobs WHERE owner_id=? AND job_id=?""", (owner_id, job_id)).fetchone()
             if (not row or row["assigned_agent_id"] != agent_id or row["lease_id"] != lease_token
-                or row["status"] not in {"ASSIGNED", "RUNNING"} or not row["lease_expires_at"]
+                or row["status"] not in {"ASSIGNED", "RUNNING", "CHECKPOINTING"} or not row["lease_expires_at"]
                 or row["lease_expires_at"] <= _stamp(now)):
                 return None
             payload = self._payload(row)
