@@ -282,11 +282,8 @@ class CloudLocalHTTPTests(unittest.TestCase):
         path = f"/api/v1/jobs/{job['job_id']}/evidence/recover"
         payload = {"stage_id": "stage-recovery", "event_type": "artifact.committed"}
         status, recovered = self.request("POST", path, self.user_headers, payload)
-        if status == 500:
-            # Re-run outside dispatch's safe HTTP exception boundary so CI exposes the failing frame.
-            self.api._recover_evidence("user-a", job["job_id"], payload)
         self.assertEqual(201, status, recovered)
-        self.assertEqual("RECOVERED", recovered["status"])
+        self.assertEqual("RECOVERED", recovered["recovery_status"])
         self.assertEqual("RECOVERED", recovered["evidence"]["evidence_class"])
         self.assertEqual("artifact.committed", recovered["evidence"]["recovered_event_type"])
         self.assertIn(checkpoint["checkpoint"]["checkpoint_id"], recovered["evidence"]["recovery_sources"])
