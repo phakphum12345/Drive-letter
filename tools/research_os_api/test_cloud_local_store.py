@@ -177,6 +177,25 @@ class CloudLocalStoreTests(unittest.TestCase):
         self.assertEqual(1, len(self.store.list_evidence("user-a", "job-concurrent")))
 
 
+    def test_recovery_audit_is_append_only_and_owner_scoped(self):
+        record = {
+            "owner_id": "user-a",
+            "job_id": "job-audit",
+            "actor_id": "user-a",
+            "requested_event_type": "artifact.committed",
+            "selected_route": "CHECKPOINT_FALLBACK",
+            "decision_status": "RECOVERY_AVAILABLE",
+            "source_refs": ["cp-verified"],
+            "reason": "primary evidence missing",
+        }
+        saved = self.store.append_recovery_audit("user-a", record)
+        self.assertTrue(saved["audit_id"])
+        self.assertEqual([saved], self.store.list_recovery_audit("user-a", "job-audit"))
+        self.assertEqual([], self.store.list_recovery_audit("user-b", "job-audit"))
+        with self.assertRaises(Exception):
+            self.store.append_recovery_audit("user-b", dict(record, audit_id=saved["audit_id"]))
+
+
 
 if __name__ == "__main__":
     unittest.main()
