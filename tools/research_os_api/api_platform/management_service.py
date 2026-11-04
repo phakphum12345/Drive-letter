@@ -10,7 +10,7 @@ import os
 import tempfile
 import threading
 from dataclasses import asdict, fields, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Type
@@ -145,7 +145,7 @@ class JsonManagementStore:
                 "identifier": identifier,
                 "action": action,
                 "outcome": outcome,
-                "timestamp": datetime.now().astimezone().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             })
             self._write(state)
 
