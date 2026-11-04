@@ -93,7 +93,6 @@ function restoreLocalChatHistory(){
     renderChatHistoryOptions();
     return;
   }
-  if(!key)return;
   try{
     const raw=localStorage.getItem(key);
     const sessions=raw?JSON.parse(raw):[];
