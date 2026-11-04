@@ -54,6 +54,19 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/platform/v1/audit')", self.js)
         self.assertIn("read-only inventory", self.html)
 
+    def test_plugin_center_uses_real_first_party_integration_apis_and_owner_boundary(self):
+        self.assertIn('data-view="plugins" data-min-role="OWNER"', self.html)
+        self.assertIn('id="pluginView"', self.html)
+        self.assertIn("request('/v1/google-workspace/dashboard')", self.js)
+        self.assertIn("request('/v1/google-workspace/oauth/status')", self.js)
+        self.assertIn("request('/v1/ai/connections')", self.js)
+        self.assertIn("request('/v1/auth/providers')", self.js)
+        self.assertIn("request('/v1/google-workspace/oauth/start'", self.js)
+        self.assertIn("request('/v1/google-workspace/oauth/disconnect'", self.js)
+        self.assertIn("request('/v1/google-workspace/services'", self.js)
+        self.assertIn("OWNER role required", self.js)
+        self.assertIn("Third-party Plugin Marketplace", self.html)
+
     def test_primary_workspace_destinations_use_live_api_backed_views(self):
         self.assertIn('data-view="workspace" data-module="Projects & Files"', self.html)
         self.assertIn('data-view="workspace" data-module="History & Activity"', self.html)
