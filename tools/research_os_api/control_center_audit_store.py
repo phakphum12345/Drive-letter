@@ -10,7 +10,10 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from local_storage import data_root
+try:
+    from .local_storage import data_root
+except ImportError:
+    from local_storage import data_root
 
 _LOCK = threading.RLock()
 _ALLOWED_STATUS = frozenset({"PASS", "FAIL", "DEFERRED", "PARTIAL"})
