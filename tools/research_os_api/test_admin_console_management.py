@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from tools.research_os_api.api_platform.management_http import ManagementHTTP
@@ -69,6 +70,21 @@ class AdminConsoleManagementTests(unittest.TestCase):
         # A fresh service instance proves the metadata survived process-local memory.
         restored = ManagementService(JsonManagementStore(Path(self.temp.name) / "management.json"))
         self.assertEqual("disabled", restored.get("apis", "api-1")["lifecycle"])
+
+    def test_metadata_and_audit_are_committed_by_one_atomic_store_write(self) -> None:
+        store = JsonManagementStore(Path(self.temp.name) / "atomic.json")
+        with patch.object(store, "_write", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                store.put_with_audit(
+                    "organizations",
+                    "org-failed",
+                    {"organization_id": "org-failed", "name": "No partial write"},
+                    actor="owner-1",
+                    action="create",
+                )
+        snapshot = store.snapshot()
+        self.assertNotIn("org-failed", snapshot["resources"]["organizations"])
+        self.assertEqual([], snapshot["audit"])
 
     def test_web_admin_mutations_are_owner_gated_and_confirmed(self) -> None:
         root = Path(__file__).resolve().parents[2]
