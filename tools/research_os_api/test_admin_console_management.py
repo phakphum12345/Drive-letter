@@ -73,8 +73,13 @@ class AdminConsoleManagementTests(unittest.TestCase):
 
     def test_lifecycle_and_api_key_actions_reject_non_post_methods(self) -> None:
         status, _ = self.dispatch(
+            "POST", "/platform/v1/organizations", self.owner,
+            {"organization_id": "org-guard", "name": "Guard Organization"},
+        )
+        self.assertEqual(201, status)
+        status, _ = self.dispatch(
             "POST", "/platform/v1/projects", self.owner,
-            {"project_id": "project-guard", "name": "Guard Project"},
+            {"project_id": "project-guard", "organization_id": "org-guard", "name": "Guard Project"},
         )
         self.assertEqual(201, status)
         status, _ = self.dispatch(
