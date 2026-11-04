@@ -79,8 +79,26 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
         widget.apiClient.getAgentReadiness(),
         widget.apiClient.getOrchestrations(limit: 20),
       ]);
+      List<NativeControlAuditSnapshot> persistedAudits = <NativeControlAuditSnapshot>[];
+      try {
+        final auditResponse = await widget.apiClient.getControlCenterAudits(limit: 20);
+        final rawAudits = auditResponse['audits'];
+        if (rawAudits is List) {
+          persistedAudits = rawAudits
+              .whereType<Map>()
+              .map((item) => NativeControlAuditSnapshot.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .toList();
+        }
+      } on Object catch (error) {
+        if (mounted) _events.insert(0, 'Persisted audit history unavailable: $error');
+      }
       if (!mounted) return;
       setState(() {
+        _auditSnapshots
+          ..clear()
+          ..addAll(persistedAudits);
         _health = values[0];
         _brain = values[1];
         _skills = values[2];
@@ -128,7 +146,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
     final route = routes[command];
     if (route != null) {
       widget.onNavigate?.call(route);
-      setState(() => _events.insert(0, '$command prepared'));
+      setState(() => _events.insert(0, '$command opened locally; no runtime command executed'));
       return;
     }
 
@@ -141,7 +159,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
     }
   }
 
-  void _runAudit() {
+  Future<void> _runAudit() async {
     final checks = <Map<String, String>>[
       _auditCheck('Runtime', _health?['status']?.toString() == 'ok'),
       _auditCheck('Brain capacity', _brain != null && _brain!.isNotEmpty),
@@ -158,18 +176,36 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
     final hasDeferred = checks.any((item) => item['state'] == 'DEFERRED');
     final now = DateTime.now().toUtc();
     final snapshot = NativeControlAuditSnapshot(
-      auditId: 'audit-${now.millisecondsSinceEpoch}',
+      auditId: 'audit-${now.microsecondsSinceEpoch}',
       observedAt: now,
       status: hasFail ? 'FAIL' : (hasDeferred ? 'DEFERRED' : 'PASS'),
       checks: checks,
       source: 'Native Control Center existing observation surfaces',
     );
-    setState(() {
-      _auditSnapshots.insert(0, snapshot);
-      if (_auditSnapshots.length > 20) _auditSnapshots.removeLast();
-      _events.insert(0, 'Main Final Audit captured: ${snapshot.status}');
-    });
-    _tabs.animateTo(5);
+    try {
+      final response = await widget.apiClient.saveControlCenterAudit(snapshot.toJson());
+      final saved = response['audit'];
+      if (saved is! Map) {
+        throw const ResearchOSApiException('Audit API did not return the persisted audit record.');
+      }
+      final persisted = NativeControlAuditSnapshot.fromJson(
+        Map<String, dynamic>.from(saved),
+      );
+      if (!mounted) return;
+      setState(() {
+        _auditSnapshots.removeWhere((item) => item.auditId == persisted.auditId);
+        _auditSnapshots.insert(0, persisted);
+        if (_auditSnapshots.length > 20) _auditSnapshots.removeLast();
+        _events.insert(0, 'Audit persisted on Research OS: ${persisted.status}');
+      });
+      _tabs.animateTo(5);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _events.insert(0, 'Audit persistence failed: $error'));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('บันทึก Audit ไม่สำเร็จ: $error')),
+      );
+    }
   }
 
   Map<String, String> _auditCheck(String name, bool pass) => <String, String>{
@@ -232,7 +268,7 @@ class _NativeControlCenterPageState extends State<NativeControlCenterPage>
                             leading: const Icon(Icons.bolt_outlined),
                             title: Text(item),
                             subtitle: const Text(
-                              'Prepared through the native control lifecycle',
+                              'Local navigation only; this does not execute a runtime command.',
                             ),
                             onTap: () => _runCommand(item),
                           ),

@@ -98,6 +98,14 @@ class ResearchOSApiClient {
   Future<Map<String, dynamic>> getKnowledgeGraph() =>
       _getJson('/v1/knowledge/graph');
 
+  Future<Map<String, dynamic>> getControlCenterAudits({int limit = 20}) =>
+      _getJson('/v1/control-center/audits?limit=$limit');
+
+  Future<Map<String, dynamic>> saveControlCenterAudit(
+    Map<String, Object?> audit,
+  ) =>
+      _postJson('/v1/control-center/audits', audit);
+
   Future<Map<String, dynamic>> getBrainCapacity() =>
       _getJson('/v1/brain/capacity');
   Future<Map<String, dynamic>> getBrainSkills() =>

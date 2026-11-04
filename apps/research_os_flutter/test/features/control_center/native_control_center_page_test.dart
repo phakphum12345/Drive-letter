@@ -9,10 +9,20 @@ import 'package:research_os_flutter/src/features/control_center/native_control_a
 import 'package:research_os_flutter/src/features/control_center/native_control_center_page.dart';
 
 class _FakeClient extends http.BaseClient {
+  final List<String> requestedPaths = <String>[];
+
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
-    final payload = switch (path) {
+    requestedPaths.add('${request.method} $path');
+    final payload = path == '/v1/control-center/audits' && request.method == 'GET'
+        ? <String, Object?>{'audits': <Object>[]}
+        : path == '/v1/control-center/audits' && request.method == 'POST'
+            ? <String, Object?>{
+                'audit': jsonDecode((request as http.Request).body),
+                'persisted': true,
+              }
+            : switch (path) {
       '/health' => <String, Object?>{
           'status': 'ok',
           'capabilities': <Object>['brain', 'evidence'],
@@ -46,9 +56,10 @@ class _FakeClient extends http.BaseClient {
 void main() {
   testWidgets('Control Center is reachable from the canonical app feature tree',
       (tester) async {
+    final fake = _FakeClient();
     final api = ResearchOSApiClient(
       baseUrl: 'http://127.0.0.1:8787',
-      client: _FakeClient(),
+      client: fake,
     );
 
     await tester.pumpWidget(
@@ -56,6 +67,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(fake.requestedPaths, contains('GET /v1/control-center/audits'));
     expect(find.text('Native Core Workspace'), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('System Map'), findsOneWidget);
@@ -104,6 +116,27 @@ void main() {
 
     expect(find.byIcon(Icons.rule_folder_outlined), findsOneWidget);
 
+    api.close();
+  });
+
+  test('API client saves an audit snapshot through the server endpoint', () async {
+    final fake = _FakeClient();
+    final api = ResearchOSApiClient(
+      baseUrl: 'http://127.0.0.1:8787',
+      client: fake,
+    );
+    final response = await api.saveControlCenterAudit(<String, Object?>{
+      'audit_id': 'audit-client-test',
+      'observed_at': '2026-11-04T12:00:00Z',
+      'status': 'DEFERRED',
+      'source': 'test',
+      'checks': <Object>[
+        <String, Object?>{'check': 'Runtime', 'state': 'PASS', 'detail': 'Observed'},
+      ],
+    });
+
+    expect(fake.requestedPaths, contains('POST /v1/control-center/audits'));
+    expect((response['audit'] as Map)['audit_id'], 'audit-client-test');
     api.close();
   });
 
