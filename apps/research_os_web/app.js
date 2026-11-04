@@ -70,8 +70,29 @@ function renderChatSession(session){
   $('chatHistoryStatus').textContent='Local history · '+new Date(Number(session.updated_at||Date.now())).toLocaleString();
   renderChatHistoryOptions();
 }
+function clearChatStateForSignedOut(statusText='Sign in to view local conversation history.'){
+  state.chatSessions=[];
+  state.messages=[];
+  state.sessionId=null;
+  $('messages').textContent='';
+  $('researchTitle').textContent='เริ่มต้นการวิจัย';
+  $('researchState').textContent='READY';
+  $('chatHistoryStatus').textContent=statusText;
+  renderChatHistoryOptions();
+}
 function restoreLocalChatHistory(){
   const key=chatStorageKey();
+  state.chatSessions=[];
+  state.messages=[];
+  state.sessionId=null;
+  $('messages').textContent='';
+  $('researchTitle').textContent='เริ่มต้นการวิจัย';
+  $('researchState').textContent='READY';
+  if(!key){
+    $('chatHistoryStatus').textContent='Sign in to view local conversation history.';
+    renderChatHistoryOptions();
+    return;
+  }
   if(!key)return;
   try{
     const raw=localStorage.getItem(key);
@@ -82,12 +103,13 @@ function restoreLocalChatHistory(){
     else{
       state.sessionId=crypto.randomUUID();
       state.messages=[];
+      $('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Start a new investigation when you are ready.</span></div>';
+      $('researchTitle').textContent='Ready for your investigation';
       renderChatHistoryOptions();
       $('chatHistoryStatus').textContent='Local history ready · this device only';
     }
   }catch(error){
-    state.chatSessions=[];
-    $('chatHistoryStatus').textContent='Could not read local history';
+    clearChatStateForSignedOut('Could not read local history');
   }
 }
 function startNewChatSession(){
@@ -130,7 +152,7 @@ function restoreChatLayout(){
 function setRunning(value){state.sending=value;const button=$('runButton');button.disabled=value;button.innerHTML=value?'กำลังค้นคว้า… <b>◌</b>':'Send <b>↑</b>';$('prompt').disabled=value;if(value)$('researchState').textContent='RUNNING'}
 function roleRank(role){return ({USER:10,PRO:20,OWNER:30})[String(role||'USER').toUpperCase()]||0}
 function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});document.querySelectorAll('[data-admin-only]').forEach(node=>{node.hidden=role!=='OWNER'});if(role!=='OWNER'&&!$('adminView').hidden)setPlatformView('home');}
-async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();if(state.account)restoreLocalChatHistory();await refreshControlCenter();return result}catch(error){state.account=null;renderAccount();showControlCenterSignIn();throw error}}
+async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();if(state.account)restoreLocalChatHistory();else clearChatStateForSignedOut();await refreshControlCenter();return result}catch(error){state.account=null;clearChatStateForSignedOut();renderAccount();showControlCenterSignIn();throw error}}
 function providerLabel(provider){return provider==='google'?'Google':provider==='microsoft'?'Microsoft':'GitHub'}
 function addEmailOtpControls(panel){
 const heading=document.createElement('p');heading.textContent='Or sign in with Email OTP';panel.appendChild(heading);
@@ -144,7 +166,7 @@ verify.addEventListener('click',async()=>{verify.disabled=true;message.textConte
 }
 async function showLoginOptions(){const panel=$('loginOptions');if(!panel.hidden){panel.hidden=true;return}panel.hidden=false;panel.textContent='Loading login providers…';try{const result=await request('/v1/auth/providers');panel.innerHTML='';for(const provider of result.providers||[]){const button=document.createElement('button');button.type='button';button.className='tool-chip';button.textContent=`Continue with ${providerLabel(provider.id)}${provider.available?'':' (not configured)'}`;button.disabled=!provider.available;button.addEventListener('click',()=>handleProviderLogin(provider.id));panel.appendChild(button)}addEmailOtpControls(panel)}catch(error){panel.textContent=`Login providers unavailable: ${error.message}`}}
 async function handleProviderLogin(provider){if(state.sending)return;try{const result=await request('/v1/auth/providers/login',{method:'POST',body:JSON.stringify({provider})});if(!result.authorization_url)throw new Error('Authorization URL was not returned');window.location.assign(result.authorization_url)}catch(error){addMessage('system',`${providerLabel(provider)} sign-in unavailable: ${error.message}`)}}
-async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;state.chatSessions=[];state.messages=[];state.sessionId=null;renderChatHistoryOptions();$('messages').textContent='';$('chatHistoryStatus').textContent='Sign in to view local conversation history.';renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
+async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;clearChatStateForSignedOut();renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
 async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();if(state.messages.length===0)$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();persistChatHistory();addMessage('assistant',answer||'Research completed without a text response.',{route:result.route,provider:result.provider,model:result.model});setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
 $('researchForm').addEventListener('submit',event=>{event.preventDefault();startResearch($('prompt').value.trim())});
 $('newResearch').addEventListener('click',()=>{setPlatformView('chat');startNewChatSession();window.scrollTo({top:0,behavior:'smooth'})});
