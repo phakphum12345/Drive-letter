@@ -38,4 +38,4 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
-        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.test_user_control_center_completion_matrix -v
+        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.research_os_api.test_admin_console_management tools.test_user_control_center_completion_matrix -v
