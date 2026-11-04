@@ -71,6 +71,27 @@ class AdminConsoleManagementTests(unittest.TestCase):
         restored = ManagementService(JsonManagementStore(Path(self.temp.name) / "management.json"))
         self.assertEqual("disabled", restored.get("apis", "api-1")["lifecycle"])
 
+    def test_lifecycle_and_api_key_actions_reject_non_post_methods(self) -> None:
+        status, _ = self.dispatch(
+            "POST", "/platform/v1/apis", self.owner,
+            {"api_id": "api-method-guard", "project_id": "project-1", "name": "Guarded API"},
+        )
+        self.assertEqual(201, status)
+
+        status, payload = self.dispatch(
+            "GET", "/platform/v1/apis/api-method-guard/disable", self.owner, {},
+        )
+        self.assertEqual(405, status)
+        self.assertEqual("method_not_allowed", payload["error"])
+        restored = self.http.service.get("apis", "api-method-guard")
+        self.assertNotEqual("disabled", restored["lifecycle"])
+
+        status, payload = self.dispatch(
+            "GET", "/platform/v1/applications/app-1/keys/key-1/revoke", self.owner, {},
+        )
+        self.assertEqual(405, status)
+        self.assertEqual("method_not_allowed", payload["error"])
+
     def test_metadata_and_audit_are_committed_by_one_atomic_store_write(self) -> None:
         store = JsonManagementStore(Path(self.temp.name) / "atomic.json")
         with patch.object(store, "_write", side_effect=OSError("simulated disk failure")):
