@@ -52,7 +52,8 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("role!=='OWNER'", self.js)
         self.assertIn("request('/platform/v1/organizations')", self.js)
         self.assertIn("request('/platform/v1/audit')", self.js)
-        self.assertIn("read-only inventory", self.html)
+        self.assertIn('User/Role/Policy/Credential administration', self.html)
+        self.assertIn('id="adminCreateForm"', self.html)
 
     def test_primary_workspace_destinations_use_live_api_backed_views(self):
         self.assertIn('data-view="workspace" data-module="Projects & Files"', self.html)
