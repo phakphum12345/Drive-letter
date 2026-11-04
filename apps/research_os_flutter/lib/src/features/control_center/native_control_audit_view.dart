@@ -11,6 +11,24 @@ class NativeControlAuditSnapshot {
     required this.source,
   });
 
+  factory NativeControlAuditSnapshot.fromJson(Map<String, dynamic> value) {
+    final rawChecks = value['checks'];
+    return NativeControlAuditSnapshot(
+      auditId: value['audit_id']?.toString() ?? '',
+      observedAt: DateTime.tryParse(value['observed_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      status: value['status']?.toString() ?? 'UNKNOWN',
+      source: value['source']?.toString() ?? 'Research OS API',
+      checks: rawChecks is List
+          ? rawChecks.whereType<Map>().map((item) => <String, String>{
+                'check': item['check']?.toString() ?? 'Check',
+                'state': item['state']?.toString() ?? 'UNKNOWN',
+                'detail': item['detail']?.toString() ?? '',
+              }).toList()
+          : <Map<String, String>>[],
+    );
+  }
+
   final String auditId;
   final DateTime observedAt;
   final String status;
@@ -107,7 +125,7 @@ class NativeControlAuditView extends StatelessWidget {
             leading: const Icon(Icons.fact_check_outlined),
             title: const Text('Main Final Audit'),
             subtitle: const Text(
-              'Read-only audit projection inside the existing Native Control Center. '
+              'Persisted, user-scoped observation history from the Research OS API. '
               'It does not grant authority or replace Final Gate.',
             ),
             trailing: FilledButton.icon(
@@ -160,7 +178,7 @@ class NativeControlAuditView extends StatelessWidget {
               leading: Icon(Icons.info_outline),
               title: Text('No audit snapshot yet'),
               subtitle: Text(
-                'Run Audit to capture an observation snapshot.',
+                'Run Audit to persist an observation snapshot to the authenticated Research OS data store.',
               ),
             ),
           ),
