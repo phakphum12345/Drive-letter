@@ -523,19 +523,6 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 email = ((result.get("account") or {}).get("email") or "Google account")
                 self._send_html(HTTPStatus.OK, f"<html><body><h2>Research OS connected to Google Workspace</h2><p>{email}</p><p>You can close this window and return to Research OS.</p></body></html>")
                 return
-            if path == "/v1/control-center/audits":
-                try:
-                    principal = require_session(self.headers)
-                except ValueError:
-                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
-                    return
-                user_id = str(principal.get("user_id") or "").strip()
-                if not user_id:
-                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "invalid_session_identity"})
-                    return
-                audit = save_control_center_audit(user_id, body)
-                self._send(HTTPStatus.CREATED, {"audit": audit, "persisted": True, "authority": "observation_only"})
-                return
             if path == "/v1/platform/work-checkpoints":
                 principal = require_session(self.headers)
                 user_id = str(principal.get("user_id") or "").strip()
@@ -677,6 +664,19 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             if path.startswith("/platform/v1"):
                 status, payload = _management_http().dispatch("POST", self.path, self.headers, body)
                 self._send(status, payload)
+                return
+            if path == "/v1/control-center/audits":
+                try:
+                    principal = require_session(self.headers)
+                except ValueError:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
+                    return
+                user_id = str(principal.get("user_id") or "").strip()
+                if not user_id:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "invalid_session_identity"})
+                    return
+                audit = save_control_center_audit(user_id, body)
+                self._send(HTTPStatus.CREATED, {"audit": audit, "persisted": True, "authority": "observation_only"})
                 return
             if path == "/v1/platform/work-checkpoints":
                 principal = require_session(self.headers)
