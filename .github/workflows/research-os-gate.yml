@@ -359,7 +359,15 @@ jobs:
           git cat-file -e "$head^{commit}"
           changed="$(git diff --name-only "$base" "$head")"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/research-os-gate\.yml$)'; then
+          source_relevant=false
+          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/)'; then
+            source_relevant=true
+          fi
+          workflow_diff="$(git diff --unified=0 "$base" "$head" -- .github/workflows/research-os-gate.yml)"
+          if printf '%s\n' "$workflow_diff" | grep -Eq '^[+-].*(runs-on: macos-latest|xcodebuild|xcrun|pod --version|flutter create --platforms=ios,macos|flutter build ios|flutter build macos)'; then
+            source_relevant=true
+          fi
+          if [[ "$source_relevant" == "true" ]]; then
             echo "run_apple=true" >> "$GITHUB_OUTPUT"
             echo "APPLE_PLATFORM_VALIDATION=RUN_RELEVANT_CHANGES"
           else
