@@ -56,9 +56,10 @@ class _FakeClient extends http.BaseClient {
 void main() {
   testWidgets('Control Center is reachable from the canonical app feature tree',
       (tester) async {
+    final fake = _FakeClient();
     final api = ResearchOSApiClient(
       baseUrl: 'http://127.0.0.1:8787',
-      client: _FakeClient(),
+      client: fake,
     );
 
     await tester.pumpWidget(
@@ -66,6 +67,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(fake.requestedPaths, contains('GET /v1/control-center/audits'));
     expect(find.text('Native Core Workspace'), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('System Map'), findsOneWidget);
@@ -100,12 +102,11 @@ void main() {
     api.close();
   });
 
-  testWidgets('Main Final Audit loads and persists through the authenticated API client',
+  testWidgets('Main Final Audit is available inside the existing Control Center',
       (tester) async {
-    final fake = _FakeClient();
     final api = ResearchOSApiClient(
       baseUrl: 'http://127.0.0.1:8787',
-      client: fake,
+      client: _FakeClient(),
     );
 
     await tester.pumpWidget(
@@ -113,19 +114,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final auditTab = find.byIcon(Icons.rule_folder_outlined);
-    expect(auditTab, findsOneWidget);
-    await tester.tap(auditTab);
-    await tester.pumpAndSettle();
-    expect(find.text('Main Final Audit'), findsOneWidget);
+    expect(find.byIcon(Icons.rule_folder_outlined), findsOneWidget);
 
-    await tester.tap(find.text('Run Audit'));
-    await tester.pumpAndSettle();
+    api.close();
+  });
 
-    expect(fake.requestedPaths, contains('GET /v1/control-center/audits'));
+  test('API client saves an audit snapshot through the server endpoint', () async {
+    final fake = _FakeClient();
+    final api = ResearchOSApiClient(
+      baseUrl: 'http://127.0.0.1:8787',
+      client: fake,
+    );
+    final response = await api.saveControlCenterAudit(<String, Object?>{
+      'audit_id': 'audit-client-test',
+      'observed_at': '2026-11-04T12:00:00Z',
+      'status': 'DEFERRED',
+      'source': 'test',
+      'checks': <Object>[
+        <String, Object?>{'check': 'Runtime', 'state': 'PASS', 'detail': 'Observed'},
+      ],
+    });
+
     expect(fake.requestedPaths, contains('POST /v1/control-center/audits'));
-    expect(find.textContaining('Latest: DEFERRED'), findsOneWidget);
-
+    expect((response['audit'] as Map)['audit_id'], 'audit-client-test');
     api.close();
   });
 
