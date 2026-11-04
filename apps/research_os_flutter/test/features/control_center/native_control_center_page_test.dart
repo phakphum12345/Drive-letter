@@ -60,6 +60,7 @@ void main() {
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('System Map'), findsOneWidget);
     expect(find.text('LIVE'), findsOneWidget);
+    expect(find.text('Main Final Audit'), findsOneWidget);
     expect(find.text('Agent readiness'), findsOneWidget);
     expect(find.text('Workflow runs'), findsOneWidget);
     expect(find.text('Running'), findsOneWidget);
