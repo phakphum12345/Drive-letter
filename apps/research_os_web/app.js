@@ -143,7 +143,68 @@ function adminItem(container,title,meta){
   const item=document.createElement('div');item.className='admin-list-item';
   const heading=document.createElement('strong');heading.textContent=title||'Unnamed resource';
   const detail=document.createElement('small');detail.textContent=meta||'';
-  item.append(heading,detail);container.appendChild(item);
+  item.append(heading,detail);container.appendChild(item);return item;
+}
+const adminCreateFields={
+  organizations:[['organization_id','Organization ID'],['name','Name']],
+  projects:[['project_id','Project ID'],['organization_id','Organization ID'],['name','Name']],
+  applications:[['application_id','Application ID'],['project_id','Project ID'],['name','Name']],
+  apis:[['api_id','API ID'],['project_id','Project ID'],['name','Name']]
+};
+function renderAdminCreateFields(){
+  const type=$('adminResourceType').value;
+  $('adminCreateFields').textContent='';
+  (adminCreateFields[type]||[]).forEach(([name,label])=>{
+    const field=document.createElement('label');
+    field.className='admin-create-field';
+    field.textContent=label;
+    const input=document.createElement('input');
+    input.name=name;
+    input.required=true;
+    input.maxLength=160;
+    input.autocomplete='off';
+    input.placeholder=label;
+    field.appendChild(input);
+    $('adminCreateFields').appendChild(field);
+  });
+}
+async function createAdminResource(event){
+  event.preventDefault();
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER'){
+    $('adminStatus').textContent='OWNER role required.';
+    return;
+  }
+  const type=$('adminResourceType').value;
+  const payload={};
+  $('adminCreateFields').querySelectorAll('input[name]').forEach(input=>payload[input.name]=input.value.trim());
+  if(Object.values(payload).some(value=>!value)){
+    $('adminStatus').textContent='กรอกข้อมูลให้ครบทุกช่องก่อนสร้าง Resource';
+    return;
+  }
+  $('adminCreateSubmit').disabled=true;
+  $('adminStatus').textContent='กำลังสร้าง '+type+' ผ่าน Management API…';
+  try{
+    await request('/platform/v1/'+type,{method:'POST',body:JSON.stringify(payload)});
+    $('adminCreateForm').reset();
+    renderAdminCreateFields();
+    $('adminStatus').textContent='สร้าง '+type+' สำเร็จและบันทึก Management Audit แล้ว';
+    await refreshAdminConsole();
+  }catch(error){
+    $('adminStatus').textContent='สร้าง Resource ไม่สำเร็จ: '+String(error.message||error);
+  }finally{$('adminCreateSubmit').disabled=false}
+}
+async function runAdminApiLifecycle(apiId,action){
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER')return;
+  const button=$('adminApis').querySelector('[data-admin-id="'+CSS.escape(apiId)+'"]');
+  if(button)button.disabled=true;
+  try{
+    await request('/platform/v1/apis/'+encodeURIComponent(apiId)+'/'+action,{method:'POST',body:JSON.stringify({})});
+    $('adminStatus').textContent='API '+apiId+' lifecycle changed: '+action+' · Management Audit recorded';
+    await refreshAdminConsole();
+  }catch(error){
+    $('adminStatus').textContent='API lifecycle action failed: '+String(error.message||error);
+    if(button)button.disabled=false;
+  }
 }
 async function refreshAdminConsole(){
   if(!$('adminView')||$('adminView').hidden)return;
@@ -176,7 +237,17 @@ async function refreshAdminConsole(){
         const name=item.name||item.title||item[group.key]||item.id||'Unnamed resource';
         const identifier=item[group.key]||item.id||'';
         const stateLabel=item.lifecycle||item.status||'REGISTERED';
-        adminItem($(group.id),name,identifier+' · '+stateLabel);
+        const rendered=adminItem($(group.id),name,identifier+' · '+stateLabel);
+        if(group.id==='adminApis'&&identifier){
+          const action=String(item.lifecycle||'active').toLowerCase()==='active'?'disable':'publish';
+          const button=document.createElement('button');
+          button.type='button';
+          button.className='subtle-button admin-lifecycle-action';
+          button.textContent=action==='disable'?'Disable':'Publish';
+          button.dataset.adminId=identifier;
+          button.addEventListener('click',()=>runAdminApiLifecycle(identifier,action));
+          rendered.appendChild(button);
+        }
       });
     });
     const audit=values[5].items||[];
@@ -356,6 +427,10 @@ document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('
 }));
 $('returnChat').addEventListener('click',()=>setPlatformView('chat'));
 $('refreshAdminConsole').addEventListener('click',refreshAdminConsole);
+$('adminResourceType').addEventListener('change',renderAdminCreateFields);
+$('adminCreateForm').addEventListener('submit',createAdminResource);
+renderAdminCreateFields();
+
 $('refreshControlCenter').addEventListener('click',refreshControlCenter);
 $('workspaceRefresh').addEventListener('click',()=>refreshWorkspaceView($('workspaceTitle').textContent));
 $('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
