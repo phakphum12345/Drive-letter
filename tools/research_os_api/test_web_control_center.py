@@ -54,6 +54,21 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/platform/v1/audit')", self.js)
         self.assertIn("read-only inventory", self.html)
 
+    def test_primary_workspace_destinations_use_live_api_backed_views(self):
+        self.assertIn('data-view="workspace" data-module="Projects & Files"', self.html)
+        self.assertIn('data-view="workspace" data-module="History & Activity"', self.html)
+        self.assertIn('data-view="workspace" data-module="Settings & Account"', self.html)
+        self.assertIn('id="workspaceView"', self.html)
+        self.assertIn("!['registry','workspace'].includes(selected)", self.js)
+        self.assertIn("request('/v1/projects')", self.js)
+        self.assertIn("request('/v2/workspaces')", self.js)
+        self.assertIn("request('/api/v1/jobs?limit=50')", self.js)
+        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("request('/v1/auth/status')", self.js)
+        self.assertIn("request('/v1/ai/connections')", self.js)
+        self.assertIn("ยังไม่มี API binding", self.js)
+        self.assertIn("credentials:'include'", self.js)
+
     def test_dashboard_has_mobile_responsive_layout(self):
         self.assertIn(".home-view", self.css)
         self.assertIn(".home-metrics", self.css)

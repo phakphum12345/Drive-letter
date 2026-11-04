@@ -38,13 +38,20 @@ class FakeWorkflowApiClient extends ResearchOSApiClient {
 }
 
 void main() {
-  testWidgets('Workflow Experience observes existing orchestration and timeline', (tester) async {
+  testWidgets('Workflow Experience links to the real Agent Center controls and observes timeline', (tester) async {
+    var openedAgentCenter = false;
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: WorkflowExperiencePage(apiClient: FakeWorkflowApiClient()))),
+      MaterialApp(home: Scaffold(body: WorkflowExperiencePage(
+        apiClient: FakeWorkflowApiClient(),
+        onOpenAgentCenter: () => openedAgentCenter = true,
+      ))),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Workflow Experience'), findsOneWidget);
+    expect(find.byKey(const Key('open-agent-center-controls')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open-agent-center-controls')));
+    expect(openedAgentCenter, isTrue);
     expect(find.byKey(const Key('workflow-run-count')), findsOneWidget);
     expect(find.text('Research objective'), findsOneWidget);
 

@@ -4,6 +4,19 @@ on:
   pull_request:
     paths:
       - "apps/research_os_web/**"
+      - "apps/research_os_flutter/lib/src/features/control_center/**"
+      - "apps/research_os_flutter/lib/src/features/owner/**"
+      - "apps/research_os_flutter/lib/src/features/chat/**"
+      - "apps/research_os_flutter/lib/src/features/projects/**"
+      - "apps/research_os_flutter/lib/src/features/workflows/**"
+      - "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
+      - "apps/research_os_flutter/lib/src/app_shell.dart"
+      - "apps/research_os_flutter/test/workflow_experience_page_test.dart"
+      - "apps/research_os_flutter/test/features/control_center/**"
+      - "apps/research_os_flutter/test/owner_experience_page_test.dart"
+      - "tools/test_user_control_center_completion_matrix.py"
+      - "current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json"
+      - "docs/FULL-USER-CONTROL-CENTER-COMPLETION-AUDIT.md"
       - "tools/research_os_api/test_web_control_center.py"
       - "tools/research_os_api/test_management_http_rbac.py"
       - ".github/workflows/research-os-user-control-center.yml"
@@ -25,4 +38,4 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
-        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac -v
+        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.test_user_control_center_completion_matrix -v

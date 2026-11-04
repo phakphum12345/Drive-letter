@@ -194,6 +194,143 @@ async function refreshAdminConsole(){
   }finally{$('refreshAdminConsole').disabled=false}
 }
 
+
+function workspaceRecord(title, detail, status) {
+  const card=document.createElement('article');
+  card.className='workspace-record';
+  const heading=document.createElement('strong');
+  heading.textContent=title||'Unnamed item';
+  const description=document.createElement('small');
+  description.textContent=detail||'';
+  card.append(heading,description);
+  if(status){
+    const badge=document.createElement('span');
+    badge.className='home-status-tag status-'+String(status).toLowerCase().replace(/[^a-z0-9_-]/g,'');
+    badge.textContent=status;
+    card.appendChild(badge);
+  }
+  $('workspaceContent').appendChild(card);
+}
+function workspaceEmpty(message){
+  const empty=document.createElement('div');
+  empty.className='home-empty';
+  empty.textContent=message;
+  $('workspaceContent').appendChild(empty);
+}
+async function refreshWorkspaceView(moduleName){
+  if(!$('workspaceView')||$('workspaceView').hidden)return;
+  $('workspaceTitle').textContent=moduleName||'Workspace';
+  $('workspaceStatus').textContent='กำลังอ่านข้อมูลจาก Research OS API…';
+  $('workspaceContent').textContent='';
+  $('workspaceRefresh').disabled=true;
+  try{
+    if(!state.account||!state.account.email){
+      $('workspaceStatus').textContent='ต้องลงชื่อเข้าใช้ก่อนจึงจะอ่านข้อมูลบัญชีได้';
+      workspaceEmpty('Sign in required. ไม่มีการแสดงข้อมูลตัวอย่าง');
+      return;
+    }
+    if(moduleName==='Projects & Files'){
+      $('workspaceDescription').textContent='ProjectRegistry และ Workspace Index ที่มีอยู่จริง · โหมดอ่านข้อมูล';
+      const results=await Promise.allSettled([request('/v1/projects'),request('/v2/workspaces')]);
+      const projectResult=results[0];
+      const workspaceResult=results[1];
+      if(projectResult.status==='fulfilled'){
+        const snapshot=projectResult.value;
+        const projects=Array.isArray(snapshot.projects)?snapshot.projects:[];
+        workspaceRecord('ProjectRegistry',String(snapshot.configured_count??projects.length)+' configured · '+String(snapshot.supported_project_contexts??'—')+' supported contexts · release authority '+String(snapshot.release_authority??'UNKNOWN'),'LIVE');
+        if(!projects.length)workspaceEmpty('ProjectRegistry ยังไม่มี project ที่ตั้งค่าไว้');
+        projects.forEach(project=>workspaceRecord(
+          project.display_name||project.project_id,
+          String(project.project_id||'unknown')+' · v'+String(project.version??'unknown')+' · '+(Array.isArray(project.capabilities)?project.capabilities.join(', '):'capabilities not reported'),
+          project.status||'REGISTERED'
+        ));
+      }else{
+        workspaceRecord('ProjectRegistry unavailable',String(projectResult.reason),'UNAVAILABLE');
+      }
+      if(workspaceResult.status==='fulfilled'){
+        const workspaces=Array.isArray(workspaceResult.value.workspaces)?workspaceResult.value.workspaces:[];
+        workspaceRecord('Workspace Index',String(workspaces.length)+' workspace(s) returned by /v2/workspaces','LIVE');
+        workspaces.forEach(workspace=>workspaceRecord(
+          workspace.name||workspace.workspace_id||workspace.id,
+          String(workspace.workspace_id||workspace.id||'unknown')+' · '+String(workspace.description||workspace.kind||'Workspace record'),
+          workspace.status||'REGISTERED'
+        ));
+      }else{
+        workspaceRecord('Workspace Index unavailable',String(workspaceResult.reason),'UNAVAILABLE');
+      }
+      $('workspaceStatus').textContent='แสดงเฉพาะข้อมูลจริงจาก ProjectRegistry และ Workspace Index · หน้านี้ยังไม่สร้าง/แก้ไข/ลบ project หรือไฟล์';
+    }else if(moduleName==='History & Activity'){
+      $('workspaceDescription').textContent='งานและ Workflow ที่อ่านได้จาก API จริง พร้อมสถานะและเวลา · read-only';
+      const results=await Promise.allSettled([
+        request('/api/v1/jobs?limit=50'),
+        request('/v1/agents/orchestrations?limit=50')
+      ]);
+      let total=0;
+      if(results[0].status==='fulfilled'){
+        const jobs=Array.isArray(results[0].value.jobs)?results[0].value.jobs:[];
+        workspaceRecord('Execution Jobs',jobs.length+' job(s) returned by /api/v1/jobs','LIVE');
+        total+=jobs.length;
+        if(!jobs.length)workspaceEmpty('ยังไม่มี execution jobs');
+        jobs.forEach(job=>workspaceRecord(
+          job.task_type||job.job_id,
+          String(job.job_id||'unknown')+' · '+formatHomeTime(job.updated_at||job.created_at),
+          job.status||'UNKNOWN'
+        ));
+      }else workspaceRecord('Execution Jobs unavailable',String(results[0].reason),'UNAVAILABLE');
+      if(results[1].status==='fulfilled'){
+        const runs=Array.isArray(results[1].value.runs)?results[1].value.runs:(Array.isArray(results[1].value.orchestrations)?results[1].value.orchestrations:[]);
+        workspaceRecord('Workflow Runs',runs.length+' run(s) returned by orchestration API','LIVE');
+        total+=runs.length;
+        if(!runs.length)workspaceEmpty('ยังไม่มี workflow runs');
+        runs.forEach(run=>workspaceRecord(
+          run.objective||run.run_id,
+          String(run.run_id||'unknown')+' · '+formatHomeTime(run.updated_at||run.created_at),
+          run.status||'UNKNOWN'
+        ));
+      }else workspaceRecord('Workflow Runs unavailable',String(results[1].reason),'UNAVAILABLE');
+      $('workspaceStatus').textContent='โหลด '+total+' รายการจาก Jobs และ Workflow API · รายละเอียดหลักฐานจะแสดงเมื่อ API ต้นทางส่งกลับ';
+    }else if(moduleName==='Settings & Account'){
+      $('workspaceDescription').textContent='ข้อมูลบัญชี ผู้ให้บริการ และสถานะการเชื่อมต่อ · ไม่มีการเปิดเผย Secret';
+      const results=await Promise.allSettled([
+        request('/v1/auth/status'),
+        request('/v1/auth/providers'),
+        request('/v1/providers'),
+        request('/v1/ai/connections')
+      ]);
+      const labels=['Authenticated Account','Login Providers','AI Providers','AI Provider Connections'];
+      results.forEach((result,index)=>{
+        if(result.status!=='fulfilled'){
+          workspaceRecord(labels[index]+' unavailable',String(result.reason),'UNAVAILABLE');
+          return;
+        }
+        const value=result.value;
+        if(index===0){
+          const account=value.account||value.user||value;
+          workspaceRecord(labels[index],String(account.email||account.user_id||'Session active')+' · role '+String(account.role||value.role||'UNKNOWN'),value.authenticated===false?'UNKNOWN':'AVAILABLE');
+        }else if(index===1){
+          const providers=Array.isArray(value.providers)?value.providers:[];
+          workspaceRecord(labels[index],providers.map(item=>String(item.label||item.id||item.name)+' '+(item.available?'available':'not configured')).join(' · ')||'No providers returned','LIVE');
+        }else if(index===2){
+          workspaceRecord(labels[index],'Active provider: '+String(value.active||'UNKNOWN')+' · available: '+(Array.isArray(value.providers)?value.providers.join(', '):'not reported'),'LIVE');
+        }else{
+          const providers=Array.isArray(value.providers)?value.providers:[];
+          workspaceRecord(labels[index],providers.map(item=>String(item.label||item.provider)+' · '+String(item.state||'UNKNOWN')+' · credential configured: '+String(Boolean(item.credential_configured))+' · model configured: '+String(Boolean(item.model_configured))).join(' | ')||'No connection status returned',value.safe===false?'WARNING':'LIVE');
+        }
+      });
+      $('workspaceStatus').textContent='ข้อมูลการตั้งค่าเป็น read-only; ไม่แสดงค่า Secret และยังไม่เปิดปุ่มเปลี่ยนค่าที่ไม่มี API รองรับ';
+    }else{
+      $('workspaceStatus').textContent='โมดูลนี้ยังเป็น Architecture Directory';
+      workspaceEmpty('ยังไม่มี API binding สำหรับโมดูลนี้ จึงไม่แสดงสถานะ Connected หรือข้อมูลจำลอง');
+    }
+    $('workspaceUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+  }catch(error){
+    $('workspaceStatus').textContent='โหลดข้อมูลไม่สำเร็จ: '+String(error.message||error);
+    workspaceEmpty('API ไม่พร้อมใช้งาน · ไม่มีการใช้ข้อมูลจำลองแทน');
+  }finally{
+    $('workspaceRefresh').disabled=false;
+  }
+}
+
 // Platform workspace navigation and responsive controls.
 function setPlatformView(view,moduleName){
   let selected=view||'home';
@@ -201,15 +338,17 @@ function setPlatformView(view,moduleName){
   $('homeView').hidden=selected!=='home';
   $('chatView').hidden=selected!=='chat';
   $('registryView').hidden=selected!=='registry';
+  $('workspaceView').hidden=selected!=='workspace';
   $('adminView').hidden=selected!=='admin';
-  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(selected!=='registry'||button.dataset.module===moduleName)));
-  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':(moduleName||'Platform Directory');
+  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(!['registry','workspace'].includes(selected)||button.dataset.module===moduleName)));
+  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
   if(selected==='chat')setChatWide(state.chatWide);else document.body.classList.remove('chat-wide-mode');
   $('sidebar').classList.remove('open');
   $('sidebarScrim').classList.remove('open');
   if(selected==='home')refreshControlCenter();
+  if(selected==='workspace')refreshWorkspaceView(moduleName);
   if(selected==='admin')refreshAdminConsole();
 }
 document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('click',()=>{
@@ -218,6 +357,7 @@ document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('
 $('returnChat').addEventListener('click',()=>setPlatformView('chat'));
 $('refreshAdminConsole').addEventListener('click',refreshAdminConsole);
 $('refreshControlCenter').addEventListener('click',refreshControlCenter);
+$('workspaceRefresh').addEventListener('click',()=>refreshWorkspaceView($('workspaceTitle').textContent));
 $('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
 $('homeViewDirectory').addEventListener('click',()=>setPlatformView('registry'));
 $('openSidebar').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarScrim').classList.add('open')});

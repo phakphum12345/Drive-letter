@@ -70,3 +70,18 @@
 .chat-wide-mode .research-composer{width:min(100%,1200px)}
 .chat-wide-mode .composer-dock{padding-left:clamp(12px,3vw,42px);padding-right:clamp(12px,3vw,42px)}
 @media(max-width:760px){.chat-wide-mode .conversation-heading{align-items:flex-start;padding:12px}.chat-wide-mode .heading-actions{flex-wrap:wrap;justify-content:flex-end}.chat-wide-mode .messages{padding:16px 12px 22px}.chat-wide-mode .composer-dock{padding:8px 9px max(8px,env(safe-area-inset-bottom))}}
+
+/* API-backed user workspaces; each card reports only observed source data. */
+.workspace-view{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:clamp(18px,3vw,34px) clamp(16px,3.5vw,42px)}
+.workspace-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:18px}
+.workspace-heading h1{margin:7px 0 5px;font-size:clamp(22px,3vw,30px);letter-spacing:-.04em}
+.workspace-heading p{margin:0;color:var(--muted);font-size:10px}
+.workspace-heading-actions{display:flex;align-items:center;gap:10px;color:var(--dim);font-size:8px;white-space:nowrap}
+.workspace-status{margin-bottom:14px;padding:10px 13px;border:1px solid var(--line2);border-radius:8px;background:#101a2a;color:#aab9cf;font-size:9px;line-height:1.6}
+.workspace-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.workspace-record{min-width:0;display:flex;flex-direction:column;gap:7px;padding:14px;border:1px solid #27364b;border-radius:10px;background:linear-gradient(145deg,#111d2d,#0d1726)}
+.workspace-record strong{color:#dce5f2;font-size:10px;font-weight:650;overflow-wrap:anywhere}
+.workspace-record small{color:#8191a8;font-size:8px;line-height:1.6;overflow-wrap:anywhere}
+.workspace-record .home-status-tag{align-self:flex-start;max-width:100%}
+.workspace-content .home-empty{grid-column:1/-1}
+@media(max-width:760px){.workspace-view{padding:18px 13px max(20px,env(safe-area-inset-bottom))}.workspace-heading{align-items:flex-start;flex-direction:column;gap:10px}.workspace-heading-actions{width:100%;justify-content:space-between}.workspace-content{grid-template-columns:1fr}}

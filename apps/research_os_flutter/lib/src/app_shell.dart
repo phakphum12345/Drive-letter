@@ -82,7 +82,10 @@ class _ResearchOSAppShellState extends State<ResearchOSAppShell> {
         GoogleLoginPage(apiClient: widget.apiClient),
         FriendConnectPage(apiClient: widget.apiClient),
         ProjectExperiencePage(apiClient: widget.apiClient),
-        WorkflowExperiencePage(apiClient: widget.apiClient),
+        WorkflowExperiencePage(
+          apiClient: widget.apiClient,
+          onOpenAgentCenter: () => _select(2),
+        ),
         NativeControlCenterPage(
           apiClient: widget.apiClient,
           onNavigate: _select,

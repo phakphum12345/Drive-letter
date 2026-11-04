@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "status": "BASELINE_AUDIT",
+  "baseline_ref": "main",
+  "baseline_commit": "065174320974c30e99f2a8ce185e145ed9c03e84",
+  "rules": [
+    "A visible page or button is not complete unless it invokes an authoritative API/runtime and renders the returned outcome.",
+    "Read-only observation must never be described as execution or authorization.",
+    "No mock data may be presented as production state.",
+    "Existing engines, identity, evidence, release gates, and platform boundaries remain authoritative.",
+    "Unknown capabilities remain UNKNOWN until verified."
+  ],
+  "capabilities": [
+    {
+      "id": "web.control_center.dashboard",
+      "surface": "web",
+      "status": "CANONICAL_WIRED",
+      "evidence": [
+        "apps/research_os_web/app.js",
+        "tools/research_os_api/test_web_control_center.py"
+      ],
+      "detail": "Reads live health, jobs, agents, and job evidence; cloud worker is explicitly shown as not deployed.",
+      "acceptance": "Retain live API and no-demo-data behavior; add interaction tests."
+    },
+    {
+      "id": "web.research_chat",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/app.js",
+        "apps/research_os_web/index.html"
+      ],
+      "detail": "Calls /v1/ai/generate and supports wide/normal layout; chat state is in-memory only and no model/agent/plugin selector is present.",
+      "acceptance": "Durable conversation history, provider/model selection, explicit agent/workflow routing, and real error/stream behavior."
+    },
+    {
+      "id": "web.projects_files",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/index.html",
+        "apps/research_os_web/app.js"
+      ],
+      "detail": "Web page now reads ProjectRegistry (/v1/projects) and Workspace Index (/v2/workspaces); create/edit/delete and file operations are not exposed.",
+      "acceptance": "Add real file/project actions only after confirming authoritative APIs; preserve ProjectRegistry and shared workspace ownership."
+    },
+    {
+      "id": "web.history_activity",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/index.html",
+        "apps/research_os_web/app.js"
+      ],
+      "detail": "Web page now reads owner-scoped jobs (/api/v1/jobs) and orchestration runs (/v1/agents/orchestrations); detailed evidence drill-down and history search/filter are not yet implemented.",
+      "acceptance": "Add evidence drill-down, pagination/search, and traceable detail views using authoritative job/orchestration/evidence APIs."
+    },
+    {
+      "id": "web.settings_account",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/app.js",
+        "apps/research_os_web/index.html"
+      ],
+      "detail": "Web page now reads authenticated account, login provider catalog, active AI provider, and secret-safe provider connection status; settings mutations are not exposed.",
+      "acceptance": "Expose only configuration changes backed by server-side APIs, approval/audit, and secret-safe validation."
+    },
+    {
+      "id": "web.admin_console",
+      "surface": "web",
+      "status": "WIRED_NOT_EXECUTABLE",
+      "evidence": [
+        "apps/research_os_web/app.js",
+        "tools/research_os_api/api_platform/management_http.py",
+        "tools/research_os_api/test_web_control_center.py"
+      ],
+      "detail": "OWNER-only management inventory and audit reads are wired; UI explicitly states inventory is read-only.",
+      "acceptance": "Keep read-only until durable lifecycle, credential, approval, audit, and recovery contracts are proven; then add individually authorized operations."
+    },
+    {
+      "id": "flutter.projects",
+      "surface": "flutter",
+      "status": "WIRED_NOT_EXECUTABLE",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/projects/project_experience_page.dart",
+        "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
+      ],
+      "detail": "Reads ProjectRegistry metadata and renders project details; no project mutation/open-file operations in this page.",
+      "acceptance": "Add supported project actions only after confirming authoritative API contracts."
+    },
+    {
+      "id": "flutter.workflows",
+      "surface": "flutter",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/workflows/workflow_experience_page.dart",
+        "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
+      ],
+      "detail": "Workflow Experience reads orchestration runs/timelines and now links directly to Agent Center, which already exposes create, execute, approval/confirm, retry, cancel, and timeline controls through the existing Owner-authorized API.",
+      "acceptance": "Verify navigation and all Agent Center lifecycle actions with Flutter widget/API integration tests; keep Owner authorization and explicit confirmation enforced server-side."
+    },
+    {
+      "id": "flutter.chat",
+      "surface": "flutter",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/chat/chat_page.dart",
+        "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
+      ],
+      "detail": "Local conversation persistence and optional cloud conversation sync exist; provider/model/agent/plugin capability coverage requires separate verification.",
+      "acceptance": "Verify real send path, provider/model routing, cross-device sync behavior, and failure recovery."
+    },
+    {
+      "id": "flutter.native_control",
+      "surface": "flutter",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/control_center/native_control_center_page.dart",
+        "tools/native_control_center.py",
+        "tools/control_center_capability_registry.py"
+      ],
+      "detail": "Runtime observations are API-backed; command actions include local navigation and local simulation toggles, while audit snapshots are locally assembled. The pure control kernel delegates I/O to adapters.",
+      "acceptance": "Bind each command to an existing authoritative executor or label it prepare/inspect only; persist audit evidence through canonical evidence services."
+    },
+    {
+      "id": "flutter.owner_experience",
+      "surface": "flutter",
+      "status": "WIRED_NOT_EXECUTABLE",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/owner/owner_experience_page.dart",
+        "current/RESEARCH_OS_OWNER_EXPERIENCE_CONTRACT.json"
+      ],
+      "detail": "Server-derived owner identity and health/projects/workflows/agents/providers observations are displayed; page is intentionally read-only.",
+      "acceptance": "Preserve authority boundary; only add actions backed by owner-authorized server workflows."
+    },
+    {
+      "id": "plugin_center.marketplace",
+      "surface": "cross_platform",
+      "status": "MISSING_EXECUTOR",
+      "evidence": [
+        "v3/assistant_core/plugins.py"
+      ],
+      "detail": "A V3 runtime PluginRegistry exists, but no user-facing plugin catalog/install/connect/permission/test/enable/disable/audit service or API was found in the inspected repository paths.",
+      "acceptance": "Design and implement a server-owned plugin manifest/connection/secret/permission/audit lifecycle; never treat runtime handler registration as marketplace installation."
+    },
+    {
+      "id": "api_management",
+      "surface": "backend",
+      "status": "PARTIAL",
+      "evidence": [
+        "tools/research_os_api/api_platform/management_http.py",
+        "tools/research_os_api/api_platform/management_service.py",
+        "tools/research_os_api/test_management_http_rbac.py"
+      ],
+      "detail": "OWNER-authenticated metadata CRUD/lifecycle exists with JSON persistence and separate API-key lifecycle; usage/cost are empty runtime-ledger projections.",
+      "acceptance": "Verify production persistence, credential secrecy, audit atomicity, approval and runtime-ledger integration before exposing mutations."
+    },
+    {
+      "id": "control_center_ci",
+      "surface": "verification",
+      "status": "PARTIAL",
+      "evidence": [
+        ".github/workflows/research-os-user-control-center.yml",
+        "apps/research_os_flutter/test/features/control_center/native_control_center_page_test.dart",
+        "apps/research_os_flutter/test/owner_experience_page_test.dart"
+      ],
+      "detail": "Dedicated Control Center workflow currently filters web/API paths; Flutter control/owner tests are not included by its path trigger.",
+      "acceptance": "Add Flutter path triggers and run relevant Flutter analyze/widget tests in the Control Center gate."
+    }
+  ]
+}

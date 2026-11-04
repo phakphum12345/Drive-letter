@@ -14,9 +14,9 @@
     <div class="nav-label">WORKSPACE</div>
     <button class="nav-link active" type="button" data-view="home"><span>⌂</span> Control Center</button>
     <button class="nav-link" type="button" data-view="chat"><span>◉</span> Research Chat <kbd>⌘1</kbd></button>
-    <button class="nav-link" type="button" data-view="registry" data-module="Projects & Files"><span>▣</span> Projects & Files</button>
-    <button class="nav-link" type="button" data-view="registry" data-module="History & Activity"><span>◷</span> History & Activity</button>
-    <button class="nav-link" type="button" data-view="registry" data-module="Settings & Account"><span>⚙</span> Settings & Account</button>
+    <button class="nav-link" type="button" data-view="workspace" data-module="Projects & Files"><span>▣</span> Projects & Files</button>
+    <button class="nav-link" type="button" data-view="workspace" data-module="History & Activity"><span>◷</span> History & Activity</button>
+    <button class="nav-link" type="button" data-view="workspace" data-module="Settings & Account"><span>⚙</span> Settings & Account</button>
     <button class="nav-link" type="button" data-view="admin" data-admin-only hidden><span>▤</span> Admin Console</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Work Graph"><span>⌘</span> Work Graph</button>
     <button class="nav-link" type="button" data-view="registry" data-module="Experiments & Observe"><span>◷</span> Experiments & Observe</button>
@@ -71,6 +71,11 @@
   <div class="admin-metrics"><article class="admin-metric"><span>ORGANIZATIONS</span><strong id="adminOrganizationsCount">—</strong></article><article class="admin-metric"><span>PROJECTS</span><strong id="adminProjectsCount">—</strong></article><article class="admin-metric"><span>APPLICATIONS</span><strong id="adminApplicationsCount">—</strong></article><article class="admin-metric"><span>APIS</span><strong id="adminApisCount">—</strong></article></div>
   <div class="admin-grid"><article class="admin-panel"><header><div><span class="eyebrow">TENANCY</span><h2>Organizations</h2></div></header><div id="adminOrganizations" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">WORKSPACE</span><h2>Projects</h2></div></header><div id="adminProjects" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">INTEGRATIONS</span><h2>Applications</h2></div></header><div id="adminApplications" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel"><header><div><span class="eyebrow">CATALOG</span><h2>APIs</h2></div></header><div id="adminApis" class="admin-list"><div class="home-empty">No data loaded.</div></div></article><article class="admin-panel admin-audit-panel"><header><div><span class="eyebrow">GOVERNANCE</span><h2>Management audit</h2></div><span class="panel-meta" id="adminAuditCount">Read-only</span></header><div id="adminAudit" class="admin-list"><div class="home-empty">No audit data loaded.</div></div></article></div>
   <p class="admin-note">หน้าจอนี้เป็น read-only inventory ในเฟสแรก ยังไม่เปิดคำสั่งเปลี่ยน Role, User, Policy หรือการจัดการ Credential จากหน้าเว็บ จนกว่าจะมี durable persistence และ audit/approval flow ครบ</p>
+</section>
+<section class="workspace-view" id="workspaceView" hidden>
+  <div class="workspace-heading"><div><span class="eyebrow">USER WORKSPACE</span><h1 id="workspaceTitle">Projects & Files</h1><p id="workspaceDescription">ข้อมูลจาก Research OS API จริง โดยไม่สร้างหรือแก้ไขข้อมูลแทนระบบต้นทาง</p></div><div class="workspace-heading-actions"><span id="workspaceUpdated">Not loaded</span><button class="subtle-button" id="workspaceRefresh" type="button">↻ Refresh</button></div></div>
+  <div class="workspace-status" id="workspaceStatus" role="status" aria-live="polite">รอโหลดข้อมูลจาก API…</div>
+  <div class="workspace-content" id="workspaceContent"><div class="home-empty">เลือกเมนูเพื่อโหลดข้อมูลจาก API</div></div>
 </section>
 <section class="chat-view active" id="chatView" hidden>
   <div class="conversation-heading"><div><span class="eyebrow">RESEARCH WORKSPACE</span><h1 id="researchTitle">เริ่มต้นการวิจัย</h1><p>กำหนดโจทย์ · ตรวจสอบหลักฐาน · สร้างข้อสรุปที่ตรวจสอบย้อนกลับได้</p></div><div class="heading-actions"><span class="state" id="researchState">READY</span><button class="subtle-button" id="chatLayoutToggle" type="button" aria-pressed="false" aria-label="Switch to wide chat">↗ แชทกว้าง</button><button class="subtle-button" id="startWork" type="button">เริ่มงาน</button><button class="subtle-button" id="clearConversation" type="button">Clear chat</button></div></div>
