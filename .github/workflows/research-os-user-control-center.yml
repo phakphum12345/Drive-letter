@@ -10,6 +10,7 @@ on:
       - "tools/research_os_api/control_center_audit_store.py"
       - "tools/research_os_api/test_control_center_audit_store.py"
       - "tools/research_os_api/test_control_center_audit_http.py"
+      - "tools/research_os_api/test_plugin_center_http.py"
       - "apps/research_os_flutter/lib/src/features/owner/**"
       - "apps/research_os_flutter/lib/src/features/chat/**"
       - "apps/research_os_flutter/lib/src/features/projects/**"
@@ -43,4 +44,4 @@ jobs:
       - name: Validate JavaScript syntax
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
-        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.test_user_control_center_completion_matrix tools.research_os_api.test_control_center_audit_store tools.research_os_api.test_control_center_audit_http -v
+        run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.test_user_control_center_completion_matrix tools.research_os_api.test_control_center_audit_store tools.research_os_api.test_control_center_audit_http tools.research_os_api.test_plugin_center_http -v
