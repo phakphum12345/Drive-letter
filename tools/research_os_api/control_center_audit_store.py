@@ -6,7 +6,6 @@ the verified Research OS user and stored beneath the configured data root.
 from __future__ import annotations
 
 import json
-import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -28,10 +27,10 @@ def _user_id(value: str) -> str:
     result = str(value or "").strip()
     if (
         not result
-        or not _SAFE_USER_ID.fullmatch(result)
+        or any(ord(char) < 32 or ord(char) == 127 for char in result)
         or result in {".", ".."}
         or "/" in result
-        or "\\\\" in result
+        or chr(92) in result
     ):
         raise ValueError("invalid user_id")
     return result
