@@ -5,7 +5,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+import sys
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import control_center_audit_store
 
