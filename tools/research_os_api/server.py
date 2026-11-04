@@ -348,8 +348,8 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             return {"connected": False, "account": None}
         return {"connected": True, "account": {"user_id": session["user_id"], "email": session["email"], "role": str(session["role"]).upper()}}
 
-    def _authorize_github_account_control(self) -> bool:
-        """Protect account/repository enumeration with the existing owner authority."""
+    def _authorize_owner(self) -> bool:
+        """Protect owner-only control surfaces with the verified session role."""
         try:
             principal = require_session(self.headers)
         except ValueError:
@@ -359,6 +359,10 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.FORBIDDEN, {"error": "owner_required"})
             return False
         return True
+
+    def _authorize_github_account_control(self) -> bool:
+        """Keep the GitHub account boundary on the shared Owner authorization guard."""
+        return self._authorize_owner()
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlsplit(self.path)
@@ -504,9 +508,13 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                         self._redirect("/", cookie)
                     return
             if path == "/v1/google-workspace/dashboard":
+                if not self._authorize_owner():
+                    return
                 self._send(HTTPStatus.OK, get_google_workspace_dashboard())
                 return
             if path == "/v1/google-workspace/oauth/status":
+                if not self._authorize_owner():
+                    return
                 self._send(HTTPStatus.OK, GoogleOAuthBroker().status())
                 return
             if path == "/v1/google-workspace/oauth/callback":
@@ -832,12 +840,18 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body_bytes)
                 return
             if path == "/v1/google-workspace/oauth/start":
+                if not self._authorize_owner():
+                    return
                 self._send(HTTPStatus.OK, GoogleOAuthBroker().begin())
                 return
             if path == "/v1/google-workspace/oauth/disconnect":
+                if not self._authorize_owner():
+                    return
                 self._send(HTTPStatus.OK, GoogleOAuthBroker().disconnect())
                 return
             if path == "/v1/google-workspace/services":
+                if not self._authorize_owner():
+                    return
                 services = body.get("enabled_services")
                 if not isinstance(services, list):
                     raise ValueError("enabled_services must be an array")
