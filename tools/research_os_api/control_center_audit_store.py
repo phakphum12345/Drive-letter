@@ -13,7 +13,6 @@ from typing import Any
 from local_storage import data_root
 
 _LOCK = threading.RLock()
-_SAFE_USER_ID = re.compile(r"^[^\\x00-\\x1f\\x7f]{1,128}$")
 _ALLOWED_STATUS = frozenset({"PASS", "FAIL", "DEFERRED", "PARTIAL"})
 _ALLOWED_CHECK_STATE = frozenset({"PASS", "FAIL", "DEFERRED", "UNKNOWN"})
 _MAX_AUDITS_PER_USER = 100
