@@ -21,7 +21,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: research-os-pages
+  group: research-os-pages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
