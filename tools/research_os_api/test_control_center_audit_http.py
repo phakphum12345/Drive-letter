@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import threading
 import unittest
@@ -9,6 +10,9 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest.mock import patch
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auth_session import issue_session
 from server import ResearchOSHandler
