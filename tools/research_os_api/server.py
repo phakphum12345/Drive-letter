@@ -29,6 +29,7 @@ from conversation_store import (
     sync_configured,
     upsert_session as upsert_cloud_session,
 )
+from control_center_audit_store import list_audits as list_control_center_audits, save_audit as save_control_center_audit
 from github_status import (GitHubStatusError, accounts as github_accounts, dashboard as github_dashboard, repositories as github_repositories)
 from google_identity import GoogleIdentityBroker
 from google_oauth import GoogleOAuthBroker, GoogleOAuthError
@@ -522,6 +523,19 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 email = ((result.get("account") or {}).get("email") or "Google account")
                 self._send_html(HTTPStatus.OK, f"<html><body><h2>Research OS connected to Google Workspace</h2><p>{email}</p><p>You can close this window and return to Research OS.</p></body></html>")
                 return
+            if path == "/v1/control-center/audits":
+                try:
+                    principal = require_session(self.headers)
+                except ValueError:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
+                    return
+                user_id = str(principal.get("user_id") or "").strip()
+                if not user_id:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "invalid_session_identity"})
+                    return
+                audit = save_control_center_audit(user_id, body)
+                self._send(HTTPStatus.CREATED, {"audit": audit, "persisted": True, "authority": "observation_only"})
+                return
             if path == "/v1/platform/work-checkpoints":
                 principal = require_session(self.headers)
                 user_id = str(principal.get("user_id") or "").strip()
@@ -536,6 +550,20 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                     "source": "platform-work-checkpoint",
                     "chat_is_not_source_of_truth": True,
                 })
+                return
+            if path == "/v1/control-center/audits":
+                try:
+                    principal = require_session(self.headers)
+                except ValueError:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
+                    return
+                user_id = str(principal.get("user_id") or "").strip()
+                if not user_id:
+                    self._send(HTTPStatus.UNAUTHORIZED, {"error": "invalid_session_identity"})
+                    return
+                limit = int(parse_qs(parsed.query).get("limit", ["20"])[0])
+                records = list_control_center_audits(user_id, limit=limit)
+                self._send(HTTPStatus.OK, {"audits": records, "count": len(records), "persisted": True, "authority": "observation_only"})
                 return
             if path == "/v1/conversations/cloud":
                 principal = self._authorize_cloud_sync()
