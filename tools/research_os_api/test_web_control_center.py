@@ -69,7 +69,10 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
     def test_chat_history_is_restored_after_otp_and_cleared_from_memory_on_signout(self):
         self.assertIn("if(state.account)restoreLocalChatHistory();panel.hidden=true", self.js)
         self.assertIn("clearChatStateForSignedOut()", self.js)
-        self.assertIn("state.chatSessions=[];\\n  state.messages=[];\\n  state.sessionId=null", self.js)
+        self.assertIn("function clearChatStateForSignedOut", self.js)
+        self.assertIn("state.chatSessions=[];", self.js)
+        self.assertIn("state.messages=[];", self.js)
+        self.assertIn("state.sessionId=null;", self.js)
         self.assertIn("else clearChatStateForSignedOut()", self.js)
         self.assertIn("Sign in to view local conversation history.", self.js)
         self.assertIn("renderLocalChatHistory", self.js) if "renderLocalChatHistory" in self.js else self.assertIn("restoreLocalChatHistory()", self.js)
