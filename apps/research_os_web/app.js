@@ -340,7 +340,7 @@ function setPlatformView(view,moduleName){
   $('registryView').hidden=selected!=='registry';
   $('workspaceView').hidden=selected!=='workspace';
   $('adminView').hidden=selected!=='admin';
-  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(selected!=='registry'||button.dataset.module===moduleName)));
+  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(!['registry','workspace'].includes(selected)||button.dataset.module===moduleName)));
   $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
