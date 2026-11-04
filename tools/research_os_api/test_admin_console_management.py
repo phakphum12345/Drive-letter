@@ -86,6 +86,17 @@ class AdminConsoleManagementTests(unittest.TestCase):
         self.assertNotIn("org-failed", snapshot["resources"]["organizations"])
         self.assertEqual([], snapshot["audit"])
 
+    def test_failed_commit_does_not_leave_unpersisted_resource_in_memory(self) -> None:
+        service = ManagementService(JsonManagementStore(Path(self.temp.name) / "rollback.json"))
+        with patch.object(service.store, "_write", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                service.create(
+                    "organizations",
+                    {"organization_id": "org-rollback", "name": "Rollback"},
+                    actor="owner-1",
+                )
+        self.assertEqual([], service.list("organizations"))
+
     def test_web_admin_mutations_are_owner_gated_and_confirmed(self) -> None:
         root = Path(__file__).resolve().parents[2]
         source = (root / "apps" / "research_os_web" / "app.js").read_text(encoding="utf-8")
