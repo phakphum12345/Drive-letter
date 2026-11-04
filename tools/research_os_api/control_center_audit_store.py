@@ -29,6 +29,7 @@ def _user_id(value: str) -> str:
     result = str(value or "").strip()
     if (
         not result
+        or len(result) > 128
         or any(ord(char) < 32 or ord(char) == 127 for char in result)
         or result in {".", ".."}
         or "/" in result
