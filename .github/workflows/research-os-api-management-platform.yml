@@ -7,6 +7,7 @@ on:
       - 'tools/research_os_api/api_key_store.py'
       - 'tools/research_os_api/api_keys.py'
       - 'tools/research_os_api/server.py'
+      - 'tools/research_os_api/test_plugin_center_http.py'
       - 'tools/validate_research_os_api_management_platform.py'
       - 'current/RESEARCH_OS_UNIFIED_FINAL_GATE.yml'
       - 'current/RESEARCH_OS_PLATFORM_PRODUCTION_CERTIFICATION_CONTRACT.json'
@@ -23,4 +24,5 @@ jobs:
           python-version: '3.12'
       - run: python tools/validate_research_os_api_management_platform.py
       - run: python -m unittest tools.research_os_api.api_platform.test_management_service tools.research_os_api.test_api_key_durable_store -v
+      - run: python -m unittest tools.research_os_api.test_plugin_center_http -v
       - run: python tools/validate_research_os_unified_final_gate.py
