@@ -4,8 +4,13 @@ import '../../api/research_os_api_client.dart';
 import '../../ui/enterprise_components.dart';
 
 class WorkflowExperiencePage extends StatefulWidget {
-  const WorkflowExperiencePage({required this.apiClient, super.key});
+  const WorkflowExperiencePage({
+    required this.apiClient,
+    this.onOpenAgentCenter,
+    super.key,
+  });
   final ResearchOSApiClient apiClient;
+  final VoidCallback? onOpenAgentCenter;
 
   @override
   State<WorkflowExperiencePage> createState() => _WorkflowExperiencePageState();
@@ -75,6 +80,15 @@ class _WorkflowExperiencePageState extends State<WorkflowExperiencePage> {
           icon: Icons.account_tree_outlined,
           title: 'Workflow Experience',
           subtitle: 'Canonical orchestration workspace: lifecycle, runs, steps, timeline and recovery state',
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: const Key('open-agent-center-controls'),
+            onPressed: widget.onOpenAgentCenter,
+            icon: const Icon(Icons.tune),
+            label: const Text('Open Agent Center controls'),
+          ),
         ),
         const SizedBox(height: 18),
         EnterpriseSection(
