@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: research-os-user-control-center-\${{ github.event.pull_request.number || github.ref }}
+  group: research-os-user-control-center-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
