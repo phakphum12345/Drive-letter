@@ -61,3 +61,12 @@
 .admin-note{margin:14px 0 0;color:#7f8ea4;font-size:8px;line-height:1.7}
 @media(max-width:1050px){.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.admin-view{padding:18px 13px max(20px,env(safe-area-inset-bottom))}.admin-heading{align-items:flex-start;flex-direction:column;gap:10px}.admin-heading-actions{width:100%;justify-content:space-between}.admin-grid{grid-template-columns:1fr}.admin-audit-panel{grid-column:auto}.admin-panel{padding:13px}}
+
+/* Wide chat layout preserves the active conversation while reclaiming the viewport. */
+.chat-wide-mode .app-shell{grid-template-columns:minmax(0,1fr)}
+.chat-wide-mode .sidebar,.chat-wide-mode .topbar{display:none}
+.chat-wide-mode .conversation-heading{padding-left:clamp(18px,4vw,64px);padding-right:clamp(18px,4vw,64px)}
+.chat-wide-mode .messages{width:min(100%,1280px);padding-left:clamp(18px,4vw,64px);padding-right:clamp(18px,4vw,64px)}
+.chat-wide-mode .research-composer{width:min(100%,1200px)}
+.chat-wide-mode .composer-dock{padding-left:clamp(12px,3vw,42px);padding-right:clamp(12px,3vw,42px)}
+@media(max-width:760px){.chat-wide-mode .conversation-heading{align-items:flex-start;padding:12px}.chat-wide-mode .heading-actions{flex-wrap:wrap;justify-content:flex-end}.chat-wide-mode .messages{padding:16px 12px 22px}.chat-wide-mode .composer-dock{padding:8px 9px max(8px,env(safe-area-inset-bottom))}}

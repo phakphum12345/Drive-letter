@@ -60,6 +60,15 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("@media(max-width:760px)", self.css)
         self.assertIn("@media(max-width:430px)", self.css)
 
+    def test_chat_wide_mode_is_toggleable_persistent_and_preserves_conversation(self):
+        self.assertIn('id="chatLayoutToggle"', self.html)
+        self.assertIn("localStorage.setItem('research-os-chat-layout'", self.js)
+        self.assertIn("localStorage.getItem('research-os-chat-layout')", self.js)
+        self.assertIn("chat-wide-mode", self.js)
+        self.assertIn(".chat-wide-mode .sidebar", self.css)
+        self.assertIn("state.messages.length===0", self.js)
+        self.assertNotIn("state.messages=[];addMessage('user',prompt)", self.js)
+
 
 if __name__ == "__main__":
     unittest.main()
