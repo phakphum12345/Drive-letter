@@ -97,8 +97,8 @@
         "apps/research_os_flutter/lib/src/features/workflows/workflow_experience_page.dart",
         "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
       ],
-      "detail": "Page reads orchestration runs and timelines; client has create/execute/confirm/retry/cancel methods not exposed by this page.",
-      "acceptance": "Expose prepare/create and approved lifecycle actions with server authorization, confirmation, audit, and E2E tests."
+      "detail": "Workflow Experience reads orchestration runs/timelines and now links directly to Agent Center, which already exposes create, execute, approval/confirm, retry, cancel, and timeline controls through the existing Owner-authorized API.",
+      "acceptance": "Verify navigation and all Agent Center lifecycle actions with Flutter widget/API integration tests; keep Owner authorization and explicit confirmation enforced server-side."
     },
     {
       "id": "flutter.chat",
