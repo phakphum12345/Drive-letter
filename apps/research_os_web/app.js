@@ -175,6 +175,7 @@ async function createAdminResource(event){
     return;
   }
   const type=$('adminResourceType').value;
+  if(!window.confirm('Create this '+type+' resource in the Owner management registry? This action is persisted and audited.'))return;
   const payload={};
   $('adminCreateFields').querySelectorAll('input[name]').forEach(input=>payload[input.name]=input.value.trim());
   if(Object.values(payload).some(value=>!value)){
@@ -195,6 +196,9 @@ async function createAdminResource(event){
 }
 async function runAdminApiLifecycle(apiId,action){
   if(String(state.account?.role||'').toUpperCase()!=='OWNER')return;
+  if(!['publish','disable'].includes(action))return;
+  const verb=action==='publish'?'publish':'disable';
+  if(!window.confirm('Confirm '+verb+' API '+apiId+'? This changes its persisted management lifecycle and records an audit event.'))return;
   const button=$('adminApis').querySelector('[data-admin-id="'+CSS.escape(apiId)+'"]');
   if(button)button.disabled=true;
   try{
