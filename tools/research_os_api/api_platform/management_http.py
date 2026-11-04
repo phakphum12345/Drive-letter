@@ -61,32 +61,38 @@ class ManagementHTTP:
                     return 201, self.service.create("portals", payload, actor=actor)
                 return 200, self.service.update("portals", project_id, body, actor=actor)
 
-        if parts[0] == "applications" and len(parts) >= 5 and parts[2] == "keys":
-            key_id = parts[3]
-            action = parts[4]
-            if action == "revoke":
-                return 200, self.service.revoke_api_key(key_id, actor=actor)
-            if action == "rotate":
-                return 200, self.service.rotate_api_key(key_id, body, actor=actor)
-
         if parts[0] == "applications" and len(parts) >= 3 and parts[2] == "keys":
             application_id = parts[1]
-            if method == "GET":
-                if len(parts) == 4:
-                    return 200, self.service.get("api_keys", parts[3])
-                values = [value for value in self.service.list("api_keys") if value.get("application_id") == application_id]
-                return 200, {"items": values, "count": len(values)}
-            if method == "POST":
-                payload = dict(body); payload["application_id"] = application_id
-                return 201, self.service.create_api_key(payload, actor=actor)
+            if len(parts) == 3:
+                if method == "GET":
+                    values = [value for value in self.service.list("api_keys") if value.get("application_id") == application_id]
+                    return 200, {"items": values, "count": len(values)}
+                if method == "POST":
+                    payload = dict(body); payload["application_id"] = application_id
+                    return 201, self.service.create_api_key(payload, actor=actor)
+                return 405, {"error": "method_not_allowed"}
+            if len(parts) == 4 and method == "GET":
+                value = self.service.get("api_keys", parts[3])
+                if value.get("application_id") != application_id:
+                    return 404, {"error": "not_found"}
+                return 200, value
+            if len(parts) == 5 and parts[4] in {"revoke", "rotate"}:
+                if method != "POST":
+                    return 405, {"error": "method_not_allowed"}
+                key_id, action = parts[3], parts[4]
+                key = self.service.get("api_keys", key_id)
+                if key.get("application_id") != application_id:
+                    return 404, {"error": "not_found"}
+                if action == "revoke":
+                    return 200, self.service.revoke_api_key(key_id, actor=actor)
+                return 200, self.service.rotate_api_key(key_id, body, actor=actor)
+            return 405, {"error": "method_not_allowed"}
 
-        if parts[0] in {"apis", "versions", "plans", "applications", "products", "routes", "webhooks"} and len(parts) >= 3:
+        if parts[0] in {"apis", "versions", "plans", "applications", "products", "routes", "webhooks"} and len(parts) == 3:
             parent, identifier, action = parts[0], parts[1], parts[2]
             if action in {"publish", "disable", "enable", "release", "retire", "revoke", "rotate"}:
-                if action in {"revoke", "rotate"} and parent == "applications":
-                    if action == "revoke":
-                        return 200, self.service.revoke_api_key(identifier, actor=actor)
-                    return 200, self.service.rotate_api_key(identifier, body, actor=actor)
+                if method != "POST":
+                    return 405, {"error": "method_not_allowed"}
                 return 200, self.service.lifecycle(RESOURCE_BY_SEGMENT[parent], identifier, action, actor=actor)
 
         if len(parts) == 3 and parts[0] == "apis" and parts[2] == "versions":
