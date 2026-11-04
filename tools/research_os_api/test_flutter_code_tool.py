@@ -17,7 +17,7 @@ class FlutterCodeToolTests(unittest.TestCase):
         project = self.root / "apps" / "research_os_flutter"
         project.mkdir(parents=True)
         (project / "lib").mkdir()
-        (project / "lib" / "main.dart").write_text("void main() {}\n", encoding="utf-8")
+        (project / "lib" / "main.dart").write_bytes(b"void main() {}\n")
         self.env = patch.dict(os.environ, {
             "RESEARCH_OS_CODE_ROOT": str(self.root),
             "RESEARCH_OS_CODE_OWNER_IDS": "owner@example.com",
