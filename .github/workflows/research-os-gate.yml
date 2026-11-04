@@ -355,7 +355,8 @@ jobs:
             echo "APPLE_PLATFORM_VALIDATION=RUN_NO_COMPARABLE_BASELINE"
             exit 0
           fi
-          git fetch --no-tags origin "$base" "$head"
+          git cat-file -e "$base^{commit}"
+          git cat-file -e "$head^{commit}"
           changed="$(git diff --name-only "$base" "$head")"
           printf '%s\n' "$changed"
           if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/research-os-gate\.yml$)'; then
