@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from tools.research_os_api.api_platform.management_http import ManagementHTTP
+from tools.research_os_api.api_platform.management_service import JsonManagementStore, ManagementService
+
+
+class AdminConsoleManagementTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        service = ManagementService(JsonManagementStore(Path(self.temp.name) / "management.json"))
+        self.http = ManagementHTTP(service, lambda headers: headers.get("principal"))
+        self.owner = {"principal": {"user_id": "owner-1", "role": "OWNER"}}
+        self.user = {"principal": {"user_id": "user-1", "role": "USER"}}
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def dispatch(self, method: str, path: str, headers=None, body=None):
+        return self.http.dispatch(method, path, headers or {}, body or {})
+
+    def test_non_owner_cannot_create_or_change_api_lifecycle(self) -> None:
+        status, payload = self.dispatch(
+            "POST", "/platform/v1/organizations", self.user,
+            {"organization_id": "org-1", "name": "Org"},
+        )
+        self.assertEqual(403, status)
+        self.assertEqual("owner_required", payload["error"])
+
+        status, payload = self.dispatch(
+            "POST", "/platform/v1/apis/api-1/disable", self.user, {},
+        )
+        self.assertEqual(403, status)
+        self.assertEqual("owner_required", payload["error"])
+
+    def test_owner_can_create_related_resources_and_lifecycle_is_persisted_and_audited(self) -> None:
+        resources = (
+            ("/platform/v1/organizations", {"organization_id": "org-1", "name": "Org"}),
+            ("/platform/v1/projects", {"project_id": "project-1", "organization_id": "org-1", "name": "Project"}),
+            ("/platform/v1/applications", {"application_id": "app-1", "project_id": "project-1", "name": "App"}),
+            ("/platform/v1/apis", {"api_id": "api-1", "project_id": "project-1", "name": "API"}),
+        )
+        for path, body in resources:
+            status, payload = self.dispatch("POST", path, self.owner, body)
+            self.assertEqual(201, status, payload)
+
+        status, published = self.dispatch(
+            "POST", "/platform/v1/apis/api-1/publish", self.owner, {},
+        )
+        self.assertEqual(200, status)
+        self.assertEqual("active", published["lifecycle"])
+
+        status, disabled = self.dispatch(
+            "POST", "/platform/v1/apis/api-1/disable", self.owner, {},
+        )
+        self.assertEqual(200, status)
+        self.assertEqual("disabled", disabled["lifecycle"])
+
+        status, audit = self.dispatch("GET", "/platform/v1/audit", self.owner)
+        self.assertEqual(200, status)
+        actions = [item["action"] for item in audit["items"]]
+        self.assertIn("create", actions)
+        self.assertIn("publish", actions)
+        self.assertIn("disable", actions)
+
+        # A fresh service instance proves the metadata survived process-local memory.
+        restored = ManagementService(JsonManagementStore(Path(self.temp.name) / "management.json"))
+        self.assertEqual("disabled", restored.get("apis", "api-1")["lifecycle"])
+
+    def test_web_admin_mutations_are_owner_gated_and_confirmed(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "apps" / "research_os_web" / "app.js").read_text(encoding="utf-8")
+        markup = (root / "apps" / "research_os_web" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("state.account?.role", source)
+        self.assertIn("window.confirm('Create this '", source)
+        self.assertIn("window.confirm('Confirm '", source)
+        self.assertIn("request('/platform/v1/'+type", source)
+        self.assertIn("request('/platform/v1/apis/'+encodeURIComponent(apiId)+'/'+action", source)
+        self.assertIn('id="adminCreateForm"', markup)
+        self.assertIn('data-admin-only', markup)
+
+
+if __name__ == "__main__":
+    unittest.main()
