@@ -9,10 +9,20 @@ import 'package:research_os_flutter/src/features/control_center/native_control_a
 import 'package:research_os_flutter/src/features/control_center/native_control_center_page.dart';
 
 class _FakeClient extends http.BaseClient {
+  final List<String> requestedPaths = <String>[];
+
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
-    final payload = switch (path) {
+    requestedPaths.add('${request.method} $path');
+    final payload = path == '/v1/control-center/audits' && request.method == 'GET'
+        ? <String, Object?>{'audits': <Object>[]}
+        : path == '/v1/control-center/audits' && request.method == 'POST'
+            ? <String, Object?>{
+                'audit': jsonDecode((request as http.Request).body),
+                'persisted': true,
+              }
+            : switch (path) {
       '/health' => <String, Object?>{
           'status': 'ok',
           'capabilities': <Object>['brain', 'evidence'],
@@ -60,7 +70,6 @@ void main() {
     expect(find.text('Overview'), findsOneWidget);
     expect(find.text('System Map'), findsOneWidget);
     expect(find.text('LIVE'), findsOneWidget);
-    expect(find.text('Main Final Audit'), findsOneWidget);
     expect(find.text('Agent readiness'), findsOneWidget);
     expect(find.text('Workflow runs'), findsOneWidget);
     expect(find.text('Running'), findsOneWidget);
@@ -91,11 +100,12 @@ void main() {
     api.close();
   });
 
-  testWidgets('Main Final Audit is available inside the existing Control Center',
+  testWidgets('Main Final Audit loads and persists through the authenticated API client',
       (tester) async {
+    final fake = _FakeClient();
     final api = ResearchOSApiClient(
       baseUrl: 'http://127.0.0.1:8787',
-      client: _FakeClient(),
+      client: fake,
     );
 
     await tester.pumpWidget(
@@ -103,7 +113,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.rule_folder_outlined), findsOneWidget);
+    final auditTab = find.byIcon(Icons.rule_folder_outlined);
+    expect(auditTab, findsOneWidget);
+    await tester.tap(auditTab);
+    await tester.pumpAndSettle();
+    expect(find.text('Main Final Audit'), findsOneWidget);
+
+    await tester.tap(find.text('Run Audit'));
+    await tester.pumpAndSettle();
+
+    expect(fake.requestedPaths, contains('GET /v1/control-center/audits'));
+    expect(fake.requestedPaths, contains('POST /v1/control-center/audits'));
+    expect(find.textContaining('Latest: DEFERRED'), findsOneWidget);
 
     api.close();
   });
