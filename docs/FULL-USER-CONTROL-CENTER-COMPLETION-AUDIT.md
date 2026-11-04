@@ -6,7 +6,7 @@
 
 ## Executive result
 
-The User Control Center is **not complete**. The repository contains substantial working surfaces and APIs, but several Web navigation destinations are still static directory placeholders, Flutter workflow UI is primarily observational despite additional lifecycle methods in the API client, Native Control commands are not uniformly bound to real executors, and a user-facing Plugin Center lifecycle was not found.
+The User Control Center is **not complete**. The repository contains substantial working surfaces and APIs, but some Web navigation destinations are now API-backed read-only views, while other domain destinations remain static directory placeholders, Flutter workflow UI is primarily observational despite additional lifecycle methods in the API client, Native Control commands are not uniformly bound to real executors, and a user-facing Plugin Center lifecycle was not found.
 
 The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json`. Its statuses deliberately distinguish a live read surface from an executable capability.
 
@@ -14,7 +14,7 @@ The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MA
 
 1. **Web dashboard:** reads live health, jobs, agents, and evidence. It explicitly reports cloud workers as not deployed and avoids demo data when storage is unavailable.
 2. **Web chat:** sends through `/v1/ai/generate`; wide layout is persisted. Conversation messages remain in browser memory only, and the UI does not yet expose complete model, agent, workflow, or plugin routing.
-3. **Web directory destinations:** Projects & Files, History & Activity, Settings & Account, and other domain entries route to a static Platform Directory. The directory itself explicitly says it is architectural information, not proof that modules are API-enabled.
+3. **Web workspaces:** Projects & Files now reads ProjectRegistry and Workspace Index; History & Activity reads owner-scoped jobs and orchestration runs; Settings & Account reads authenticated account/provider/secret-safe connection status. These are read-only slices, not complete management surfaces. Other domain entries still route to the static Platform Directory.
 4. **Web Admin Console:** OWNER-only read-only inventory and management audit are connected to `/platform/v1`. The UI explicitly defers role, user, policy, and credential mutation pending durable persistence and approval/audit flows.
 5. **Flutter Projects:** reads ProjectRegistry metadata; this is not a full project/file management workspace.
 6. **Flutter Workflow:** reads orchestration runs and timelines. The API client also defines create/execute/confirm/retry/cancel operations, but the inspected page does not expose these actions.
@@ -26,7 +26,7 @@ The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MA
 ## Required implementation order
 
 - **Phase 1 — Contract and verification:** keep this matrix current; extend the dedicated CI gate to Flutter; add page/action contract tests.
-- **Phase 2 — Real user workspaces:** replace Web directory placeholders with API-backed Projects, History/Activity, and Settings/Account surfaces; add real Flutter project actions only where authoritative APIs exist.
+- **Phase 2 — Real user workspaces:** complete the API-backed Web read views with search, pagination, evidence drill-down, and supported mutations only where authoritative APIs exist; add real Flutter project actions only where authoritative APIs exist.
 - **Phase 3 — Workflow and chat:** expose server-authorized orchestration lifecycle actions; complete provider/model routing and durable chat history without breaking local-first behavior.
 - **Phase 4 — Native Control:** map every command to a verified executor/observation/evidence path; otherwise label it accurately as navigation, preparation, simulation, or unavailable.
 - **Phase 5 — Plugin Center:** implement manifest discovery, connect/install lifecycle, scoped permissions, secret handling, connection tests, enable/disable, audit, and agent authorization. Do not reuse the V3 runtime registry as a marketplace.
