@@ -218,9 +218,14 @@ class ManagementService:
     def _persist(self, resource: str, obj: Any, *, actor: str, action: str) -> dict[str, Any]:
         identifier = getattr(obj, ID_FIELDS[resource])
         payload = _jsonable(asdict(obj))
-        self.store.put_with_audit(
-            resource, identifier, payload, actor=actor, action=action, outcome="success"
-        )
+        try:
+            self.store.put_with_audit(
+                resource, identifier, payload, actor=actor, action=action, outcome="success"
+            )
+        except Exception:
+            # Keep the in-memory registry aligned with the last committed snapshot.
+            self._load()
+            raise
         return payload
 
     def create_api_key(self, payload: dict[str, Any], *, actor: str = "system") -> dict[str, Any]:
