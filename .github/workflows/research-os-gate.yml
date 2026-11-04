@@ -357,8 +357,8 @@ jobs:
           fi
           git fetch --no-tags origin "$base" "$head"
           changed="$(git diff --name-only "$base" "$head")"
-          printf '%s\\n' "$changed"
-          if printf '%s\\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\\.github/actions/flutter-setup/|\\.github/workflows/research-os-gate\\.yml$)'; then
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/|\.github/workflows/research-os-gate\.yml$)'; then
             echo "run_apple=true" >> "$GITHUB_OUTPUT"
             echo "APPLE_PLATFORM_VALIDATION=RUN_RELEVANT_CHANGES"
           else
