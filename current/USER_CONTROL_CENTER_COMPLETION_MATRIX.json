@@ -36,24 +36,24 @@
     {
       "id": "web.projects_files",
       "surface": "web",
-      "status": "IMPLEMENTED_NOT_WIRED",
+      "status": "PARTIAL",
       "evidence": [
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Navigation points to the static Platform Directory; no live project/file workspace is rendered.",
-      "acceptance": "Connect only to existing project/workspace/file APIs; support real inspect/open actions and explicit unsupported states."
+      "detail": "Web page now reads ProjectRegistry (/v1/projects) and Workspace Index (/v2/workspaces); create/edit/delete and file operations are not exposed.",
+      "acceptance": "Add real file/project actions only after confirming authoritative APIs; preserve ProjectRegistry and shared workspace ownership."
     },
     {
       "id": "web.history_activity",
       "surface": "web",
-      "status": "IMPLEMENTED_NOT_WIRED",
+      "status": "PARTIAL",
       "evidence": [
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Navigation currently selects the static Platform Directory rather than a history/activity view.",
-      "acceptance": "Render authenticated jobs, orchestration timeline, and evidence from their authoritative APIs."
+      "detail": "Web page now reads owner-scoped jobs (/api/v1/jobs) and orchestration runs (/v1/agents/orchestrations); detailed evidence drill-down and history search/filter are not yet implemented.",
+      "acceptance": "Add evidence drill-down, pagination/search, and traceable detail views using authoritative job/orchestration/evidence APIs."
     },
     {
       "id": "web.settings_account",
@@ -63,8 +63,8 @@
         "apps/research_os_web/app.js",
         "apps/research_os_web/index.html"
       ],
-      "detail": "Sign-in/sign-out and provider discovery exist; Settings & Account navigation is a directory placeholder.",
-      "acceptance": "Expose only existing account/provider settings with server-side authorization and clear unsupported states."
+      "detail": "Web page now reads authenticated account, login provider catalog, active AI provider, and secret-safe provider connection status; settings mutations are not exposed.",
+      "acceptance": "Expose only configuration changes backed by server-side APIs, approval/audit, and secret-safe validation."
     },
     {
       "id": "web.admin_console",
