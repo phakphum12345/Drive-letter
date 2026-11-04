@@ -65,7 +65,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
         self.assertIn("request('/v1/auth/status')", self.js)
         self.assertIn("request('/v1/ai/connections')", self.js)
-        self.assertIn("no API binding", self.js)
+        self.assertIn("ยังไม่มี API binding", self.js)
         self.assertIn("credentials:'include'", self.js)
 
     def test_dashboard_has_mobile_responsive_layout(self):
