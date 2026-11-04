@@ -125,6 +125,30 @@ class JsonManagementStore:
             state["resources"].setdefault(resource, {})[identifier] = _jsonable(payload)
             self._write(state)
 
+    def put_with_audit(
+        self,
+        resource: str,
+        identifier: str,
+        payload: dict[str, Any],
+        *,
+        actor: str,
+        action: str,
+        outcome: str = "success",
+    ) -> None:
+        """Persist a metadata mutation and its audit event in one atomic file replace."""
+        with self._lock:
+            state = self._read()
+            state["resources"].setdefault(resource, {})[identifier] = _jsonable(payload)
+            state.setdefault("audit", []).append({
+                "actor": actor,
+                "resource": resource,
+                "identifier": identifier,
+                "action": action,
+                "outcome": outcome,
+                "timestamp": datetime.now().astimezone().isoformat(),
+            })
+            self._write(state)
+
     def list(self, resource: str) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._read()["resources"].get(resource, {}).values())
@@ -194,8 +218,9 @@ class ManagementService:
     def _persist(self, resource: str, obj: Any, *, actor: str, action: str) -> dict[str, Any]:
         identifier = getattr(obj, ID_FIELDS[resource])
         payload = _jsonable(asdict(obj))
-        self.store.put(resource, identifier, payload)
-        self.store.record_audit(actor, resource, identifier, action, "success")
+        self.store.put_with_audit(
+            resource, identifier, payload, actor=actor, action=action, outcome="success"
+        )
         return payload
 
     def create_api_key(self, payload: dict[str, Any], *, actor: str = "system") -> dict[str, Any]:
