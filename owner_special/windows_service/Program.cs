@@ -14,7 +14,7 @@ var host = Host.CreateDefaultBuilder(args)
     .Build();
 await host.RunAsync();
 
-sealed record ServiceOptions(string Root, string PythonExecutable, int Port, string DataDir, string ServiceName, string OwnerId)
+sealed record ServiceOptions(string Root, string PythonExecutable, int Port, string DataDir, string ServiceName, string OwnerId, string? Provider)
 {
     public static ServiceOptions FromArgs(string[] args)
     {
@@ -26,7 +26,8 @@ sealed record ServiceOptions(string Root, string PythonExecutable, int Port, str
         var dataDir = Path.GetFullPath(ReadOption(args, "--data-dir") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ResearchOSOwnerSpecial"));
         var serviceName = ReadOption(args, "--service-name") ?? "ResearchOSOwnerFriendService";
         var ownerId = ReadOption(args, "--owner-id") ?? "owner";
-        return new ServiceOptions(root, python, port, dataDir, serviceName, ownerId);
+        var provider = ReadOption(args, "--provider");
+        return new ServiceOptions(root, python, port, dataDir, serviceName, ownerId, provider);
     }
 
     private static string? ReadOption(string[] args, string name)
@@ -95,8 +96,12 @@ sealed class OwnerFriendWorker : BackgroundService
         var configuredProvider = Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER");
         var configuredOllamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL");
         var configuredOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL");
+        // An explicit service-host argument is authoritative (used by isolated
+        // hosted E2E); otherwise preserve the machine/service Local Mode setting.
         start.Environment["RESEARCH_OS_PROVIDER"] =
-            string.IsNullOrWhiteSpace(configuredProvider) ? "local" : configuredProvider;
+            !string.IsNullOrWhiteSpace(_options.Provider)
+                ? _options.Provider
+                : (string.IsNullOrWhiteSpace(configuredProvider) ? "local" : configuredProvider);
         start.Environment["OLLAMA_BASE_URL"] =
             string.IsNullOrWhiteSpace(configuredOllamaUrl) ? "http://127.0.0.1:11434/v1" : configuredOllamaUrl;
         start.Environment["OLLAMA_MODEL"] =
