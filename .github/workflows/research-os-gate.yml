@@ -316,9 +316,69 @@ jobs:
         working-directory: v3/flutter_app
         run: flutter build linux --debug
 
+  detect-apple-scope:
+    name: Decide whether Apple platform validation is relevant
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_apple: ${{ steps.scope.outputs.run_apple }}
+    steps:
+      - name: Checkout history for exact change comparison
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Detect Apple platform compatibility changes
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run_apple=true" >> "$GITHUB_OUTPUT"
+            echo "APPLE_PLATFORM_VALIDATION=RUN_MANUAL_VALIDATION"
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+            head="$TARGET_SHA"
+          fi
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            echo "run_apple=true" >> "$GITHUB_OUTPUT"
+            echo "APPLE_PLATFORM_VALIDATION=RUN_NO_COMPARABLE_BASELINE"
+            exit 0
+          fi
+          git cat-file -e "$base^{commit}"
+          git cat-file -e "$head^{commit}"
+          changed="$(git diff --name-only "$base" "$head")"
+          printf '%s\n' "$changed"
+          source_relevant=false
+          if printf '%s\n' "$changed" | grep -Eq '^(v3/flutter_app/|packages/research_os_contracts/|\.github/actions/flutter-setup/)'; then
+            source_relevant=true
+          fi
+          workflow_diff="$(git diff --unified=0 "$base" "$head" -- .github/workflows/research-os-gate.yml)"
+          if printf '%s\n' "$workflow_diff" | grep -Eq '^[+-].*(runs-on: macos-latest|xcodebuild|xcrun|pod --version|flutter create --platforms=ios,macos|flutter build ios|flutter build macos)'; then
+            source_relevant=true
+          fi
+          if [[ "$source_relevant" == "true" ]]; then
+            echo "run_apple=true" >> "$GITHUB_OUTPUT"
+            echo "APPLE_PLATFORM_VALIDATION=RUN_RELEVANT_CHANGES"
+          else
+            echo "run_apple=false" >> "$GITHUB_OUTPUT"
+            echo "APPLE_PLATFORM_VALIDATION=SKIP_UNRELATED_CHANGES"
+          fi
+
   apple-quality:
     name: Flutter macOS and iOS Xcode Recon Build
-    needs: [python-quality]
+    needs: [python-quality, detect-apple-scope]
+    if: needs.detect-apple-scope.outputs.run_apple == 'true'
     runs-on: macos-latest
     steps:
       - name: Checkout exact target SHA
@@ -431,7 +491,7 @@ jobs:
 
   gate:
     name: Research OS Final Gate
-    needs: [python-quality, research-e2e, flutter-quality, linux-desktop-quality, apple-quality]
+    needs: [python-quality, research-e2e, flutter-quality, linux-desktop-quality, detect-apple-scope, apple-quality]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -441,10 +501,17 @@ jobs:
           echo "research-e2e=${{ needs.research-e2e.result }}"
           echo "flutter-quality=${{ needs.flutter-quality.result }}"
           echo "linux-desktop-quality=${{ needs.linux-desktop-quality.result }}"
+          echo "apple-scope=${{ needs.detect-apple-scope.outputs.run_apple }}"
+          echo "apple-scope-job=${{ needs.detect-apple-scope.result }}"
           echo "apple-quality=${{ needs.apple-quality.result }}"
           test "${{ needs.python-quality.result }}" = success
           test "${{ needs.research-e2e.result }}" = success
           test "${{ needs.flutter-quality.result }}" = success
           test "${{ needs.linux-desktop-quality.result }}" = success
-          test "${{ needs.apple-quality.result }}" = success
+          test "${{ needs.detect-apple-scope.result }}" = success
+          if [[ "${{ needs.detect-apple-scope.outputs.run_apple }}" == "true" ]]; then
+            test "${{ needs.apple-quality.result }}" = success
+          else
+            test "${{ needs.apple-quality.result }}" = skipped
+          fi
           echo "RESEARCH_OS_GATE=PASS"
