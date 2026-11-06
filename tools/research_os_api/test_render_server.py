@@ -35,13 +35,22 @@ class RenderServerEntrypointTests(unittest.TestCase):
     def test_friend_readiness_requires_expected_provider(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
             with patch.object(render_server, "_friend_status", return_value={"providers": ["gemini"]}):
-                self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["gemini"])
+                with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "gemini"}):
+                    self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["gemini"])
 
     def test_friend_readiness_rejects_mock_when_gemini_is_selected(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
             with patch.object(render_server, "_friend_status", return_value={"providers": ["owner-mock"]}):
                 with self.assertRaisesRegex(RuntimeError, "provider mismatch"):
                     render_server._assert_friend_provider_ready()
+
+
+    def test_friend_readiness_rejects_unreachable_gemini_even_when_registered(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
+            with patch.object(render_server, "_friend_status", return_value={"providers": ["gemini"]}):
+                with patch.object(render_server, "_friend_provider_health", return_value={"connected": False, "provider": "gemini"}):
+                    with self.assertRaisesRegex(RuntimeError, "not connected"):
+                        render_server._assert_friend_provider_ready()
 
     def test_local_mode_maps_to_ollama_provider(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
