@@ -136,6 +136,28 @@ def _friend_chat(text: str, *, session_id: str | None = None, complexity: int = 
     return value
 
 
+def _friend_provider_health() -> dict[str, Any]:
+    """Check the actual loopback Friend provider without exposing credentials."""
+    request = urllib.request.Request(
+        f"{FRIEND_BASE_URL}/owner/provider/health",
+        headers={
+            "Accept": "application/json",
+            "X-Research-OS-Owner": FRIEND_OWNER_ID,
+            "X-Research-OS-Profile": "default",
+            "X-Research-OS-Session": "api-readiness",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        value = json.loads(response.read().decode("utf-8"))
+    if not isinstance(value, dict) or value.get("connected") is not True:
+        raise RuntimeError("Friend provider connection was not confirmed")
+    selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
+    expected = "ollama-local" if selected in {"local", "ollama"} else selected
+    if expected and value.get("provider") != expected:
+        raise RuntimeError("Friend provider does not match the configured Local/Cloud mode")
+    return value
+
+
 def _json_bytes(payload: Any) -> bytes:
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
@@ -382,6 +404,20 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self._send_static(STATIC_ROUTES[path])
                 return
             if path == "/health":
+                if os.getenv("RESEARCH_OS_REQUIRE_FRIEND_HEALTH", "").strip().lower() == "true":
+                    try:
+                        _friend_provider_health()
+                    except Exception as exc:
+                        self._send(
+                            HTTPStatus.SERVICE_UNAVAILABLE,
+                            {
+                                "status": "degraded",
+                                "service": "research-os-api",
+                                "friend": "unavailable",
+                                "detail": type(exc).__name__,
+                            },
+                        )
+                        return
                 google_workspace_connected = False
                 try:
                     workspace = get_google_workspace_dashboard()
