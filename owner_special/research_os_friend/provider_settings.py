@@ -10,9 +10,9 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
-from .providers import ProviderResult
+from .providers import MockProvider, ProviderResult
 
 
 class SecretStore(Protocol):
@@ -152,9 +152,13 @@ class OpenAICompatibleProvider:
     transport: JsonTransport
     timeout: float = 20.0
     name: str = "openai-compatible"
+    local: bool = False
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     @staticmethod
     def _decimal_env(name: str) -> Decimal | None:
@@ -172,7 +176,7 @@ class OpenAICompatibleProvider:
     def _measurement(self, payload: dict[str, object]) -> tuple[dict[str, int], Decimal | None]:
         raw_usage = payload.get("usage")
         if not isinstance(raw_usage, dict):
-            return {}, None
+            return ({"requests": 1, "tokens": 0}, Decimal("0")) if self.local else ({}, None)
 
         def count(name: str) -> int:
             value = raw_usage.get(name, 0)
@@ -190,6 +194,9 @@ class OpenAICompatibleProvider:
         completion_tokens = count("completion_tokens")
         total_tokens = count("total_tokens") or prompt_tokens + completion_tokens
         usage = {"requests": 1, "tokens": total_tokens}
+        if self.local:
+            # Local Ollama execution has no external token-billing charge.
+            return usage, Decimal("0")
 
         resource_control = payload.get("resource_control")
         if isinstance(resource_control, dict) and resource_control.get("actual_cost") is not None:
@@ -300,3 +307,150 @@ class ProviderManager:
             "secret_backend": self.secret_store.backend,
             "secret_exposed": False,
         }
+
+
+class GeminiProvider:
+    """Native Gemini GenerateContent adapter for the canonical Friend runtime."""
+
+    name = "gemini"
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        endpoint_template: str = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+        transport: JsonTransport | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("Gemini API credential is required")
+        if not model.strip():
+            raise ValueError("Gemini model is required")
+        self.api_key = api_key.strip()
+        self.model = model.strip()
+        self.endpoint_template = endpoint_template
+        self.transport = transport or UrllibJsonTransport()
+        self.timeout = timeout
+
+    def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
+        combined = prompt
+        if context:
+            combined = "Owner context:\\n" + "\\n".join(context[-12:]) + "\\n\\n" + prompt
+        endpoint = self.endpoint_template.format(
+            model=quote(self.model, safe=""),
+            api_key=quote(self.api_key, safe=""),
+        )
+        payload = {"contents": [{"parts": [{"text": combined}]}]}
+        raw = self.transport.post_json(
+            endpoint,
+            headers={"Accept": "application/json"},
+            payload=payload,
+            timeout=self.timeout,
+        )
+        candidates = raw.get("candidates")
+        if not isinstance(candidates, list) or not candidates:
+            raise RuntimeError("Gemini response contains no candidates")
+        first = candidates[0]
+        content = first.get("content") if isinstance(first, dict) else None
+        parts = content.get("parts") if isinstance(content, dict) else None
+        answer = "\\n".join(
+            str(part.get("text", ""))
+            for part in (parts if isinstance(parts, list) else [])
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        ).strip()
+        if not answer:
+            raise RuntimeError("Gemini response contains no text")
+
+        usage_metadata = raw.get("usageMetadata")
+        if not isinstance(usage_metadata, dict):
+            return ProviderResult(
+                text=answer,
+                usage={"requests": 1},
+                actual_cost=None,
+                raw={"model": raw.get("modelVersion", self.model), "usage_metadata_available": False},
+            )
+
+        def token_count(field: str) -> int:
+            value = usage_metadata.get(field, 0)
+            if isinstance(value, bool):
+                raise ValueError(f"Gemini usage {field} must be an integer")
+            parsed = int(value)
+            if parsed < 0:
+                raise ValueError(f"Gemini usage {field} cannot be negative")
+            return parsed
+
+        prompt_tokens = token_count("promptTokenCount") + token_count("toolUsePromptTokenCount")
+        cached_tokens = token_count("cachedContentTokenCount")
+        output_tokens = token_count("candidatesTokenCount") + token_count("thoughtsTokenCount")
+        total_tokens = token_count("totalTokenCount") or prompt_tokens + output_tokens
+
+        input_rate = OpenAICompatibleProvider._decimal_env("RESEARCH_OS_GEMINI_INPUT_USD_PER_1M_TOKENS")
+        output_rate = OpenAICompatibleProvider._decimal_env("RESEARCH_OS_GEMINI_OUTPUT_USD_PER_1M_TOKENS")
+        if self.model == "gemini-3-flash-preview":
+            input_rate = input_rate if input_rate is not None else Decimal("0.50")
+            output_rate = output_rate if output_rate is not None else Decimal("3.00")
+
+        # Cached input has a distinct price. Do not understate cost if caching is
+        # enabled later until its rate is explicitly configured.
+        cost = None
+        if cached_tokens == 0 and input_rate is not None and output_rate is not None:
+            cost = (
+                Decimal(prompt_tokens) * input_rate
+                + Decimal(output_tokens) * output_rate
+            ) / Decimal(1_000_000)
+
+        return ProviderResult(
+            text=answer,
+            usage={"requests": 1, "tokens": total_tokens},
+            actual_cost=cost,
+            currency="USD" if cost is not None else "USD",
+            raw={
+                "model": raw.get("modelVersion", self.model),
+                "usage_metadata": {
+                    "prompt_tokens": prompt_tokens,
+                    "cached_tokens": cached_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens,
+                },
+            },
+        )
+
+
+def build_environment_provider():
+    """Build exactly the selected provider; never append an implicit mock fallback."""
+    selected = os.getenv("RESEARCH_OS_PROVIDER", "mock").strip().lower()
+    if selected == "mock":
+        return MockProvider()
+    if selected in {"local", "ollama"}:
+        return OpenAICompatibleProvider(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1").strip(),
+            model=os.getenv("OLLAMA_MODEL", "llama3.2:3b").strip(),
+            api_key=os.getenv("OLLAMA_API_KEY", "").strip(),
+            transport=UrllibJsonTransport(),
+            name="ollama-local",
+            local=True,
+        )
+    if selected == "gemini":
+        api_key = os.getenv("RESEARCH_OS_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
+        if not api_key.strip():
+            raise RuntimeError("Gemini provider selected but its API credential is not configured")
+        return GeminiProvider(
+            api_key=api_key,
+            model=os.getenv("RESEARCH_OS_GEMINI_MODEL", "gemini-3-flash-preview").strip(),
+            endpoint_template=os.getenv(
+                "RESEARCH_OS_GEMINI_ENDPOINT_TEMPLATE",
+                "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+            ).strip(),
+        )
+    if selected in {"openai", "openai-compatible"}:
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("OpenAI-compatible provider selected but OPENAI_API_KEY is not configured")
+        return OpenAICompatibleProvider(
+            base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip(),
+            model=os.getenv("OPENAI_MODEL", "gpt-5-mini").strip(),
+            api_key=api_key,
+            transport=UrllibJsonTransport(),
+        )
+    raise ValueError(f"unsupported RESEARCH_OS_PROVIDER: {selected}")
