@@ -57,6 +57,11 @@ class OwnerFriendService:
         self._thread: threading.Thread | None = None
 
     def _apply_provider(self) -> None:
+        selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
+        if selected in {"gemini", "local", "ollama"}:
+            # Explicit deployment mode is authoritative. Do not let a stale
+            # per-owner OpenAI-compatible setting override Gemini or Ollama.
+            return
         self.runtime.orchestrator.providers.remove("openai-compatible")
         provider = self.provider_manager.provider()
         if provider is not None:
