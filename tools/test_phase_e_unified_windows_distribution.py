@@ -89,6 +89,14 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("RESEARCH_OS_PROVIDER=mock", workflow)
         self.assertIn("ResearchOSOwnerFriendService", workflow)
         self.assertIn("ResearchOSService", workflow)
+        installer = (validator.ROOT / "owner_special/scripts/install-owner-service.ps1").read_text(encoding="utf-8")
+        self.assertIn("[ValidateSet('mock')][string]$TestProvider", installer)
+        self.assertIn("$binary += ' --provider ' + $TestProvider", installer)
+        self.assertIn("-TestProvider mock", workflow)
+        self.assertIn("FRIEND_SERVICE_HOST_PATH=", workflow)
+        self.assertIn("/owner/provider/health", workflow)
+        self.assertIn("friend_memory_survives_service_restart", workflow)
+        self.assertNotIn("Set-ItemProperty -Path $friendServiceKey -Name ImagePath", workflow)
 
     def test_api_readiness_requires_health_and_packaged_ui(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
