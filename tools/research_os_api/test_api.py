@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import server
 
@@ -56,6 +56,35 @@ class ResearchOSAPITests(unittest.TestCase):
         payload = json.loads(raised.exception.read().decode("utf-8"))
         self.assertEqual("degraded", payload["status"])
         self.assertEqual("RuntimeError", payload["detail"])
+
+    def test_friend_provider_health_normalizes_explicit_mock_provider(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps({
+            "connected": True,
+            "provider": "owner-mock",
+        }).encode("utf-8")
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "mock"}, clear=False):
+            with patch("server.urllib.request.urlopen", return_value=response):
+                payload = server._friend_provider_health()
+        self.assertEqual("owner-mock", payload["provider"])
+
+    @patch("server.urllib.request.urlopen")
+    def test_health_passes_when_required_ci_mock_provider_is_connected(self, urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps({
+            "connected": True,
+            "provider": "owner-mock",
+        }).encode("utf-8")
+        urlopen.return_value = response
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true", "RESEARCH_OS_PROVIDER": "mock"},
+            clear=False,
+        ):
+            status, payload = self.request("GET", "/health")
+        self.assertEqual(200, status)
+        self.assertEqual("ok", payload["status"])
+        self.assertTrue(payload["ui"])
 
     @patch("server._friend_provider_health", return_value={"connected": True, "provider": "ollama-local"})
     def test_health_passes_when_required_local_provider_is_connected(self, _friend_health):
