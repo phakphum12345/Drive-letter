@@ -23,8 +23,8 @@ from .models import FriendRequest, FriendResponse
 from .orchestrator import FriendOrchestrator
 from .persistent_memory import PersistentScopedMemory
 from .policy import OwnerPolicy
-from .providers import MockProvider, ProviderRouter
-from .provider_settings import OpenAICompatibleProvider, UrllibJsonTransport
+from .providers import ProviderRouter
+from .provider_settings import build_environment_provider
 from .schedule_generation.preview import SchedulePreviewStore
 from .reasoning import DecisionPlanner
 from .self_learning import SelfLearningEngine
@@ -85,20 +85,10 @@ class FriendRuntime:
         skills = install_builtin_skills(SkillRegistry())
         tools = install_builtin_tools(ToolRegistry())
         providers = ProviderRouter()
-
-        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if api_key:
-            base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
-            model = os.environ.get("OPENAI_MODEL", "gpt-5-mini").strip()
-            providers.register(
-                OpenAICompatibleProvider(
-                    base_url=base_url,
-                    model=model,
-                    api_key=api_key,
-                    transport=UrllibJsonTransport(),
-                )
-            )
-        providers.register(MockProvider())
+        # The selected environment provider is the only default route. In
+        # particular, production Gemini/Ollama failures must never fall through
+        # to MockProvider and be presented as a real AI completion.
+        providers.register(build_environment_provider())
 
         capabilities = install_friend_complete_capabilities()
         bridge = V3Bridge(repo_root)
