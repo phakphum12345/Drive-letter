@@ -53,6 +53,9 @@ def _expected_provider() -> str:
     selected = os.getenv("RESEARCH_OS_PROVIDER", "gemini").strip().lower()
     if selected in {"local", "ollama"}:
         return "ollama-local"
+    if selected == "mock":
+        # MockProvider exposes its canonical runtime name, not the selector alias.
+        return "owner-mock"
     return selected
 
 
