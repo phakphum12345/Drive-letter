@@ -156,12 +156,10 @@ class AdminConsoleManagementTests(unittest.TestCase):
 
     def test_web_admin_mutations_are_owner_gated_and_confirmed(self) -> None:
         root = Path(__file__).resolve().parents[2]
+        source = (root / "apps" / "research_os_web" / "app.js").read_text(encoding="utf-8")
         markup = (root / "apps" / "research_os_web" / "index.html").read_text(encoding="utf-8")
         self.assertIn("FILE-BACKED + AUDITED", markup)
         self.assertIn("ephemeral cloud filesystem", markup)
-        root = Path(__file__).resolve().parents[2]
-        source = (root / "apps" / "research_os_web" / "app.js").read_text(encoding="utf-8")
-        markup = (root / "apps" / "research_os_web" / "index.html").read_text(encoding="utf-8")
         self.assertIn("state.account?.role", source)
         self.assertIn("window.confirm('Create this '", source)
         self.assertIn("window.confirm('Confirm '", source)
