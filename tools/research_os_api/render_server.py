@@ -3,14 +3,125 @@
 
 from __future__ import annotations
 
+import json
 import os
+import time
+import urllib.error
+import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlsplit
 
 from v2_server import V2ResearchOSHandler
 
 
+
+FRIEND_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip("/")
+FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner").strip() or "owner"
+
+
+def _friend_status() -> dict[str, object]:
+    request = urllib.request.Request(
+        f"{FRIEND_URL}/owner/status",
+        headers={
+            "Accept": "application/json",
+            "X-Research-OS-Owner": FRIEND_OWNER_ID,
+            "X-Research-OS-Profile": "default",
+            "X-Research-OS-Session": "render-readiness",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=3) as response:
+        value = json.loads(response.read().decode("utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError("Friend status response is not an object")
+    return value
+
+
+def _expected_provider() -> str:
+    selected = os.getenv("RESEARCH_OS_PROVIDER", "gemini").strip().lower()
+    if selected in {"local", "ollama"}:
+        return "ollama-local"
+    return selected
+
+
+def _assert_friend_provider_ready() -> dict[str, object]:
+    status = _friend_status()
+    providers = status.get("providers")
+    expected = _expected_provider()
+    if not isinstance(providers, list) or expected not in providers:
+        raise RuntimeError(
+            f"Friend runtime provider mismatch: expected {expected}, configured providers={providers!r}"
+        )
+    return status
+
+
+def _ensure_friend_service():
+    """Reuse a local Friend service or start one inside this Render container."""
+    parsed = urlsplit(FRIEND_URL)
+    if parsed.scheme != "http" or (parsed.hostname or "").lower() not in {
+        "127.0.0.1", "localhost", "::1"
+    }:
+        raise RuntimeError("Friend service must remain on an internal loopback HTTP address")
+    port = parsed.port or 8790
+
+    try:
+        _assert_friend_provider_ready()
+        return None
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError, RuntimeError):
+        pass
+
+    from owner_special.research_os_friend import OwnerFriendService
+
+    repository_root = Path(__file__).resolve().parents[2]
+    data_root = Path(
+        os.getenv("RESEARCH_OS_OWNER_DATA_ROOT")
+        or os.getenv("RESEARCH_OS_DATA_DIR")
+        or (Path.home() / ".research_os_owner_special")
+    ).expanduser().resolve()
+    service = OwnerFriendService(
+        owner_id=FRIEND_OWNER_ID,
+        host="127.0.0.1",
+        port=port,
+        data_root=data_root,
+        repository_root=repository_root,
+    )
+    service.start()
+    try:
+        last_error: Exception | None = None
+        for _ in range(40):
+            try:
+                _assert_friend_provider_ready()
+                return service
+            except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError, RuntimeError) as exc:
+                last_error = exc
+                time.sleep(0.25)
+        raise RuntimeError(
+            f"Friend service did not become provider-ready: {type(last_error).__name__ if last_error else 'timeout'}"
+        )
+    except Exception:
+        service.close()
+        raise
+
+
 class CloudResearchOSHandler(V2ResearchOSHandler):
     """Primary Research OS handler with V1 compatibility and V2 namespace."""
+
+    def do_GET(self) -> None:  # noqa: N802
+        if urlsplit(self.path).path == "/health":
+            try:
+                _assert_friend_provider_ready()
+            except Exception as exc:
+                self._send(
+                    503,
+                    {
+                        "status": "degraded",
+                        "service": "research-os-api",
+                        "friend": "unavailable",
+                        "detail": type(exc).__name__,
+                    },
+                )
+                return
+        super().do_GET()
 
     def end_headers(self) -> None:
         configured_origins = {
@@ -42,6 +153,7 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
 def main() -> int:
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "10000"))
+    friend_service = _ensure_friend_service()
     server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
     actual_port = int(server.server_address[1])
     os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
@@ -52,6 +164,8 @@ def main() -> int:
         pass
     finally:
         server.server_close()
+        if friend_service is not None:
+            friend_service.close()
     return 0
 
 
