@@ -409,13 +409,21 @@ class GeminiProvider:
                 + Decimal(output_tokens) * output_rate
             ) / Decimal(1_000_000)
 
+        cost_basis = (
+            "published_standard_token_rates"
+            if cost is not None
+            else ("cached_input_rate_unconfigured" if cached_tokens else "token_rates_unconfigured")
+        )
         return ProviderResult(
             text=answer,
             usage={"requests": 1, "tokens": total_tokens},
             actual_cost=cost,
-            currency="USD" if cost is not None else "USD",
+            currency="USD",
             raw={
                 "model": raw.get("modelVersion", self.model),
+                "cost_basis": cost_basis,
+                "input_usd_per_1m_tokens": str(input_rate) if input_rate is not None else None,
+                "output_usd_per_1m_tokens": str(output_rate) if output_rate is not None else None,
                 "usage_metadata": {
                     "prompt_tokens": prompt_tokens,
                     "cached_tokens": cached_tokens,
