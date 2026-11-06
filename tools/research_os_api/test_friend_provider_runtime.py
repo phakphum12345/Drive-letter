@@ -20,7 +20,7 @@ class FakeTransport:
     def get_json(self, url, *, headers, timeout):
         self.last_url = url
         self.last_headers = headers
-        return {"data": [{"id": "ollama-model"}]}
+        return {"data": [{"id": "llama3.2:3b"}]}
 
     def post_json(self, url, *, headers, payload, timeout):
         self.last_url = url
@@ -123,6 +123,9 @@ class FriendProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(result.usage, {"requests": 1, "tokens": 13})
         self.assertEqual(result.actual_cost, Decimal("0"))
         self.assertNotIn("Authorization", transport.last_headers)
+        health = provider.test_connection()
+        self.assertTrue(health["connected"])
+        self.assertEqual("llama3.2:3b", health["model"])
 
     def test_gemini_mode_requires_existing_secret_without_exposing_it(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
