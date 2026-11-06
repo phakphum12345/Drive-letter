@@ -73,6 +73,16 @@ sealed class ResearchOsApiWorker : BackgroundService
         // Pass its URL explicitly; never let the API fall back to port zero.
         startInfo.Environment["RESEARCH_OS_FRIEND_URL"] =
             Environment.GetEnvironmentVariable("RESEARCH_OS_FRIEND_URL") ?? "http://127.0.0.1:8790";
+        startInfo.Environment["RESEARCH_OS_REQUIRE_FRIEND_HEALTH"] = "true";
+        var configuredProvider = Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER");
+        var configuredOllamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL");
+        var configuredOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL");
+        startInfo.Environment["RESEARCH_OS_PROVIDER"] =
+            string.IsNullOrWhiteSpace(configuredProvider) ? "local" : configuredProvider;
+        startInfo.Environment["OLLAMA_BASE_URL"] =
+            string.IsNullOrWhiteSpace(configuredOllamaUrl) ? "http://127.0.0.1:11434/v1" : configuredOllamaUrl;
+        startInfo.Environment["OLLAMA_MODEL"] =
+            string.IsNullOrWhiteSpace(configuredOllamaModel) ? "llama3.2:3b" : configuredOllamaModel;
         startInfo.Environment["HOST"] = startInfo.Environment["RESEARCH_OS_API_HOST"]!;
         startInfo.Environment["PORT"] = startInfo.Environment["RESEARCH_OS_API_PORT"]!;
 

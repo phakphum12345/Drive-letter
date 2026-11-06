@@ -3,11 +3,12 @@ import os
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import server
 
@@ -45,6 +46,74 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("ok", payload["status"])
         self.assertTrue(payload["memory"])
+
+    @patch("server._friend_provider_health", side_effect=RuntimeError("provider offline"))
+    def test_health_fails_closed_when_installed_service_requires_friend(self, _friend_health):
+        with patch.dict(os.environ, {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true"}, clear=False):
+            with self.assertRaises(urllib.error.HTTPError) as raised:
+                self.request("GET", "/health")
+        self.assertEqual(503, raised.exception.code)
+        payload = json.loads(raised.exception.read().decode("utf-8"))
+        self.assertEqual("degraded", payload["status"])
+        self.assertEqual("provider offline", payload["detail"])
+
+    def test_friend_provider_health_reports_safe_http_error_context(self):
+        import io
+        error_body = json.dumps({
+            "connected": False,
+            "provider": "owner-mock",
+            "error": "provider_health_not_supported",
+        }).encode("utf-8")
+        error = urllib.error.HTTPError(
+            "http://127.0.0.1:8790/owner/provider/health",
+            503,
+            "Service Unavailable",
+            hdrs=None,
+            fp=io.BytesIO(error_body),
+        )
+        with patch("server.urllib.request.urlopen", side_effect=error):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"HTTP 503: provider=owner-mock; error=provider_health_not_supported",
+            ):
+                server._friend_provider_health()
+
+    def test_friend_provider_health_normalizes_explicit_mock_provider(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps({
+            "connected": True,
+            "provider": "owner-mock",
+        }).encode("utf-8")
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "mock"}, clear=False):
+            with patch("server.urllib.request.urlopen", return_value=response):
+                payload = server._friend_provider_health()
+        self.assertEqual("owner-mock", payload["provider"])
+
+    @patch(
+        "server._friend_provider_health",
+        return_value={"connected": True, "provider": "owner-mock"},
+    )
+    def test_health_passes_when_required_ci_mock_provider_is_connected(self, _friend_health):
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true", "RESEARCH_OS_PROVIDER": "mock"},
+            clear=False,
+        ):
+            status, payload = self.request("GET", "/health")
+        self.assertEqual(200, status)
+        self.assertEqual("ok", payload["status"])
+        self.assertTrue(payload["ui"])
+
+    @patch("server._friend_provider_health", return_value={"connected": True, "provider": "ollama-local"})
+    def test_health_passes_when_required_local_provider_is_connected(self, _friend_health):
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true", "RESEARCH_OS_PROVIDER": "local"},
+            clear=False,
+        ):
+            status, payload = self.request("GET", "/health")
+        self.assertEqual(200, status)
+        self.assertEqual("ok", payload["status"])
 
     @patch("server._friend_chat")
     def test_mock_provider_generation(self, friend_chat):

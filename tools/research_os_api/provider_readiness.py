@@ -35,8 +35,22 @@ def inspect_provider(provider: str) -> dict[str, object]:
     if selected not in REQUIREMENTS:
         raise ValueError(f"unsupported provider: {selected}")
     missing = [name for name in REQUIREMENTS[selected] if not os.getenv(name)]
-    if selected in {"openai-compatible", "local"}:
+    if selected == "local":
+        missing = []
+        if not (os.getenv("OLLAMA_BASE_URL") or os.getenv("RESEARCH_OS_OPENAI_ENDPOINT")):
+            missing.append("OLLAMA_BASE_URL or RESEARCH_OS_OPENAI_ENDPOINT")
+        if not (os.getenv("OLLAMA_MODEL") or os.getenv("RESEARCH_OS_OPENAI_MODEL")):
+            missing.append("OLLAMA_MODEL or RESEARCH_OS_OPENAI_MODEL")
+    if selected == "gemini":
+        missing = []
+        if not (os.getenv("RESEARCH_OS_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")):
+            missing.append("GEMINI_API_KEY or RESEARCH_OS_GEMINI_API_KEY")
+        if not os.getenv("RESEARCH_OS_GEMINI_MODEL"):
+            missing.append("RESEARCH_OS_GEMINI_MODEL")
+    if selected == "openai-compatible":
         endpoint_key, model_key = "RESEARCH_OS_OPENAI_ENDPOINT", "RESEARCH_OS_OPENAI_MODEL"
+    elif selected == "local":
+        endpoint_key, model_key = "OLLAMA_BASE_URL", "OLLAMA_MODEL"
     elif selected == "anthropic":
         endpoint_key, model_key = "RESEARCH_OS_ANTHROPIC_ENDPOINT", "RESEARCH_OS_ANTHROPIC_MODEL"
     elif selected == "gemini":
@@ -47,8 +61,8 @@ def inspect_provider(provider: str) -> dict[str, object]:
         provider=selected,
         ready=not missing,
         missing=missing,
-        endpoint_configured=True if selected == "mock" else bool(os.getenv(endpoint_key)),
-        model_configured=True if selected == "mock" else bool(os.getenv(model_key)),
+        endpoint_configured=True if selected in {"mock", "gemini"} else bool(os.getenv(endpoint_key) or (selected == "local" and os.getenv("RESEARCH_OS_OPENAI_ENDPOINT"))),
+        model_configured=True if selected == "mock" else bool(os.getenv(model_key) or (selected == "local" and os.getenv("RESEARCH_OS_OPENAI_MODEL"))),
     )
     return asdict(result)
 

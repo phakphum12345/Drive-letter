@@ -83,11 +83,33 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("BUNDLED_API_IMPORT=PASS", workflow)
         self.assertIn("import server; print('BUNDLED_API_IMPORT=PASS')", workflow)
 
+    def test_windows_installer_e2e_uses_explicit_mock_provider_without_changing_defaults(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("WINDOWS_INSTALLER_E2E_PROVIDER=mock", workflow)
+        self.assertIn("RESEARCH_OS_PROVIDER=mock", workflow)
+        self.assertIn("ResearchOSOwnerFriendService", workflow)
+        self.assertIn("ResearchOSService", workflow)
+        installer = (validator.ROOT / "owner_special/scripts/install-owner-service.ps1").read_text(encoding="utf-8")
+        self.assertIn("[ValidateSet('mock')][string]$TestProvider", installer)
+        self.assertIn("$binary += ' --provider ' + $TestProvider", installer)
+        self.assertIn("-TestProvider mock", workflow)
+        self.assertIn("FRIEND_SERVICE_HOST_PATH=", workflow)
+        self.assertIn("/owner/provider/health", workflow)
+        self.assertIn("friend_memory_survives_service_restart", workflow)
+        self.assertNotIn("Set-ItemProperty -Path $friendServiceKey -Name ImagePath", workflow)
+
     def test_api_readiness_requires_health_and_packaged_ui(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
         self.assertIn("/health", workflow)
         self.assertIn("apiHealth.status -eq 'ok'", workflow)
         self.assertIn("apiHealth.ui -eq $true", workflow)
+
+    def test_owner_friend_lifecycle_health_monitor_tolerates_transient_latency(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("$consecutiveHealthFailures -ge 3", workflow)
+        self.assertIn("http://127.0.0.1:8787/health' -TimeoutSec 5", workflow)
+        self.assertIn("http://127.0.0.1:8787/health' -TimeoutSec 10", workflow)
+        self.assertIn("$checks['owner_friend_lifecycle_api_final_health'] = $true", workflow)
 
     def test_service_start_failure_collects_runtime_and_event_diagnostics(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)

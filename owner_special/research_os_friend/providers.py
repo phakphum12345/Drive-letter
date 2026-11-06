@@ -49,6 +49,11 @@ class Provider(Protocol):
 class MockProvider:
     name: str = "owner-mock"
 
+    def test_connection(self) -> dict[str, object]:
+        # Explicit CI/test provider: readiness is local and deterministic.
+        # Production Gemini/Ollama adapters perform their real network checks.
+        return {"connected": True, "provider": self.name, "model": "mock"}
+
     def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
         prefix = f"context={len(context)}"
         return ProviderResult(

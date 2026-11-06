@@ -4,7 +4,10 @@ param(
     [string]$DataDir = "$env:ProgramData\ResearchOSOwnerSpecial",
     [string]$ServiceName = 'ResearchOSOwnerFriendService',
     [string]$OwnerId = 'owner',
-    [int]$Port = 8790
+    [int]$Port = 8790,
+    # CI-only deterministic provider override. Production installs omit this argument
+    # and retain the existing Local/Ollama default selected by ServiceHost.
+    [ValidateSet('mock')][string]$TestProvider
 )
 $ErrorActionPreference = 'Stop'
 
@@ -150,6 +153,10 @@ foreach ($required in @($hostExe,$pythonExe,$entrypoint)) {
 
 Remove-OwnerService
 $binary = "`"$hostExe`" --root `"$Root`" --python `"$pythonExe`" --data-dir `"$DataDir`" --owner-id `"$OwnerId`" --port $Port --service-name `"$ServiceName`""
+if ($TestProvider) {
+    $binary += ' --provider ' + $TestProvider
+    Write-Host "Owner Friend CI-only provider override: $TestProvider"
+}
 New-Service -Name $ServiceName -BinaryPathName $binary -DisplayName 'Research OS Owner Friend Service' -Description 'Local loopback Friend Runtime for Research OS Owner Special' -StartupType Automatic | Out-Null
 Start-Service -Name $ServiceName
 
