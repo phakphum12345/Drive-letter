@@ -512,14 +512,23 @@ jobs:
           $apiHealth = $null
           for ($i = 0; $i -lt 30; $i++) {
             try {
-              $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+              # Provider readiness may perform a loopback request to Friend;
+              # allow startup headroom instead of treating a healthy service
+              # as failed after a two-second cold-start window.
+              $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 10
               if ($apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) { $apiReady = $true; break }
             } catch {
               $response = $_.Exception.Response
               if ($response) {
                 try {
-                  $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
-                  $body = $reader.ReadToEnd()
+                  # PowerShell 7 exposes HttpResponseMessage; older Windows
+                  # PowerShell may expose HttpWebResponse. Support both types.
+                  if ($response -is [System.Net.Http.HttpResponseMessage]) {
+                    $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                  } else {
+                    $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                    try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                  }
                   Write-Host "Research OS API health probe HTTP $([int]$response.StatusCode): $body"
                 } catch {
                   Write-Host "Research OS API health probe error: $($_.Exception.Message)"
