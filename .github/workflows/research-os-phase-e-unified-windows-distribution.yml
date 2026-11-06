@@ -669,7 +669,12 @@ jobs:
           if (-not $apiServiceAfter -or $apiServiceAfter.State -ne 'Running' -or [int]$apiServiceAfter.ProcessId -ne $apiPidBefore) {
             throw "ResearchOSService PID changed across Owner Friend lifecycle. before=$apiPidBefore after=$($apiServiceAfter.ProcessId) state=$($apiServiceAfter.State)"
           }
+          $apiHealthAfter = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 10
+          if ($apiHealthAfter.status -ne 'ok' -or $apiHealthAfter.ui -ne $true) {
+            throw "ResearchOSService final health check failed after Owner Friend lifecycle: $($apiHealthAfter | ConvertTo-Json -Compress)"
+          }
           $checks['owner_friend_lifecycle_api_pid_stable'] = $true
+          $checks['owner_friend_lifecycle_api_final_health'] = $true
           $checks['owner_friend_lifecycle_api_health_continuous'] = $true
           Write-Host "OWNER_FRIEND_LIFECYCLE_API_STABILITY=PASS api_pid=$apiPidBefore"
 
