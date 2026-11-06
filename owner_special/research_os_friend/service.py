@@ -56,7 +56,16 @@ class OwnerFriendService:
         self.port = int(self.httpd.server_address[1])
         self._thread: threading.Thread | None = None
 
-    def _apply_provider(self) -> None:
+    def _apply_provider(self, *, allow_local_override: bool = False) -> None:
+        selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
+        if selected == "gemini":
+            # Cloud Gemini is an explicit deployment authority and cannot be
+            # replaced by a per-owner OpenAI-compatible setting.
+            return
+        if selected in {"local", "ollama"} and not allow_local_override:
+            # Keep Ollama as the installed Local Mode default. A deliberate
+            # provider/config API call may switch the active route explicitly.
+            return
         self.runtime.orchestrator.providers.remove("openai-compatible")
         provider = self.provider_manager.provider()
         if provider is not None:
@@ -152,6 +161,32 @@ class OwnerFriendService:
                         )
                         self._send_json(200, preview.to_dict())
                         return
+                    if path == "/owner/provider/health":
+                        provider = service.runtime.orchestrator.providers.primary()
+                        checker = getattr(provider, "test_connection", None)
+                        if not callable(checker):
+                            self._send_json(503, {
+                                "connected": False,
+                                "provider": provider.name,
+                                "error": "provider_health_not_supported",
+                            })
+                            return
+                        try:
+                            result = checker()
+                            if not isinstance(result, dict) or result.get("connected") is not True:
+                                raise RuntimeError("provider_connection_not_confirmed")
+                            self._send_json(200, {
+                                "connected": True,
+                                "provider": provider.name,
+                                "model": result.get("model"),
+                            })
+                        except Exception as exc:
+                            self._send_json(503, {
+                                "connected": False,
+                                "provider": provider.name,
+                                "error": type(exc).__name__,
+                            })
+                        return
                     if path == "/owner/provider":
                         self._send_json(200, service.provider_manager.safe_status())
                         return
@@ -202,7 +237,7 @@ class OwnerFriendService:
                             api_key=str(payload["api_key"]) if payload.get("api_key") is not None else None,
                             enabled=bool(payload.get("enabled", True)),
                         )
-                        service._apply_provider()
+                        service._apply_provider(allow_local_override=True)
                         self._send_json(200, status)
                         return
                     if path == "/owner/provider/test":

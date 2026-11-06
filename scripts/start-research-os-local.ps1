@@ -4,7 +4,7 @@ param(
   [int]$Port = 0,
   [int]$FriendPort = 0,
   [ValidateSet("gemini", "mock", "local", "openai-compatible", "anthropic")]
-  [string]$Provider = "gemini",
+  [string]$Provider = "local",
   [switch]$Background
 )
 
@@ -97,6 +97,12 @@ if (-not (Test-Path $FriendScript)) {
 $env:RESEARCH_OS_DATA_DIR = $DataDir
 $env:RESEARCH_OS_CONVERSATION_STORE = Join-Path $DataDir "sessions\conversations.json"
 $env:RESEARCH_OS_PROVIDER = $Provider
+if ([string]::IsNullOrWhiteSpace($env:OLLAMA_BASE_URL)) {
+  $env:OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1"
+}
+if ([string]::IsNullOrWhiteSpace($env:OLLAMA_MODEL)) {
+  $env:OLLAMA_MODEL = "llama3.2:3b"
+}
 $env:RESEARCH_OS_API_HOST = $HostAddress
 $env:RESEARCH_OS_API_PORT = "$Port"
 $env:RESEARCH_OS_FRIEND_URL = $FriendUrl
@@ -180,7 +186,7 @@ Write-Host "Public API      : https://$ExpectedServeHostname"
 Write-Host ""
 Write-Host "Friend Service is a required local dependency for RESEARCH_OS_AI_ROUTE=friend."
 Write-Host "Secrets are NOT stored by this script."
-Write-Host "Set GEMINI_API_KEY / RESEARCH_OS_GEMINI_API_KEY in your Windows environment when ready."
+Write-Host "Local default: Ollama at $($env:OLLAMA_BASE_URL) using model $($env:OLLAMA_MODEL)."
 Write-Host ""
 
 $friendProcess = Start-FriendService

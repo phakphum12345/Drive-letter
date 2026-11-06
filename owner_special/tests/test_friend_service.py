@@ -4,6 +4,7 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from research_os_friend import OwnerFriendService
 
@@ -390,6 +391,47 @@ class OwnerFriendServiceTests(unittest.TestCase):
 
             finally:
                 service.close()
+
+    def test_explicit_provider_config_overrides_local_ollama_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            configured_provider = Mock()
+            configured_provider.name = "openai-compatible"
+            provider_manager = Mock()
+            provider_manager.configure.return_value = {"provider": "openai-compatible", "enabled": True}
+            provider_manager.provider.return_value = configured_provider
+
+            with patch.dict("os.environ", {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
+                service = OwnerFriendService(
+                    owner_id="owner",
+                    port=0,
+                    data_root=root / "data",
+                    repository_root=REPOSITORY_ROOT,
+                    provider_manager=provider_manager,
+                )
+                service.start()
+                try:
+                    # Local Mode starts with Ollama; merely constructing the
+                    # service must not apply stale per-owner provider settings.
+                    self.assertEqual(service.runtime.orchestrator.providers.primary().name, "ollama-local")
+
+                    status, payload = self._request(
+                        f"http://127.0.0.1:{service.port}/owner/provider/config",
+                        method="POST",
+                        body={
+                            "base_url": "http://127.0.0.1:18991/v1",
+                            "model": "mock-model",
+                            "api_key": "test-key",
+                            "enabled": True,
+                        },
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertEqual(payload["provider"], "openai-compatible")
+                    self.assertEqual(service.runtime.orchestrator.providers.primary().name, "openai-compatible")
+                    provider_manager.configure.assert_called_once()
+                    provider_manager.provider.assert_called_once()
+                finally:
+                    service.close()
 
     def test_wrong_owner_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

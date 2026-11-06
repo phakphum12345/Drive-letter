@@ -16,6 +16,13 @@ class AIProviderConnectionTests(unittest.TestCase):
   self.assertEqual(item.state,"CONNECTED")
   self.assertFalse(item.secret_exposed)
 
+ def test_gemini_accepts_render_secret_alias(self):
+  with patch.dict(os.environ,{"GEMINI_API_KEY":"secret","RESEARCH_OS_GEMINI_MODEL":"gemini-3-flash-preview"},clear=True):
+   item=_configured("gemini")
+  self.assertEqual(item.state,"CONNECTED")
+  self.assertTrue(item.endpoint_configured)
+  self.assertFalse(item.secret_exposed)
+
  def test_inspect_never_contains_secret(self):
   with patch.dict(os.environ,{"RESEARCH_OS_OPENAI_API_KEY":"TOP-SECRET","RESEARCH_OS_OPENAI_MODEL":"gpt-test"},clear=True):
    report=inspect()

@@ -340,6 +340,88 @@ def prove_flutter_scope_skip(
     return result
 
 
+def prove_pages_deploy_skip(
+    check: dict[str, Any],
+    normalized: dict[str, Any],
+    repository: str,
+    pr_number: str,
+    expected_head_sha: str,
+) -> dict[str, Any]:
+    """Prove that a skipped Pages deploy is expected for a PR after its build artifact passed.
+
+    The deploy job is intentionally gated to non-pull_request events. A skipped
+    deploy is not treated as success by itself: the exact workflow run, event,
+    HEAD SHA, skipped deploy job, and successful static-site build job must all
+    match before the check can be classified as not applicable.
+    """
+    if not (
+        normalized.get("bucket") == "unproven"
+        and normalized.get("state") == "SKIPPED"
+        and str(check.get("name") or "").strip() == "Deploy Research OS GitHub Pages"
+    ):
+        return normalized
+    if not pr_number:
+        return normalized
+
+    details_url = str(check.get("details_url") or check.get("html_url") or "")
+    parsed = urllib.parse.urlparse(details_url)
+    match = re.fullmatch(
+        rf"/{re.escape(repository)}/actions/runs/([0-9]+)/job/([0-9]+)/?",
+        parsed.path,
+    )
+    if parsed.scheme != "https" or parsed.netloc.casefold() != "github.com" or not match:
+        return normalized
+    run_id, job_id = match.groups()
+    repo_path = urllib.parse.quote(repository, safe="/")
+
+    run, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}")
+    if not isinstance(run, dict) or (
+        run.get("name") != "Research OS GitHub Pages"
+        or run.get("path") != ".github/workflows/research-os-github-pages.yml"
+        or run.get("event") != "pull_request"
+        or run.get("head_sha") != expected_head_sha
+        or run.get("conclusion") != "success"
+    ):
+        return normalized
+
+    deploy_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
+    if not isinstance(deploy_job, dict) or (
+        str(deploy_job.get("run_id") or "") != run_id
+        or str(deploy_job.get("name") or "").strip() != "Deploy Research OS GitHub Pages"
+        or deploy_job.get("status") != "completed"
+        or deploy_job.get("conclusion") != "skipped"
+        or deploy_job.get("head_sha") != expected_head_sha
+    ):
+        return normalized
+
+    jobs = paginate(
+        f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}/jobs?per_page=100",
+        "jobs",
+    )
+    build_jobs = [
+        job for job in jobs
+        if job.get("name") == "Validate and package static Research OS web UI"
+        and str(job.get("run_id") or "") == run_id
+        and job.get("head_sha") == expected_head_sha
+    ]
+    if len(build_jobs) != 1 or (
+        build_jobs[0].get("status") != "completed"
+        or build_jobs[0].get("conclusion") != "success"
+    ):
+        return normalized
+
+    result = dict(normalized)
+    result.update({
+        "bucket": "not_applicable",
+        "reason_code": (
+            "NOT_APPLICABLE: Pages deployment is gated off for pull_request events; "
+            "the exact-SHA static-site build and artifact upload passed"
+        ),
+        "source": "check_run+exact_pages_build_evidence",
+    })
+    return result
+
+
 def fetch_external_checks(repository: str, head_sha: str, current_run_id: str, pr_number: str = "") -> list[dict[str, Any]]:
     repo_path = urllib.parse.quote(repository, safe="/")
     ref = urllib.parse.quote(head_sha, safe="")
@@ -350,6 +432,9 @@ def fetch_external_checks(repository: str, head_sha: str, current_run_id: str, p
         normalized = normalize_check_run(item, current_run_id)
         if normalized:
             if pr_number:
+                normalized = prove_pages_deploy_skip(
+                    item, normalized, repository, pr_number, head_sha
+                )
                 normalized = prove_flutter_scope_skip(
                     item, normalized, repository, pr_number, head_sha
                 )

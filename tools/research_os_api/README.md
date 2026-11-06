@@ -6,12 +6,16 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 - Version: `0.1.0`
 - Runtime: Python standard library
-- Default provider: `mock`
+- Installed Windows Local Mode: Ollama (`llama3.2:3b` by default)
+- Render Cloud Mode: Gemini (`RESEARCH_OS_PROVIDER=gemini`)
+- Mock is only selected explicitly for development/tests; provider failures do not fall back to Mock.
 - Persistence: Preview-only ผ่าน API; การเขียน Repository ต้องผ่าน Git Publisher และ Review Gate
 
 ## เริ่มรัน
 
 ### Windows — Local Research OS พร้อม Friend Service
+
+ค่าเริ่มต้นของ Windows Service และ Local Launcher คือ Ollama ที่ `http://127.0.0.1:11434/v1` โดยใช้โมเดล `llama3.2:3b`; สามารถกำหนด `OLLAMA_BASE_URL` และ `OLLAMA_MODEL` ก่อนเริ่มบริการได้
 
 สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
@@ -134,13 +138,17 @@ export RESEARCH_OS_ANTHROPIC_API_KEY="..."
 export RESEARCH_OS_ANTHROPIC_MODEL="..."
 ```
 
-### Gemini
+### Gemini (Render Cloud Mode)
+
+Render blueprint selects `RESEARCH_OS_PROVIDER=gemini` and `gemini-3-flash-preview`. The existing `GEMINI_API_KEY` Secret is accepted; it is read only by the Friend runtime and is sent to Google in the `x-goog-api-key` header. Do not place the key in browser storage or logs.
 
 ```bash
 export RESEARCH_OS_PROVIDER=gemini
-export RESEARCH_OS_GEMINI_API_KEY="..."
-export RESEARCH_OS_GEMINI_MODEL="..."
+export RESEARCH_OS_GEMINI_MODEL="gemini-3-flash-preview"
+# Configure GEMINI_API_KEY in the server's secret manager; never commit it.
 ```
+
+Render starts the Friend service inside the existing API container on loopback. The API health check requires the selected provider to be registered and reachable; it does not treat API-only health as full readiness.
 
 ชื่อโมเดลจริงต้องกำหนดผ่าน Environment Variable เพื่อไม่ฝัง dependency กับรุ่นใดใน Core
 
