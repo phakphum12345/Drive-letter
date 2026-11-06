@@ -20,23 +20,6 @@ FRIEND_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner").strip() or "owner"
 
 
-def _friend_status() -> dict[str, object]:
-    request = urllib.request.Request(
-        f"{FRIEND_URL}/owner/status",
-        headers={
-            "Accept": "application/json",
-            "X-Research-OS-Owner": FRIEND_OWNER_ID,
-            "X-Research-OS-Profile": "default",
-            "X-Research-OS-Session": "render-readiness",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=3) as response:
-        value = json.loads(response.read().decode("utf-8"))
-    if not isinstance(value, dict):
-        raise RuntimeError("Friend status response is not an object")
-    return value
-
-
 def _friend_provider_health() -> dict[str, object]:
     request = urllib.request.Request(
         f"{FRIEND_URL}/owner/provider/health",
@@ -62,19 +45,13 @@ def _expected_provider() -> str:
 
 
 def _assert_friend_provider_ready() -> dict[str, object]:
-    status = _friend_status()
-    providers = status.get("providers")
     expected = _expected_provider()
-    if not isinstance(providers, list) or expected not in providers:
-        raise RuntimeError(
-            f"Friend runtime provider mismatch: expected {expected}, configured providers={providers!r}"
-        )
     health = _friend_provider_health()
     if health.get("connected") is not True or health.get("provider") != expected:
         raise RuntimeError(
             f"Friend provider is not connected: expected {expected}, reported {health.get('provider')!r}"
         )
-    return status
+    return {"providers": [expected], "provider_health": health}
 
 
 def _ensure_friend_service():
@@ -87,15 +64,11 @@ def _ensure_friend_service():
     port = parsed.port or 8790
 
     try:
-        _friend_status()
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
-        pass
-    else:
-        # An existing service on the configured loopback port is authoritative.
-        # If its provider is wrong, fail closed instead of trying to bind a second
-        # process to the same port or silently replacing its runtime.
         _assert_friend_provider_ready()
         return None
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
+        # No reachable Friend provider: start the embedded service below.
+        pass
 
     from owner_special.research_os_friend import OwnerFriendService
 
