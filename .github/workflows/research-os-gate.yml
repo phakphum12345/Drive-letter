@@ -236,7 +236,8 @@ jobs:
     name: Flutter Linux Desktop Recon Build
     needs: [python-quality]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Allow slow hosted-runner apt mirror downloads plus the actual Flutter build.
+    timeout-minutes: 45
     steps:
       - name: Checkout exact target SHA
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
