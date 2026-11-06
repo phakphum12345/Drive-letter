@@ -104,6 +104,13 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("apiHealth.status -eq 'ok'", workflow)
         self.assertIn("apiHealth.ui -eq $true", workflow)
 
+    def test_owner_friend_lifecycle_health_monitor_tolerates_transient_latency(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("$consecutiveHealthFailures -ge 3", workflow)
+        self.assertIn("http://127.0.0.1:8787/health' -TimeoutSec 5", workflow)
+        self.assertIn("http://127.0.0.1:8787/health' -TimeoutSec 10", workflow)
+        self.assertIn("$checks['owner_friend_lifecycle_api_final_health'] = $true", workflow)
+
     def test_service_start_failure_collects_runtime_and_event_diagnostics(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
         self.assertIn("Get-WinEvent", workflow)
