@@ -49,8 +49,17 @@ def _friend_provider_health() -> dict[str, object]:
     return value
 
 
+def _selected_provider() -> str:
+    configured = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
+    if configured:
+        return configured
+    # The packaged Windows service is Local/Ollama by default. Render's
+    # Linux container uses Gemini as its cloud default.
+    return "local" if os.name == "nt" else "gemini"
+
+
 def _expected_provider() -> str:
-    selected = os.getenv("RESEARCH_OS_PROVIDER", "gemini").strip().lower()
+    selected = _selected_provider()
     if selected in {"local", "ollama"}:
         return "ollama-local"
     if selected == "mock":
@@ -62,11 +71,18 @@ def _expected_provider() -> str:
 def _assert_friend_provider_ready() -> dict[str, object]:
     expected = _expected_provider()
     health = _friend_provider_health()
-    if health.get("connected") is not True or health.get("provider") != expected:
+    actual = health.get("provider")
+    allowed = {expected}
+    if _selected_provider() in {"local", "ollama"}:
+        # Local Mode may deliberately switch from Ollama to the explicitly
+        # configured per-owner OpenAI-compatible provider. Gemini remains
+        # locked to the deployment selector and is never overridden this way.
+        allowed.add("openai-compatible")
+    if health.get("connected") is not True or actual not in allowed:
         raise RuntimeError(
-            f"Friend provider is not connected: expected {expected}, reported {health.get('provider')!r}"
+            f"Friend provider is not connected: expected one of {sorted(allowed)}, reported {actual!r}"
         )
-    return {"providers": [expected], "provider_health": health}
+    return {"providers": [str(actual)], "provider_health": health}
 
 
 def _ensure_friend_service():
