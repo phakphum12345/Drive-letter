@@ -92,12 +92,15 @@ sealed class OwnerFriendWorker : BackgroundService
         start.Environment["RESEARCH_OS_OWNER_DATA_ROOT"] = _options.DataDir;
         // The installed Windows edition is Local Mode: use the loopback Ollama
         // endpoint unless an administrator has explicitly selected another provider.
+        var configuredProvider = Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER");
+        var configuredOllamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL");
+        var configuredOllamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL");
         start.Environment["RESEARCH_OS_PROVIDER"] =
-            Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER") ?? "local";
+            string.IsNullOrWhiteSpace(configuredProvider) ? "local" : configuredProvider;
         start.Environment["OLLAMA_BASE_URL"] =
-            Environment.GetEnvironmentVariable("OLLAMA_BASE_URL") ?? "http://127.0.0.1:11434/v1";
+            string.IsNullOrWhiteSpace(configuredOllamaUrl) ? "http://127.0.0.1:11434/v1" : configuredOllamaUrl;
         start.Environment["OLLAMA_MODEL"] =
-            Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "llama3.2:3b";
+            string.IsNullOrWhiteSpace(configuredOllamaModel) ? "llama3.2:3b" : configuredOllamaModel;
 
         _process = new Process { StartInfo = start, EnableRaisingEvents = true };
         if (!_process.Start()) throw new InvalidOperationException("Failed to start Owner Friend process");
