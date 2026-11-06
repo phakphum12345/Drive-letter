@@ -157,6 +157,32 @@ class OwnerFriendService:
                         )
                         self._send_json(200, preview.to_dict())
                         return
+                    if path == "/owner/provider/health":
+                        provider = service.runtime.orchestrator.providers.primary()
+                        checker = getattr(provider, "test_connection", None)
+                        if not callable(checker):
+                            self._send_json(503, {
+                                "connected": False,
+                                "provider": provider.name,
+                                "error": "provider_health_not_supported",
+                            })
+                            return
+                        try:
+                            result = checker()
+                            if not isinstance(result, dict) or result.get("connected") is not True:
+                                raise RuntimeError("provider_connection_not_confirmed")
+                            self._send_json(200, {
+                                "connected": True,
+                                "provider": provider.name,
+                                "model": result.get("model"),
+                            })
+                        except Exception as exc:
+                            self._send_json(503, {
+                                "connected": False,
+                                "provider": provider.name,
+                                "error": type(exc).__name__,
+                            })
+                        return
                     if path == "/owner/provider":
                         self._send_json(200, service.provider_manager.safe_status())
                         return
