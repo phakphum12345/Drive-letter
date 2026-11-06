@@ -424,17 +424,22 @@ jobs:
             $serviceEnvironment += 'RESEARCH_OS_PROVIDER=mock'
             New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Value $serviceEnvironment -Force | Out-Null
           }
-          # SCM's service Environment registry override did not reach the
-          # Friend child process in hosted Windows E2E. Pass the isolated test
-          # provider explicitly through the packaged ServiceHost command line.
-          $friendServiceKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\ResearchOSOwnerFriendService'
-          $friendImagePath = (Get-ItemProperty -Path $friendServiceKey -Name ImagePath).ImagePath
-          if ($friendImagePath -notmatch '(?i)--provider(?:\s|=)') {
-            Set-ItemProperty -Path $friendServiceKey -Name ImagePath -Value "$friendImagePath --provider mock"
-          }
-          Restart-Service -Name 'ResearchOSOwnerFriendService' -Force
+          # Reinstall Friend through the canonical service installer so the
+          # CI-only provider is present in ServiceHost arguments before startup.
+          # Production installer calls omit -TestProvider and keep Local/Ollama.
+          $friendLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
+          if (-not (Test-Path $friendLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend service installer missing.' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $friendLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -ServiceName 'ResearchOSOwnerFriendService' -OwnerId 'owner' -Port 8790 -TestProvider mock
+          if ($LASTEXITCODE -ne 0) { throw "Owner Friend CI provider installation failed with exit code $LASTEXITCODE." }
+          $friendServiceConfig = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction Stop
+          if (-not $friendServiceConfig -or $friendServiceConfig.State -ne 'Running') { throw 'Owner Friend CI provider service is not running after installation.' }
+          if ($friendServiceConfig.PathName -notmatch '(?i)--provider\s+mock') { throw "Owner Friend ServiceHost did not receive the explicit CI provider argument: $($friendServiceConfig.PathName)" }
+          Write-Host "FRIEND_SERVICE_HOST_PATH=$($friendServiceConfig.PathName)"
+          $friendProviderHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -TimeoutSec 10
+          if ($friendProviderHealth.connected -ne $true -or $friendProviderHealth.provider -ne 'owner-mock') { throw "Owner Friend CI provider mismatch: $($friendProviderHealth | ConvertTo-Json -Compress)" }
+          $checks['friend_provider_ready'] = $true
+          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (canonical installer ServiceHost argument; CI runner only)'
           Restart-Service -Name 'ResearchOSService' -Force
-          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (explicit ServiceHost argument; CI runner only)'
 
           # Windows service state is mutable and Get-Service returns a snapshot.
           # The installer may return before the SCM transitions the service to Running,
@@ -559,6 +564,27 @@ jobs:
           $checks['research_os_api_ready'] = $true
           $checks['research_os_api_ui_ready'] = $true
 
+          # Verify actual Friend memory persistence across the service-only
+          # uninstall/reinstall below, using the installed ProgramData store.
+          $memoryMarker = "installer-e2e-memory-$targetSha"
+          $friendHeaders = @{
+            'X-Research-OS-Owner' = 'owner'
+            'X-Research-OS-Profile' = 'default'
+            'X-Research-OS-Session' = 'installer-e2e'
+          }
+          $friendChatBody = @{
+            text = "Remember this exact marker: $memoryMarker"
+            complexity = 1
+            risk = 1
+            parallelism = 1
+            helper_budget = 0
+          } | ConvertTo-Json -Compress
+          $friendChatResult = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/chat' -Method Post -Headers $friendHeaders -ContentType 'application/json' -Body $friendChatBody -TimeoutSec 30
+          if ($friendChatResult.provider -ne 'owner-mock') { throw "Friend chat did not use the isolated CI provider: $($friendChatResult.provider)" }
+          $memoryBeforeRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+          if (-not @($memoryBeforeRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory marker was not persisted before service restart.' }
+          $checks['friend_memory_written'] = $true
+
           # Exercise Owner Friend service lifecycle while the main API is live.
           # This catches regressions where cleanup kills the shared bundled Python
           # interpreter without distinguishing the API entrypoint from Friend.
@@ -590,7 +616,7 @@ jobs:
             if (-not (Test-Path $ownerLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend lifecycle script missing.' }
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action uninstall -Root $installRoot -DataDir $ownerDataRoot
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only uninstall failed with exit code $LASTEXITCODE." }
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -TestProvider mock
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only reinstall failed with exit code $LASTEXITCODE." }
             $ownerLifecycleReady = $false
             for ($i = 0; $i -lt 30; $i++) {
@@ -605,6 +631,12 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
+            $providerAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -TimeoutSec 10
+            if ($providerAfterRestart.connected -ne $true -or $providerAfterRestart.provider -ne 'owner-mock') { throw 'Owner Friend provider changed after service-only reinstall.' }
+            $memoryAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+            if (-not @($memoryAfterRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory did not survive service-only uninstall/reinstall.' }
+            $checks['friend_memory_survives_service_restart'] = $true
+            $checks['friend_provider_survives_service_restart'] = $true
             Start-Sleep -Seconds 2
           } finally {
             Stop-Job -Job $monitor -ErrorAction SilentlyContinue
