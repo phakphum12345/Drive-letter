@@ -34,23 +34,21 @@ class RenderServerEntrypointTests(unittest.TestCase):
 
     def test_friend_readiness_requires_expected_provider(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
-            with patch.object(render_server, "_friend_status", return_value={"providers": ["gemini"]}):
-                with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "gemini"}):
-                    self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["gemini"])
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "gemini"}):
+                self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["gemini"])
 
     def test_friend_readiness_rejects_mock_when_gemini_is_selected(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
-            with patch.object(render_server, "_friend_status", return_value={"providers": ["owner-mock"]}):
-                with self.assertRaisesRegex(RuntimeError, "provider mismatch"):
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "owner-mock"}):
+                with self.assertRaisesRegex(RuntimeError, "not connected"):
                     render_server._assert_friend_provider_ready()
 
 
     def test_friend_readiness_rejects_unreachable_gemini_even_when_registered(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
-            with patch.object(render_server, "_friend_status", return_value={"providers": ["gemini"]}):
-                with patch.object(render_server, "_friend_provider_health", return_value={"connected": False, "provider": "gemini"}):
-                    with self.assertRaisesRegex(RuntimeError, "not connected"):
-                        render_server._assert_friend_provider_ready()
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": False, "provider": "gemini"}):
+                with self.assertRaisesRegex(RuntimeError, "not connected"):
+                    render_server._assert_friend_provider_ready()
 
     def test_local_mode_maps_to_ollama_provider(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
@@ -59,7 +57,7 @@ class RenderServerEntrypointTests(unittest.TestCase):
     def test_starts_internal_friend_when_loopback_endpoint_is_unavailable(self):
         with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
             with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
-                with patch.object(render_server, "_friend_status", side_effect=urllib.error.URLError("offline")):
+                with patch.object(render_server, "_friend_service_health", side_effect=urllib.error.URLError("offline")):
                     with patch.object(render_server, "_assert_friend_provider_ready", return_value={"providers": ["gemini"]}):
                         with patch("owner_special.research_os_friend.OwnerFriendService") as service_factory:
                             service = service_factory.return_value
@@ -74,9 +72,10 @@ class RenderServerEntrypointTests(unittest.TestCase):
     def test_existing_friend_with_wrong_provider_fails_closed(self):
         with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
             with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
-                with patch.object(render_server, "_friend_status", return_value={"providers": ["owner-mock"]}):
-                    with self.assertRaisesRegex(RuntimeError, "provider mismatch"):
-                        render_server._ensure_friend_service()
+                with patch.object(render_server, "_friend_service_health", return_value={"status": "ok"}):
+                    with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "owner-mock"}):
+                        with self.assertRaisesRegex(RuntimeError, "not connected"):
+                            render_server._ensure_friend_service()
 
     def test_health_returns_503_when_friend_provider_is_unavailable(self):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), render_server.CloudResearchOSHandler)
