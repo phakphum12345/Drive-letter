@@ -336,7 +336,7 @@ class GeminiProvider:
     def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
         combined = prompt
         if context:
-            combined = "Owner context:\\n" + "\\n".join(context[-12:]) + "\\n\\n" + prompt
+            combined = "Owner context:\n" + "\n".join(context[-12:]) + "\n\n" + prompt
         endpoint = self.endpoint_template.format(
             model=quote(self.model, safe=""),
             api_key=quote(self.api_key, safe=""),
@@ -354,7 +354,7 @@ class GeminiProvider:
         first = candidates[0]
         content = first.get("content") if isinstance(first, dict) else None
         parts = content.get("parts") if isinstance(content, dict) else None
-        answer = "\\n".join(
+        answer = "\n".join(
             str(part.get("text", ""))
             for part in (parts if isinstance(parts, list) else [])
             if isinstance(part, dict) and isinstance(part.get("text"), str)
