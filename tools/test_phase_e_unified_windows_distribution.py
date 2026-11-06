@@ -83,6 +83,13 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("BUNDLED_API_IMPORT=PASS", workflow)
         self.assertIn("import server; print('BUNDLED_API_IMPORT=PASS')", workflow)
 
+    def test_windows_installer_e2e_uses_explicit_mock_provider_without_changing_defaults(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("WINDOWS_INSTALLER_E2E_PROVIDER=mock", workflow)
+        self.assertIn("RESEARCH_OS_PROVIDER=mock", workflow)
+        self.assertIn("ResearchOSOwnerFriendService", workflow)
+        self.assertIn("ResearchOSService", workflow)
+
     def test_api_readiness_requires_health_and_packaged_ui(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
         self.assertIn("/health", workflow)
