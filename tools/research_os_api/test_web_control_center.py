@@ -66,6 +66,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/v1/google-workspace/services'", self.js)
         self.assertIn("OWNER role required", self.js)
         self.assertIn("Third-party Plugin Marketplace", self.html)
+        self.assertIn("ephemeral cloud filesystem", self.html)
 
     def test_primary_workspace_destinations_use_live_api_backed_views(self):
         self.assertIn('data-view="workspace" data-module="Projects & Files"', self.html)
