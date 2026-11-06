@@ -147,10 +147,14 @@ class FriendProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(provider.name, "ollama-local")
         self.assertTrue(provider.local)
 
-    def test_mock_is_only_selected_explicitly(self):
+    def test_mock_is_only_selected_explicitly_and_reports_local_readiness(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "mock"}, clear=True):
             provider = build_environment_provider()
         self.assertEqual(provider.name, "owner-mock")
+        self.assertEqual(
+            provider.test_connection(),
+            {"connected": True, "provider": "owner-mock", "model": "mock"},
+        )
 
 
 if __name__ == "__main__":
