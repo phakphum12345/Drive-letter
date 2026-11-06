@@ -152,7 +152,11 @@ def _friend_provider_health() -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("connected") is not True:
         raise RuntimeError("Friend provider connection was not confirmed")
     selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
-    expected = "ollama-local" if selected in {"local", "ollama"} else selected
+    expected = {
+        "local": "ollama-local",
+        "ollama": "ollama-local",
+        "mock": "owner-mock",
+    }.get(selected, selected)
     if expected and value.get("provider") != expected:
         raise RuntimeError("Friend provider does not match the configured Local/Cloud mode")
     return value
