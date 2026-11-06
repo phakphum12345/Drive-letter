@@ -68,15 +68,11 @@ class ResearchOSAPITests(unittest.TestCase):
                 payload = server._friend_provider_health()
         self.assertEqual("owner-mock", payload["provider"])
 
-    @patch("server.urllib.request.urlopen")
-    def test_health_passes_when_required_ci_mock_provider_is_connected(self, urlopen):
-        response = MagicMock()
-        response.__enter__.return_value.status = 200
-        response.__enter__.return_value.read.return_value = json.dumps({
-            "connected": True,
-            "provider": "owner-mock",
-        }).encode("utf-8")
-        urlopen.return_value = response
+    @patch(
+        "server._friend_provider_health",
+        return_value={"connected": True, "provider": "owner-mock"},
+    )
+    def test_health_passes_when_required_ci_mock_provider_is_connected(self, _friend_health):
         with patch.dict(
             os.environ,
             {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true", "RESEARCH_OS_PROVIDER": "mock"},
