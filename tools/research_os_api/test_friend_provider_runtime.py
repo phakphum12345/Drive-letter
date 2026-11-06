@@ -18,6 +18,8 @@ class FakeTransport:
         self.last_payload = None
 
     def get_json(self, url, *, headers, timeout):
+        self.last_url = url
+        self.last_headers = headers
         return {"data": [{"id": "ollama-model"}]}
 
     def post_json(self, url, *, headers, payload, timeout):
@@ -52,11 +54,26 @@ class FriendProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(result.usage, {"requests": 1, "tokens": 130})
         self.assertEqual(result.actual_cost, Decimal("0.00014"))
         self.assertIn("generateContent", transport.last_url)
+        self.assertNotIn("test-secret", transport.last_url)
+        self.assertEqual(transport.last_headers["x-goog-api-key"], "test-secret")
         self.assertEqual(
             transport.last_payload["contents"][0]["parts"][0]["text"],
             "Owner context:\nmemory\n\nquestion",
         )
         self.assertNotIn("test-secret", str(result.raw))
+
+    def test_gemini_health_uses_models_get_and_secret_header(self):
+        transport = FakeTransport({"name": "models/gemini-3-flash-preview"})
+        provider = GeminiProvider(
+            api_key="test-secret",
+            model="gemini-3-flash-preview",
+            transport=transport,
+        )
+        result = provider.test_connection()
+        self.assertTrue(result["connected"])
+        self.assertEqual(result["provider"], "gemini")
+        self.assertNotIn("test-secret", transport.last_url)
+        self.assertEqual(transport.last_headers["x-goog-api-key"], "test-secret")
 
     def test_gemini_missing_usage_does_not_invent_cost(self):
         transport = FakeTransport({
