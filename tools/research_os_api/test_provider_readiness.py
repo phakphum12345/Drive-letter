@@ -50,5 +50,19 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertTrue(status["ready"])
 
 
+    def test_gemini_accepts_render_secret_alias_without_exposing_secret(self):
+        env = {
+            "GEMINI_API_KEY": "test-secret",
+            "RESEARCH_OS_GEMINI_MODEL": "gemini-3-flash-preview",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            status = provider_readiness.inspect_provider("gemini")
+        self.assertTrue(status["ready"])
+        self.assertEqual([], status["missing"])
+        self.assertTrue(status["endpoint_configured"])
+        self.assertNotIn("test-secret", str(status))
+        self.assertNotIn("api_key", status)
+
+
 if __name__ == "__main__":
     unittest.main()
