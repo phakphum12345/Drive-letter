@@ -435,6 +435,11 @@ jobs:
           if (-not $friendServiceConfig -or $friendServiceConfig.State -ne 'Running') { throw 'Owner Friend CI provider service is not running after installation.' }
           if ($friendServiceConfig.PathName -notmatch '(?i)--provider\s+mock') { throw "Owner Friend ServiceHost did not receive the explicit CI provider argument: $($friendServiceConfig.PathName)" }
           Write-Host "FRIEND_SERVICE_HOST_PATH=$($friendServiceConfig.PathName)"
+          $friendHeaders = @{
+            'X-Research-OS-Owner' = 'owner'
+            'X-Research-OS-Profile' = 'default'
+            'X-Research-OS-Session' = 'installer-e2e'
+          }
           $friendProviderHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
           if ($friendProviderHealth.connected -ne $true -or $friendProviderHealth.provider -ne 'owner-mock') { throw "Owner Friend CI provider mismatch: $($friendProviderHealth | ConvertTo-Json -Compress)" }
           $checks['friend_provider_ready'] = $true
@@ -567,11 +572,6 @@ jobs:
           # Verify actual Friend memory persistence across the service-only
           # uninstall/reinstall below, using the installed ProgramData store.
           $memoryMarker = "installer-e2e-memory-$targetSha"
-          $friendHeaders = @{
-            'X-Research-OS-Owner' = 'owner'
-            'X-Research-OS-Profile' = 'default'
-            'X-Research-OS-Session' = 'installer-e2e'
-          }
           $friendChatBody = @{
             text = "Remember this exact marker: $memoryMarker"
             complexity = 1
