@@ -595,20 +595,38 @@ jobs:
           $apiPidBefore = [int]$apiServiceBefore.ProcessId
           $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
             param([int]$ExpectedApiPid)
+            # A single slow health response during Windows service/installer I/O
+            # is transient evidence, not proof that the main API was stopped.
+            # Require sustained failures and always perform a final authoritative
+            # PID + health check after the Owner Friend-only lifecycle completes.
+            $consecutiveHealthFailures = 0
             while ($true) {
+              $service = $null
               try {
                 $service = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
                 if (-not $service -or $service.State -ne 'Running' -or [int]$service.ProcessId -ne $ExpectedApiPid) {
                   Write-Output "API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)"
                 }
-                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+              } catch {
+                Write-Output "API_SERVICE_STATE_PROBE_FAILED $($_.Exception.Message)"
+              }
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 5
                 if ($health.status -ne 'ok' -or $health.ui -ne $true) {
-                  Write-Output "API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)"
+                  $consecutiveHealthFailures++
+                  if ($consecutiveHealthFailures -ge 3) {
+                    Write-Output "API_HEALTH_PAYLOAD_INVALID consecutive_failures=$consecutiveHealthFailures status=$($health.status) ui=$($health.ui)"
+                  }
+                } else {
+                  $consecutiveHealthFailures = 0
                 }
               } catch {
-                Write-Output "API_HEALTH_PROBE_FAILED $($_.Exception.Message)"
+                $consecutiveHealthFailures++
+                if ($consecutiveHealthFailures -ge 3) {
+                  Write-Output "API_HEALTH_PROBE_FAILED consecutive_failures=$consecutiveHealthFailures $($_.Exception.Message)"
+                }
               }
-              Start-Sleep -Milliseconds 250
+              Start-Sleep -Milliseconds 500
             }
           }
           try {
