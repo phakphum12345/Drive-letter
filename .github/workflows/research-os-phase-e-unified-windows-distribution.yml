@@ -510,9 +510,9 @@ jobs:
 
           $apiReady = $false
           $apiHealth = $null
-          # Use HttpClient directly so non-2xx response bodies are consumed
-          # before disposing the response. Invoke-RestMethod's PowerShell 7
-          # exception response may already be disposed inside catch.
+          # Consume non-2xx response bodies before disposing the response.
+          # Invoke-RestMethod's PowerShell 7 exception response may already
+          # be disposed by the time its catch block runs.
           $healthClient = [System.Net.Http.HttpClient]::new()
           $healthClient.Timeout = [TimeSpan]::FromSeconds(10)
           try {
@@ -650,3 +650,68 @@ jobs:
             Write-Host '--- Processes referencing installation root ---'
             Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
               Where-Object { $_.ExecutablePath -like "$installRoot*" -or $_.CommandLine -like "*$installRoot*" } |
+              Select-Object ProcessId,Name,ExecutablePath,CommandLine | Format-List | Out-Host
+            Write-Host '--- Services referencing installation root ---'
+            Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
+              Where-Object { $_.PathName -like "*$installRoot*" } |
+              Select-Object Name,State,StartMode,PathName,ExitCode | Format-List | Out-Host
+            throw 'Installation root remained after uninstall.'
+          }
+          $remainingMainService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction SilentlyContinue
+          if ($remainingMainService) { throw 'Research OS service remained after uninstall.' }
+          $remainingOwnerService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
+          if ($remainingOwnerService) { throw 'Owner Friend service remained after uninstall.' }
+          if (Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue) { throw 'Research OS API port remained bound after uninstall.' }
+          if (Get-NetTCPConnection -LocalPort 8790 -State Listen -ErrorAction SilentlyContinue) { throw 'Owner Friend port remained bound after uninstall.' }
+          $checks['uninstall_clean'] = $true
+
+          [ordered]@{
+            schema = 'research-os.windows-installer-e2e.v1'
+            source_sha = $targetSha
+            installer = $setup.Name
+            installer_role = 'OWNER_SPECIAL'
+            installer_sha256 = $setupHash
+            platform_zip = $platformZip.Name
+            platform_zip_sha256 = $platformZipHash
+            manifest_sha256 = $manifestHashValue
+            manifest_hash_file = (Get-Content $manifestHash -Raw).Trim()
+            install_root = $installRoot
+            checks = $checks
+            release_authority = 'FINAL_GATE'
+          } | ConvertTo-Json -Depth 8 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\WINDOWS_INSTALL_E2E_EVIDENCE.json" -Encoding utf8
+          Write-Host 'WINDOWS_INSTALL_E2E=PASS'
+
+      - name: Publish Platform + Owner Special release evidence
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse HEAD).Trim()
+          $platformZip = Get-ChildItem "$env:GITHUB_WORKSPACE\phase-e\Research-OS-Platform-Windows-x64-*.zip" | Select-Object -First 1
+          $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" | Select-Object -First 1
+          if (-not $platformZip -or -not $setup) { throw 'Canonical Platform ZIP or Owner Special Setup.exe missing.' }
+          $platformHash = (Get-FileHash $platformZip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $setupHash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          [ordered]@{
+            schema = 'research-os.windows-release-evidence.v2'
+            source_sha = $sha
+            platform_zip = $platformZip.Name
+            platform_zip_sha256 = $platformHash
+            owner_special_setup = $setup.Name
+            owner_special_setup_sha256 = $setupHash
+            release_authority = 'FINAL_GATE'
+            installer_role = 'OWNER_SPECIAL'
+            installation_payload = 'RESEARCH_OS_PLATFORM_ZIP'
+          } | ConvertTo-Json -Depth 5 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\RELEASE_EVIDENCE.json" -Encoding utf8
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: Research-OS-Unified-Windows-x64-${{ env.TARGET_SHA }}
+          path: |
+            phase-e/Research-OS-Platform-Windows-x64-*.zip
+            phase-e/Research-OS-Platform-Windows-x64-*.zip.sha256
+            phase-e/RELEASE_EVIDENCE.json
+            phase-e/WINDOWS_INSTALL_E2E_EVIDENCE.json
+            phase-e/package/DISTRIBUTION_MANIFEST.json
+            phase-e/package/DISTRIBUTION_MANIFEST.sha256
+            owner_special/installer/output/Research-OS-Owner-Special-Setup-*-x64.exe
+          if-no-files-found: error
+          retention-days: 30
