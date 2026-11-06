@@ -128,6 +128,32 @@ class AdminConsoleManagementTests(unittest.TestCase):
                 )
         self.assertEqual([], service.list("organizations"))
 
+    def test_failed_lifecycle_commit_keeps_metadata_and_audit_unchanged(self) -> None:
+        service = ManagementService(JsonManagementStore(Path(self.temp.name) / "lifecycle-rollback.json"))
+        service.create(
+            "organizations",
+            {"organization_id": "org-1", "name": "Org"},
+            actor="owner-1",
+        )
+        service.create(
+            "projects",
+            {"project_id": "project-1", "organization_id": "org-1", "name": "Project"},
+            actor="owner-1",
+        )
+        service.create(
+            "apis",
+            {"api_id": "api-1", "project_id": "project-1", "name": "API"},
+            actor="owner-1",
+        )
+        before = service.store.snapshot()
+        with patch.object(service.store, "_write", side_effect=OSError("simulated disk failure")):
+            with self.assertRaises(OSError):
+                service.lifecycle("apis", "api-1", "disable", actor="owner-1")
+        self.assertEqual("active", service.get("apis", "api-1")["lifecycle"])
+        after = service.store.snapshot()
+        self.assertEqual(before, after)
+        self.assertFalse(any(item["action"] == "disable" for item in after["audit"]))
+
     def test_web_admin_mutations_are_owner_gated_and_confirmed(self) -> None:
         root = Path(__file__).resolve().parents[2]
         source = (root / "apps" / "research_os_web" / "app.js").read_text(encoding="utf-8")
