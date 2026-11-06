@@ -35,6 +35,12 @@ def inspect_provider(provider: str) -> dict[str, object]:
     if selected not in REQUIREMENTS:
         raise ValueError(f"unsupported provider: {selected}")
     missing = [name for name in REQUIREMENTS[selected] if not os.getenv(name)]
+    if selected == "gemini":
+        missing = []
+        if not (os.getenv("RESEARCH_OS_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")):
+            missing.append("GEMINI_API_KEY or RESEARCH_OS_GEMINI_API_KEY")
+        if not os.getenv("RESEARCH_OS_GEMINI_MODEL"):
+            missing.append("RESEARCH_OS_GEMINI_MODEL")
     if selected in {"openai-compatible", "local"}:
         endpoint_key, model_key = "RESEARCH_OS_OPENAI_ENDPOINT", "RESEARCH_OS_OPENAI_MODEL"
     elif selected == "anthropic":
@@ -47,7 +53,7 @@ def inspect_provider(provider: str) -> dict[str, object]:
         provider=selected,
         ready=not missing,
         missing=missing,
-        endpoint_configured=True if selected == "mock" else bool(os.getenv(endpoint_key)),
+        endpoint_configured=True if selected in {"mock", "gemini"} else bool(os.getenv(endpoint_key)),
         model_configured=True if selected == "mock" else bool(os.getenv(model_key)),
     )
     return asdict(result)
