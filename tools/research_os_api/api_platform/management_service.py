@@ -361,8 +361,9 @@ class ManagementService:
         except Exception:
             self._load()
             raise
+        # Validation updates only the in-memory registry. _persist() is the
+        # single durable commit point for both resource metadata and its audit.
         self.registry = rebuilt
-        self.store.put(resource, identifier, _jsonable(asdict(candidate)))
 
 
 def default_management_service() -> ManagementService:
