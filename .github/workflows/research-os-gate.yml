@@ -260,28 +260,34 @@ jobs:
           set -euo pipefail
           run_with_retry() {
             local label="$1"
-            shift
+            local timeout_seconds="$2"
+            local max_attempts="$3"
+            shift 3
             local attempt=1
             local status=0
-            while [ "$attempt" -le 3 ]; do
-              echo "::group::${label} attempt ${attempt}/3"
-              if timeout --signal=TERM --kill-after=10s 240s "$@"; then
+            while [ "$attempt" -le "$max_attempts" ]; do
+              echo "::group::${label} attempt ${attempt}/${max_attempts} (timeout ${timeout_seconds}s)"
+              if timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" "$@"; then
                 echo "::endgroup::"
                 return 0
               else
                 status=$?
               fi
               echo "::endgroup::"
-              if [ "$attempt" -eq 3 ]; then
-                echo "::error::${label} failed after 3 attempts (exit ${status})"
+              if [ "$attempt" -eq "$max_attempts" ]; then
+                echo "::error::${label} failed after ${max_attempts} attempts (exit ${status})"
                 return "$status"
               fi
-              sleep "$((attempt * 5))"
+              sleep "$((attempt * 10))"
               attempt=$((attempt + 1))
             done
           }
-          run_with_retry "apt-get update" sudo apt-get update
-          run_with_retry "apt-get install Linux desktop prerequisites" sudo apt-get install --no-install-recommends -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev mesa-utils
+          # Ubuntu hosted runners can experience slow Azure apt-mirror downloads.
+          # Give the metadata refresh a bounded retry window and package installation
+          # enough time to download the full GTK/CMake dependency tree. A single
+          # 240-second timeout repeatedly killed the CMake package download.
+          run_with_retry "apt-get update" 300 3 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60 update
+          run_with_retry "apt-get install Linux desktop prerequisites" 900 2 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=60 -o Acquire::https::Timeout=60 install --no-install-recommends -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev mesa-utils
       - name: Recon Linux desktop toolchain
         shell: bash
         run: |
