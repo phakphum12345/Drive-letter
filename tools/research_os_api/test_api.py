@@ -71,6 +71,7 @@ class ResearchOSAPITests(unittest.TestCase):
     @patch("server.urllib.request.urlopen")
     def test_health_passes_when_required_ci_mock_provider_is_connected(self, urlopen):
         response = MagicMock()
+        response.__enter__.return_value.status = 200
         response.__enter__.return_value.read.return_value = json.dumps({
             "connected": True,
             "provider": "owner-mock",
