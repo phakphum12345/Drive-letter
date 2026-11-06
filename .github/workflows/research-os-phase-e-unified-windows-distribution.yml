@@ -521,9 +521,12 @@ jobs:
               try {
                 $healthResponse = $healthClient.GetAsync('http://127.0.0.1:8787/health').GetAwaiter().GetResult()
                 $healthBody = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                try { $apiHealth = $healthBody | ConvertFrom-Json -ErrorAction Stop }
+                catch {
+                  $apiHealth = $null
+                  Write-Host "Research OS API health returned invalid JSON: $healthBody"
+                }
                 if ($healthResponse.IsSuccessStatusCode) {
-                  try { $apiHealth = $healthBody | ConvertFrom-Json -ErrorAction Stop }
-                  catch { Write-Host "Research OS API health returned invalid JSON: $healthBody" }
                   if ($apiHealth -and $apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) {
                     $apiReady = $true
                     break
