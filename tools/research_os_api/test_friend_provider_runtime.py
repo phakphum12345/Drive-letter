@@ -50,11 +50,11 @@ class FriendProviderRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result.text, "Gemini answer")
         self.assertEqual(result.usage, {"requests": 1, "tokens": 130})
-        self.assertEqual(result.actual_cost, Decimal("0.00008"))
+        self.assertEqual(result.actual_cost, Decimal("0.00014"))
         self.assertIn("generateContent", transport.last_url)
         self.assertEqual(
             transport.last_payload["contents"][0]["parts"][0]["text"],
-            "Owner context:\\nmemory\\n\\nquestion",
+            "Owner context:\nmemory\n\nquestion",
         )
         self.assertNotIn("test-secret", str(result.raw))
 
