@@ -3,6 +3,7 @@ import os
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -45,6 +46,27 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual(200, status)
         self.assertEqual("ok", payload["status"])
         self.assertTrue(payload["memory"])
+
+    @patch("server._friend_provider_health", side_effect=RuntimeError("provider offline"))
+    def test_health_fails_closed_when_installed_service_requires_friend(self, _friend_health):
+        with patch.dict(os.environ, {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true"}, clear=False):
+            with self.assertRaises(urllib.error.HTTPError) as raised:
+                self.request("GET", "/health")
+        self.assertEqual(503, raised.exception.code)
+        payload = json.loads(raised.exception.read().decode("utf-8"))
+        self.assertEqual("degraded", payload["status"])
+        self.assertEqual("RuntimeError", payload["detail"])
+
+    @patch("server._friend_provider_health", return_value={"connected": True, "provider": "ollama-local"})
+    def test_health_passes_when_required_local_provider_is_connected(self, _friend_health):
+        with patch.dict(
+            os.environ,
+            {"RESEARCH_OS_REQUIRE_FRIEND_HEALTH": "true", "RESEARCH_OS_PROVIDER": "local"},
+            clear=False,
+        ):
+            status, payload = self.request("GET", "/health")
+        self.assertEqual(200, status)
+        self.assertEqual("ok", payload["status"])
 
     @patch("server._friend_chat")
     def test_mock_provider_generation(self, friend_chat):
