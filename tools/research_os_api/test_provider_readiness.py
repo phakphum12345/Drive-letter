@@ -50,6 +50,18 @@ class ProviderReadinessTests(unittest.TestCase):
         self.assertTrue(status["ready"])
 
 
+    def test_local_ollama_environment_is_ready_without_api_key(self):
+        env = {
+            "OLLAMA_BASE_URL": "http://127.0.0.1:11434/v1",
+            "OLLAMA_MODEL": "llama3.2:3b",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            status = provider_readiness.inspect_provider("local")
+        self.assertTrue(status["ready"])
+        self.assertEqual([], status["missing"])
+        self.assertTrue(status["endpoint_configured"])
+        self.assertTrue(status["model_configured"])
+
     def test_gemini_accepts_render_secret_alias_without_exposing_secret(self):
         env = {
             "GEMINI_API_KEY": "test-secret",
