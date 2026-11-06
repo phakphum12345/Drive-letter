@@ -412,6 +412,22 @@ jobs:
           if ($provenance.release_authority -ne 'FINAL_GATE' -or $provenance.installer_role -ne 'OWNER_SPECIAL') { throw 'Installed Platform provenance authority mismatch.' }
           $checks['owner_special_platform_binding'] = $true
 
+          # This hosted Windows runner has no Ollama daemon. Keep production
+          # defaults unchanged, but explicitly select the deterministic Mock
+          # provider for this isolated installer E2E and write it as a
+          # per-service override so SCM passes it to both service hosts.
+          foreach ($serviceName in @('ResearchOSOwnerFriendService', 'ResearchOSService')) {
+            $serviceKey = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$serviceName"
+            if (-not (Test-Path $serviceKey)) { throw "Expected installed service registry key missing: $serviceName" }
+            $existingEnvironment = @((Get-ItemProperty -Path $serviceKey -Name Environment -ErrorAction SilentlyContinue).Environment)
+            $serviceEnvironment = @($existingEnvironment | Where-Object { $_ -and $_ -notmatch '^RESEARCH_OS_PROVIDER=' })
+            $serviceEnvironment += 'RESEARCH_OS_PROVIDER=mock'
+            New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Value $serviceEnvironment -Force | Out-Null
+          }
+          Restart-Service -Name 'ResearchOSOwnerFriendService' -Force
+          Restart-Service -Name 'ResearchOSService' -Force
+          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (per-service, CI runner only)'
+
           # Windows service state is mutable and Get-Service returns a snapshot.
           # The installer may return before the SCM transitions the service to Running,
           # so poll the authoritative service state instead of evaluating a stale object.
@@ -498,7 +514,20 @@ jobs:
             try {
               $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
               if ($apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) { $apiReady = $true; break }
-            } catch {}
+            } catch {
+              $response = $_.Exception.Response
+              if ($response) {
+                try {
+                  $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                  $body = $reader.ReadToEnd()
+                  Write-Host "Research OS API health probe HTTP $([int]$response.StatusCode): $body"
+                } catch {
+                  Write-Host "Research OS API health probe error: $($_.Exception.Message)"
+                }
+              } else {
+                Write-Host "Research OS API health probe transport error: $($_.Exception.Message)"
+              }
+            }
             Start-Sleep -Milliseconds 500
           }
           if (-not $apiReady) {
