@@ -90,6 +90,14 @@ sealed class OwnerFriendWorker : BackgroundService
         start.Environment["PYTHONPATH"] = Path.Combine(_options.Root, "owner_special");
         start.Environment["PYTHONUNBUFFERED"] = "1";
         start.Environment["RESEARCH_OS_OWNER_DATA_ROOT"] = _options.DataDir;
+        // The installed Windows edition is Local Mode: use the loopback Ollama
+        // endpoint unless an administrator has explicitly selected another provider.
+        start.Environment["RESEARCH_OS_PROVIDER"] =
+            Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER") ?? "local";
+        start.Environment["OLLAMA_BASE_URL"] =
+            Environment.GetEnvironmentVariable("OLLAMA_BASE_URL") ?? "http://127.0.0.1:11434/v1";
+        start.Environment["OLLAMA_MODEL"] =
+            Environment.GetEnvironmentVariable("OLLAMA_MODEL") ?? "llama3.2:3b";
 
         _process = new Process { StartInfo = start, EnableRaisingEvents = true };
         if (!_process.Start()) throw new InvalidOperationException("Failed to start Owner Friend process");
