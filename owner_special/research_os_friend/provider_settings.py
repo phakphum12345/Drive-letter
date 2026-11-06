@@ -216,8 +216,27 @@ class OpenAICompatibleProvider:
         return usage, cost
 
     def test_connection(self) -> dict[str, object]:
-        payload = self.transport.get_json(f"{self.base_url.rstrip('/')}/models", headers=self._headers(), timeout=self.timeout)
-        return {"connected": True, "provider": self.name, "models_visible": len(payload.get("data", []) or [])}
+        payload = self.transport.get_json(
+            f"{self.base_url.rstrip('/')}/models",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        models = payload.get("data", []) or []
+        if not isinstance(models, list):
+            raise RuntimeError("provider model catalog is invalid")
+        model_ids = {
+            str(item.get("id", "")).strip()
+            for item in models
+            if isinstance(item, dict)
+        }
+        if self.local and self.model not in model_ids:
+            raise RuntimeError("configured Ollama model is not available")
+        return {
+            "connected": True,
+            "provider": self.name,
+            "model": self.model,
+            "models_visible": len(models),
+        }
 
     def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
         messages: list[dict[str, str]] = []
