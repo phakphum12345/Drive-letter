@@ -319,7 +319,7 @@ class GeminiProvider:
         *,
         api_key: str,
         model: str,
-        endpoint_template: str = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+        endpoint_template: str = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         transport: JsonTransport | None = None,
         timeout: float = 30.0,
     ) -> None:
@@ -333,18 +333,27 @@ class GeminiProvider:
         self.transport = transport or UrllibJsonTransport()
         self.timeout = timeout
 
+    def test_connection(self) -> dict[str, object]:
+        endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            + quote(self.model, safe="")
+        )
+        self.transport.get_json(
+            endpoint,
+            headers={"Accept": "application/json", "x-goog-api-key": self.api_key},
+            timeout=self.timeout,
+        )
+        return {"connected": True, "provider": self.name, "model": self.model}
+
     def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
         combined = prompt
         if context:
             combined = "Owner context:\n" + "\n".join(context[-12:]) + "\n\n" + prompt
-        endpoint = self.endpoint_template.format(
-            model=quote(self.model, safe=""),
-            api_key=quote(self.api_key, safe=""),
-        )
+        endpoint = self.endpoint_template.format(model=quote(self.model, safe=""))
         payload = {"contents": [{"parts": [{"text": combined}]}]}
         raw = self.transport.post_json(
             endpoint,
-            headers={"Accept": "application/json"},
+            headers={"Accept": "application/json", "x-goog-api-key": self.api_key},
             payload=payload,
             timeout=self.timeout,
         )
@@ -440,7 +449,7 @@ def build_environment_provider():
             model=os.getenv("RESEARCH_OS_GEMINI_MODEL", "gemini-3-flash-preview").strip(),
             endpoint_template=os.getenv(
                 "RESEARCH_OS_GEMINI_ENDPOINT_TEMPLATE",
-                "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+                "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             ).strip(),
         )
     if selected in {"openai", "openai-compatible"}:
