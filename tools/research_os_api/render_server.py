@@ -20,6 +20,18 @@ FRIEND_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner").strip() or "owner"
 
 
+def _friend_service_health() -> dict[str, object]:
+    request = urllib.request.Request(
+        f"{FRIEND_URL}/owner/health",
+        headers={"Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=3) as response:
+        value = json.loads(response.read().decode("utf-8"))
+    if not isinstance(value, dict) or value.get("status") != "ok":
+        raise RuntimeError("Friend service health was not confirmed")
+    return value
+
+
 def _friend_provider_health() -> dict[str, object]:
     request = urllib.request.Request(
         f"{FRIEND_URL}/owner/provider/health",
@@ -64,11 +76,17 @@ def _ensure_friend_service():
     port = parsed.port or 8790
 
     try:
+        _friend_service_health()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"Friend health endpoint returned HTTP {exc.code}") from None
+    except (OSError, urllib.error.URLError, ValueError):
+        # No service is listening on the loopback endpoint; start it below.
+        pass
+    else:
+        # An existing service is authoritative. A provider failure must not
+        # trigger a second process or silently replace the active runtime.
         _assert_friend_provider_ready()
         return None
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
-        # No reachable Friend provider: start the embedded service below.
-        pass
 
     from owner_special.research_os_friend import OwnerFriendService
 
