@@ -417,7 +417,7 @@ jobs:
           # provider for this isolated installer E2E and write it as a
           # per-service override so SCM passes it to both service hosts.
           foreach ($serviceName in @('ResearchOSOwnerFriendService', 'ResearchOSService')) {
-            $serviceKey = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$serviceName"
+            $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
             if (-not (Test-Path $serviceKey)) { throw "Expected installed service registry key missing: $serviceName" }
             $existingEnvironment = @((Get-ItemProperty -Path $serviceKey -Name Environment -ErrorAction SilentlyContinue).Environment)
             $serviceEnvironment = @($existingEnvironment | Where-Object { $_ -and $_ -notmatch '^RESEARCH_OS_PROVIDER=' })
