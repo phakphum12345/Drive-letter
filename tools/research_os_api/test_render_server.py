@@ -54,6 +54,12 @@ class RenderServerEntrypointTests(unittest.TestCase):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
             self.assertEqual(render_server._expected_provider(), "ollama-local")
 
+    def test_mock_mode_maps_to_canonical_mock_provider_name(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "mock"}, clear=True):
+            self.assertEqual(render_server._expected_provider(), "owner-mock")
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "owner-mock"}):
+                self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["owner-mock"])
+
     def test_starts_internal_friend_when_loopback_endpoint_is_unavailable(self):
         with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
             with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
