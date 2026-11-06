@@ -89,7 +89,7 @@ def _ensure_friend_service():
     try:
         _friend_status()
     except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
-        existing_status = None
+        pass
     else:
         # An existing service on the configured loopback port is authoritative.
         # If its provider is wrong, fail closed instead of trying to bind a second
