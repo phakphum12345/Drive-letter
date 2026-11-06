@@ -56,6 +56,21 @@ class RenderServerEntrypointTests(unittest.TestCase):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
             self.assertEqual(render_server._expected_provider(), "ollama-local")
 
+    def test_starts_internal_friend_when_loopback_endpoint_is_unavailable(self):
+        with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
+            with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
+                with patch.object(render_server, "_friend_status", side_effect=urllib.error.URLError("offline")):
+                    with patch.object(render_server, "_assert_friend_provider_ready", return_value={"providers": ["gemini"]}):
+                        with patch("owner_special.research_os_friend.OwnerFriendService") as service_factory:
+                            service = service_factory.return_value
+                            self.assertIs(render_server._ensure_friend_service(), service)
+                            service.start.assert_called_once_with()
+
+    def test_friend_endpoint_must_remain_loopback(self):
+        with patch.object(render_server, "FRIEND_URL", "https://friend.example.com"):
+            with self.assertRaisesRegex(RuntimeError, "loopback"):
+                render_server._ensure_friend_service()
+
     def test_existing_friend_with_wrong_provider_fails_closed(self):
         with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
             with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
