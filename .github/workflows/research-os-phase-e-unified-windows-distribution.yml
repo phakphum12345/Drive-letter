@@ -424,9 +424,17 @@ jobs:
             $serviceEnvironment += 'RESEARCH_OS_PROVIDER=mock'
             New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Value $serviceEnvironment -Force | Out-Null
           }
+          # SCM's service Environment registry override did not reach the
+          # Friend child process in hosted Windows E2E. Pass the isolated test
+          # provider explicitly through the packaged ServiceHost command line.
+          $friendServiceKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\ResearchOSOwnerFriendService'
+          $friendImagePath = (Get-ItemProperty -Path $friendServiceKey -Name ImagePath).ImagePath
+          if ($friendImagePath -notmatch '(?i)--provider(?:\s|=)') {
+            Set-ItemProperty -Path $friendServiceKey -Name ImagePath -Value "$friendImagePath --provider mock"
+          }
           Restart-Service -Name 'ResearchOSOwnerFriendService' -Force
           Restart-Service -Name 'ResearchOSService' -Force
-          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (per-service, CI runner only)'
+          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (explicit ServiceHost argument; CI runner only)'
 
           # Windows service state is mutable and Get-Service returns a snapshot.
           # The installer may return before the SCM transitions the service to Running,
