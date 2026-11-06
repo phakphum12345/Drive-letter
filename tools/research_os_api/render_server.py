@@ -37,6 +37,23 @@ def _friend_status() -> dict[str, object]:
     return value
 
 
+def _friend_provider_health() -> dict[str, object]:
+    request = urllib.request.Request(
+        f"{FRIEND_URL}/owner/provider/health",
+        headers={
+            "Accept": "application/json",
+            "X-Research-OS-Owner": FRIEND_OWNER_ID,
+            "X-Research-OS-Profile": "default",
+            "X-Research-OS-Session": "render-readiness",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        value = json.loads(response.read().decode("utf-8"))
+    if not isinstance(value, dict):
+        raise RuntimeError("Friend provider health response is not an object")
+    return value
+
+
 def _expected_provider() -> str:
     selected = os.getenv("RESEARCH_OS_PROVIDER", "gemini").strip().lower()
     if selected in {"local", "ollama"}:
@@ -51,6 +68,11 @@ def _assert_friend_provider_ready() -> dict[str, object]:
     if not isinstance(providers, list) or expected not in providers:
         raise RuntimeError(
             f"Friend runtime provider mismatch: expected {expected}, configured providers={providers!r}"
+        )
+    health = _friend_provider_health()
+    if health.get("connected") is not True or health.get("provider") != expected:
+        raise RuntimeError(
+            f"Friend provider is not connected: expected {expected}, reported {health.get('provider')!r}"
         )
     return status
 
