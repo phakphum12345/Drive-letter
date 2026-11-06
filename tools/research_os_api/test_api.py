@@ -55,7 +55,28 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual(503, raised.exception.code)
         payload = json.loads(raised.exception.read().decode("utf-8"))
         self.assertEqual("degraded", payload["status"])
-        self.assertEqual("RuntimeError", payload["detail"])
+        self.assertEqual("provider offline", payload["detail"])
+
+    def test_friend_provider_health_reports_safe_http_error_context(self):
+        import io
+        error_body = json.dumps({
+            "connected": False,
+            "provider": "owner-mock",
+            "error": "provider_health_not_supported",
+        }).encode("utf-8")
+        error = urllib.error.HTTPError(
+            "http://127.0.0.1:8790/owner/provider/health",
+            503,
+            "Service Unavailable",
+            hdrs=None,
+            fp=io.BytesIO(error_body),
+        )
+        with patch("server.urllib.request.urlopen", side_effect=error):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"HTTP 503: provider=owner-mock; error=provider_health_not_supported",
+            ):
+                server._friend_provider_health()
 
     def test_friend_provider_health_normalizes_explicit_mock_provider(self):
         response = MagicMock()
