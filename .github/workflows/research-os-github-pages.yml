@@ -23,7 +23,7 @@ permissions:
 concurrency:
   # Isolate pull requests so they cannot cancel main deployments or other PR builds.
   # New commits may supersede older runs only within the same PR/ref.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: research-os-pages-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
