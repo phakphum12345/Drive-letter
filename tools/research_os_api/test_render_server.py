@@ -54,6 +54,26 @@ class RenderServerEntrypointTests(unittest.TestCase):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
             self.assertEqual(render_server._expected_provider(), "ollama-local")
 
+    def test_windows_default_provider_is_local_mode(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(render_server.os, "name", "nt"):
+                self.assertEqual(render_server._selected_provider(), "local")
+                self.assertEqual(render_server._expected_provider(), "ollama-local")
+
+    def test_local_mode_accepts_explicit_openai_compatible_override(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "openai-compatible"}):
+                self.assertEqual(
+                    render_server._assert_friend_provider_ready()["providers"],
+                    ["openai-compatible"],
+                )
+
+    def test_local_mode_does_not_accept_mock_fallback(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "local"}, clear=True):
+            with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "owner-mock"}):
+                with self.assertRaisesRegex(RuntimeError, "not connected"):
+                    render_server._assert_friend_provider_ready()
+
     def test_mock_mode_maps_to_canonical_mock_provider_name(self):
         with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "mock"}, clear=True):
             self.assertEqual(render_server._expected_provider(), "owner-mock")
