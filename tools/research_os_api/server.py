@@ -147,8 +147,20 @@ def _friend_provider_health() -> dict[str, Any]:
             "X-Research-OS-Session": "api-readiness",
         },
     )
-    with urllib.request.urlopen(request, timeout=8) as response:
-        value = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            value = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # Friend returns only non-secret provider diagnostics here.
+        try:
+            body = json.loads(exc.read().decode("utf-8", errors="replace"))
+        except (ValueError, UnicodeDecodeError):
+            body = {}
+        provider = str(body.get("provider") or "unknown")[:80] if isinstance(body, dict) else "unknown"
+        reason = str(body.get("error") or "provider_health_http_error")[:120] if isinstance(body, dict) else "provider_health_http_error"
+        raise RuntimeError(
+            f"Friend provider health HTTP {exc.code}: provider={provider}; error={reason}"
+        ) from exc
     if not isinstance(value, dict) or value.get("connected") is not True:
         raise RuntimeError("Friend provider connection was not confirmed")
     selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
@@ -418,7 +430,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                                 "status": "degraded",
                                 "service": "research-os-api",
                                 "friend": "unavailable",
-                                "detail": type(exc).__name__,
+                                "detail": str(exc)[:240] or type(exc).__name__,
                             },
                         )
                         return
