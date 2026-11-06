@@ -65,10 +65,15 @@ def _ensure_friend_service():
     port = parsed.port or 8790
 
     try:
+        _friend_status()
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
+        existing_status = None
+    else:
+        # An existing service on the configured loopback port is authoritative.
+        # If its provider is wrong, fail closed instead of trying to bind a second
+        # process to the same port or silently replacing its runtime.
         _assert_friend_provider_ready()
         return None
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError, RuntimeError):
-        pass
 
     from owner_special.research_os_friend import OwnerFriendService
 
@@ -92,7 +97,7 @@ def _ensure_friend_service():
             try:
                 _assert_friend_provider_ready()
                 return service
-            except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError, RuntimeError) as exc:
+            except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError) as exc:
                 last_error = exc
                 time.sleep(0.25)
         raise RuntimeError(
@@ -154,16 +159,18 @@ def main() -> int:
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "10000"))
     friend_service = _ensure_friend_service()
-    server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
-    actual_port = int(server.server_address[1])
-    os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
-    print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
+    server = None
     try:
+        server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
+        actual_port = int(server.server_address[1])
+        os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
+        print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
+        if server is not None:
+            server.server_close()
         if friend_service is not None:
             friend_service.close()
     return 0
