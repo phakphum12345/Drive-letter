@@ -28,8 +28,8 @@ class ProviderStatus:
 def _configured(name:str)->ProviderStatus:
  if name not in PROVIDERS: raise ValueError(f"unsupported provider: {name}")
  p=PROVIDERS[name]
- key_ok=bool(os.getenv(p["key"]))
- endpoint_ok=bool(os.getenv(p["endpoint"])) or name=="openai"
+ key_ok=bool(os.getenv(p["key"]) or (name=="gemini" and os.getenv("GEMINI_API_KEY")))
+ endpoint_ok=bool(os.getenv(p["endpoint"])) or name in {"openai","gemini"}
  model_ok=bool(os.getenv(p["model"]))
  if key_ok and model_ok: state="CONNECTED"
  elif key_ok or model_ok: state="DEGRADED"
