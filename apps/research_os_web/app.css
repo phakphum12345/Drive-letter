@@ -85,3 +85,9 @@
 .workspace-record .home-status-tag{align-self:flex-start;max-width:100%}
 .workspace-content .home-empty{grid-column:1/-1}
 @media(max-width:760px){.workspace-view{padding:18px 13px max(20px,env(safe-area-inset-bottom))}.workspace-heading{align-items:flex-start;flex-direction:column;gap:10px}.workspace-heading-actions{width:100%;justify-content:space-between}.workspace-content{grid-template-columns:1fr}}
+
+/* Local-first chat history; stored per signed-in account on this browser only. */
+.chat-history-select{max-width:180px;min-width:130px;border:1px solid var(--line2);border-radius:8px;background:#101a2a;color:#cbd7e8;padding:7px 9px;font:inherit;font-size:9px}
+.chat-response-meta{display:block;margin-top:8px;color:var(--dim);font-size:8px;line-height:1.5}
+#chatHistoryStatus{color:var(--dim);font-size:8px;white-space:nowrap}
+@media(max-width:760px){.chat-history-select{max-width:145px;min-width:110px}.conversation-heading .heading-actions{gap:6px}}

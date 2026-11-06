@@ -1,8 +1,135 @@
 const API_BASE_URL=(window.RESEARCH_OS_API_BASE_URL||'https://research-os-api-phakphoum-v0wf.onrender.com').replace(/\/$/,'');
-const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null,chatWide:false};
+const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null,chatWide:false,chatSessions:[]};
 const stages=['define','plan','gather','verify','synthesize','remember'];
 const $=id=>document.getElementById(id);
-function addMessage(role,text){const node=document.createElement('div');node.className=`message ${role}`;node.textContent=text;$('messages').appendChild(node);node.scrollIntoView({behavior:'smooth',block:'end'});state.messages.push({role,content:text});return node;}
+function appendMessageNode(message){
+  const node=document.createElement('div');
+  node.className=`message ${message.role||'assistant'}`;
+  node.textContent=message.content||'';
+  $('messages').appendChild(node);
+  if(message.meta){
+    const meta=document.createElement('small');
+    meta.className='chat-response-meta';
+    meta.textContent=[message.meta.route,message.meta.provider,message.meta.model].filter(Boolean).join(' · ');
+    if(meta.textContent)node.appendChild(meta);
+  }
+  return node;
+}
+function chatStorageKey(){
+  const account=state.account||{};
+  const identity=String(account.user_id||account.email||'').trim().toLowerCase();
+  return identity?'research-os-chat-history:'+encodeURIComponent(identity):null;
+}
+function renderChatHistoryOptions(){
+  const select=$('chatHistory');
+  if(!select)return;
+  select.textContent='';
+  const placeholder=document.createElement('option');
+  placeholder.value='';
+  placeholder.textContent='History on this device';
+  select.appendChild(placeholder);
+  state.chatSessions.forEach(session=>{
+    const option=document.createElement('option');
+    option.value=session.id;
+    option.textContent=session.title||'New conversation';
+    select.appendChild(option);
+  });
+  select.value=state.sessionId||'';
+}
+function persistChatHistory(){
+  const key=chatStorageKey();
+  if(!key||!state.sessionId)return;
+  const firstUser=state.messages.find(message=>message.role==='user');
+  const title=(firstUser?.content||'New conversation').replace(/\s+/g,' ').slice(0,72);
+  const session={id:state.sessionId,title,updated_at:Date.now(),messages:state.messages.slice(-100)};
+  state.chatSessions=state.chatSessions.filter(item=>item.id!==session.id);
+  state.chatSessions.unshift(session);
+  state.chatSessions.sort((a,b)=>Number(b.updated_at||0)-Number(a.updated_at||0));
+  state.chatSessions=state.chatSessions.slice(0,50);
+  try{
+    localStorage.setItem(key,JSON.stringify(state.chatSessions));
+    $('chatHistoryStatus').textContent='Saved locally on this device';
+  }catch(error){
+    $('chatHistoryStatus').textContent='Local save unavailable';
+  }
+  renderChatHistoryOptions();
+}
+function renderChatSession(session){
+  state.sessionId=session.id;
+  state.messages=Array.isArray(session.messages)?session.messages.slice(-100):[];
+  $('messages').textContent='';
+  if(state.messages.length){
+    state.messages.forEach(appendMessageNode);
+    const last=$('messages').lastElementChild;
+    last?.scrollIntoView({block:'end'});
+  }else{
+    $('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Start a new investigation when you are ready.</span></div>';
+  }
+  $('researchTitle').textContent=session.title||'เริ่มต้นการวิจัย';
+  $('researchState').textContent='HISTORY';
+  $('chatHistoryStatus').textContent='Local history · '+new Date(Number(session.updated_at||Date.now())).toLocaleString();
+  renderChatHistoryOptions();
+}
+function clearChatStateForSignedOut(statusText='Sign in to view local conversation history.'){
+  state.chatSessions=[];
+  state.messages=[];
+  state.sessionId=null;
+  $('messages').textContent='';
+  $('researchTitle').textContent='เริ่มต้นการวิจัย';
+  $('researchState').textContent='READY';
+  $('chatHistoryStatus').textContent=statusText;
+  renderChatHistoryOptions();
+}
+function restoreLocalChatHistory(){
+  const key=chatStorageKey();
+  state.chatSessions=[];
+  state.messages=[];
+  state.sessionId=null;
+  $('messages').textContent='';
+  $('researchTitle').textContent='เริ่มต้นการวิจัย';
+  $('researchState').textContent='READY';
+  if(!key){
+    $('chatHistoryStatus').textContent='Sign in to view local conversation history.';
+    renderChatHistoryOptions();
+    return;
+  }
+  try{
+    const raw=localStorage.getItem(key);
+    const sessions=raw?JSON.parse(raw):[];
+    state.chatSessions=Array.isArray(sessions)?sessions.filter(item=>item&&typeof item.id==='string'&&Array.isArray(item.messages)).slice(0,50):[];
+    state.chatSessions.sort((a,b)=>Number(b.updated_at||0)-Number(a.updated_at||0));
+    if(state.chatSessions.length)renderChatSession(state.chatSessions[0]);
+    else{
+      state.sessionId=crypto.randomUUID();
+      state.messages=[];
+      $('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Start a new investigation when you are ready.</span></div>';
+      $('researchTitle').textContent='Ready for your investigation';
+      renderChatHistoryOptions();
+      $('chatHistoryStatus').textContent='Local history ready · this device only';
+    }
+  }catch(error){
+    clearChatStateForSignedOut('Could not read local history');
+  }
+}
+function startNewChatSession(){
+  if(state.sending)return;
+  state.sessionId=crypto.randomUUID();
+  state.messages=[];
+  $('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';
+  $('researchTitle').textContent='Ready for your investigation';
+  $('researchState').textContent='IDLE';
+  $('prompt').value='';
+  setStage('define');
+  persistChatHistory();
+}
+function addMessage(role,text,meta=null){
+  const message={role,content:text,...(meta?{meta}: {})};
+  const node=appendMessageNode(message);
+  node.scrollIntoView({behavior:'smooth',block:'end'});
+  state.messages.push(message);
+  persistChatHistory();
+  return node;
+}
 function setStage(stage){const index=stages.indexOf(stage);document.querySelectorAll('.flow-item[data-stage]').forEach((node,i)=>{node.classList.toggle('active',i===index);node.classList.toggle('complete',i<index);const icon=node.querySelector('i');if(icon)icon.textContent=i<index?'✓':i===index?'●':'○';});}
 async function request(path,options={},timeoutMs=65000){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(`${API_BASE_URL}${path}`,{headers:{'Content-Type':'application/json'},credentials:'include',signal:controller.signal,...options});let data;try{data=await response.json()}catch(_){throw new Error(`API returned invalid JSON (HTTP ${response.status})`)}if(!response.ok)throw new Error(data.detail||data.error||`HTTP ${response.status}`);return data}catch(error){if(error.name==='AbortError')throw new Error('Research request timed out after 65 seconds');throw error}finally{clearTimeout(timer)}}
 function setChatWide(enabled){
@@ -24,7 +151,7 @@ function restoreChatLayout(){
 function setRunning(value){state.sending=value;const button=$('runButton');button.disabled=value;button.innerHTML=value?'กำลังค้นคว้า… <b>◌</b>':'Send <b>↑</b>';$('prompt').disabled=value;if(value)$('researchState').textContent='RUNNING'}
 function roleRank(role){return ({USER:10,PRO:20,OWNER:30})[String(role||'USER').toUpperCase()]||0}
 function renderAccount(){const account=state.account||{};const role=String(account.role||'USER').toUpperCase();const email=account.email||'Not signed in';$('accountEmail').textContent=email;$('accountRole').textContent=role;$('accountRole').className=`role-badge role-${role.toLowerCase()}`;$('authButton').textContent=account.email?'Sign out':'Sign in';$('ownerTools').hidden=role!=='OWNER';document.querySelectorAll('[data-min-role]').forEach(node=>{node.hidden=roleRank(role)<roleRank(node.dataset.minRole)});document.querySelectorAll('[data-admin-only]').forEach(node=>{node.hidden=role!=='OWNER'});if(role!=='OWNER'&&!$('adminView').hidden)setPlatformView('home');}
-async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();await refreshControlCenter();return result}catch(error){state.account=null;renderAccount();showControlCenterSignIn();throw error}}
+async function refreshAuth(){try{const result=await request('/v1/auth/google/status');state.account=result.account&&result.connected?result.account:null;renderAccount();if(state.account)restoreLocalChatHistory();else clearChatStateForSignedOut();await refreshControlCenter();return result}catch(error){state.account=null;clearChatStateForSignedOut();renderAccount();showControlCenterSignIn();throw error}}
 function providerLabel(provider){return provider==='google'?'Google':provider==='microsoft'?'Microsoft':'GitHub'}
 function addEmailOtpControls(panel){
 const heading=document.createElement('p');heading.textContent='Or sign in with Email OTP';panel.appendChild(heading);
@@ -34,14 +161,19 @@ const code=document.createElement('input');code.type='text';code.inputMode='nume
 const verify=document.createElement('button');verify.type='button';verify.className='tool-chip';verify.textContent='Verify code';verify.hidden=true;panel.appendChild(verify);
 const message=document.createElement('small');message.setAttribute('role','status');panel.appendChild(message);
 send.addEventListener('click',async()=>{send.disabled=true;message.textContent='Sending…';try{await request('/v1/auth/email-otp/start',{method:'POST',body:JSON.stringify({email:email.value.trim()})});code.hidden=false;verify.hidden=false;message.textContent='If SMTP is configured, a code has been sent. It expires in 5 minutes.'}catch(error){message.textContent=error.message}finally{send.disabled=false}});
-verify.addEventListener('click',async()=>{verify.disabled=true;message.textContent='Verifying…';try{const result=await request('/v1/auth/email-otp/verify',{method:'POST',body:JSON.stringify({email:email.value.trim(),code:code.value.trim()})});state.account=result.account||null;renderAccount();panel.hidden=true;addMessage('system','Email OTP sign-in complete.');refreshControlCenter()}catch(error){message.textContent=error.message}finally{verify.disabled=false}});
+verify.addEventListener('click',async()=>{verify.disabled=true;message.textContent='Verifying…';try{const result=await request('/v1/auth/email-otp/verify',{method:'POST',body:JSON.stringify({email:email.value.trim(),code:code.value.trim()})});state.account=result.account||null;renderAccount();if(state.account)restoreLocalChatHistory();panel.hidden=true;addMessage('system','Email OTP sign-in complete.');refreshControlCenter()}catch(error){message.textContent=error.message}finally{verify.disabled=false}});
 }
 async function showLoginOptions(){const panel=$('loginOptions');if(!panel.hidden){panel.hidden=true;return}panel.hidden=false;panel.textContent='Loading login providers…';try{const result=await request('/v1/auth/providers');panel.innerHTML='';for(const provider of result.providers||[]){const button=document.createElement('button');button.type='button';button.className='tool-chip';button.textContent=`Continue with ${providerLabel(provider.id)}${provider.available?'':' (not configured)'}`;button.disabled=!provider.available;button.addEventListener('click',()=>handleProviderLogin(provider.id));panel.appendChild(button)}addEmailOtpControls(panel)}catch(error){panel.textContent=`Login providers unavailable: ${error.message}`}}
 async function handleProviderLogin(provider){if(state.sending)return;try{const result=await request('/v1/auth/providers/login',{method:'POST',body:JSON.stringify({provider})});if(!result.authorization_url)throw new Error('Authorization URL was not returned');window.location.assign(result.authorization_url)}catch(error){addMessage('system',`${providerLabel(provider)} sign-in unavailable: ${error.message}`)}}
-async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
-async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();if(state.messages.length===0)$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();addMessage('assistant',answer||'Research completed without a text response.');setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
+async function handleAuth(){if(state.sending)return;if(state.account&&state.account.email){try{await request('/v1/auth/google/signout',{method:'POST'});state.account=null;clearChatStateForSignedOut();renderAccount();setPlatformView('home');showControlCenterSignIn();addMessage('system','Signed out successfully.')}catch(error){addMessage('system',`Sign out failed: ${error.message}`)}return}await showLoginOptions()}
+async function startResearch(prompt){if(state.sending||!prompt)return;if(!state.sessionId)state.sessionId=crypto.randomUUID();if(state.messages.length===0)$('researchTitle').textContent=prompt.length>72?`${prompt.slice(0,72)}…`:prompt;addMessage('user',prompt);setRunning(true);setStage('define');const pending=addMessage('assistant','DEFINE — locking the research question, scope, and goal…');try{const health=await request('/health');$('health').textContent=health.version||'ONLINE';await new Promise(r=>setTimeout(r,180));setStage('plan');pending.textContent='PLAN — coordinating the investigation through Unified Master…';await new Promise(r=>setTimeout(r,180));setStage('gather');pending.textContent=state.deepMode?'GATHER — running the deep research path through the existing API contract…':'GATHER — requesting research output through the existing API contract…';const result=await request('/v1/ai/generate',{method:'POST',body:JSON.stringify({prompt,session_id:state.sessionId,mode:state.deepMode?'deep':'standard'})});setStage('verify');pending.textContent='VERIFY — validating the returned response and checking the research contract…';await new Promise(r=>setTimeout(r,180));setStage('synthesize');pending.textContent='SYNTHESIZE — preparing the answer and unresolved questions…';await new Promise(r=>setTimeout(r,180));const answer=(result.text||result.answer||'Research completed without a text response.').toString().trim();pending.remove();state.messages.pop();persistChatHistory();addMessage('assistant',answer||'Research completed without a text response.',{route:result.route,provider:result.provider,model:result.model});setStage('remember');$('researchState').textContent='COMPLETE'}catch(error){pending.remove();state.messages.pop();addMessage('assistant',`Research could not start: ${error.message}`);$('researchState').textContent='ERROR'}finally{setRunning(false)}}
 $('researchForm').addEventListener('submit',event=>{event.preventDefault();startResearch($('prompt').value.trim())});
-$('newResearch').addEventListener('click',()=>{setPlatformView('chat');state.sessionId=crypto.randomUUID();state.messages=[];$('messages').innerHTML='<div class="empty-state"><div class="empty-icon">✦</div><b>Your research workspace is ready.</b><span>Research output, claims, and verification notes will appear here.</span></div>';$('researchTitle').textContent='Ready for your investigation';$('researchState').textContent='IDLE';$('prompt').value='';setStage('define');window.scrollTo({top:0,behavior:'smooth'})});
+$('newResearch').addEventListener('click',()=>{setPlatformView('chat');startNewChatSession();window.scrollTo({top:0,behavior:'smooth'})});
+$('newChatSession').addEventListener('click',startNewChatSession);
+$('chatHistory').addEventListener('change',event=>{
+  const session=state.chatSessions.find(item=>item.id===event.target.value);
+  if(session&&!state.sending)renderChatSession(session);
+});
 $('startWork').addEventListener('click',()=>{$('prompt').focus();$('prompt').scrollIntoView({behavior:'smooth',block:'center'})});
 $('deepMode').addEventListener('click',event=>{state.deepMode=!state.deepMode;const on=event.currentTarget.querySelector('span');on.textContent=state.deepMode?'ON':'OFF';event.currentTarget.classList.toggle('enabled',state.deepMode);event.currentTarget.setAttribute('aria-pressed',String(state.deepMode))});
 $('authButton').addEventListener('click',handleAuth);
@@ -451,6 +583,7 @@ $('clearConversation').addEventListener('click',()=>{
   $('messages').innerHTML='<div class="empty-state" id="welcomeState"><div class="welcome-mark">R</div><span class="eyebrow">YOUR RESEARCH DESK</span><h2>What are we solving today?</h2><p>เริ่มจากคำถามหรือปัญหาที่ต้องการค้นคว้า แล้วให้ Research OS ช่วยจัดโครงสร้างการตรวจสอบ</p></div>';
   $('researchTitle').textContent='เริ่มต้นการวิจัย';
   $('researchState').textContent='READY';
+  persistChatHistory();
 });
 const promptInput=$('prompt');
 promptInput.addEventListener('input',()=>{promptInput.style.height='auto';promptInput.style.height=Math.min(promptInput.scrollHeight,180)+'px'});

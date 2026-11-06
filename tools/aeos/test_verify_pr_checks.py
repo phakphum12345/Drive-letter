@@ -13,6 +13,7 @@ classify = VERIFY_PR_CHECKS.classify
 normalize_check_run = VERIFY_PR_CHECKS.normalize_check_run
 normalize_status_context = VERIFY_PR_CHECKS.normalize_status_context
 poll_interval = VERIFY_PR_CHECKS.poll_interval
+prove_pages_deploy_skip = VERIFY_PR_CHECKS.prove_pages_deploy_skip
 current_pr_head = VERIFY_PR_CHECKS.current_pr_head
 
 
@@ -86,6 +87,66 @@ class VerifyPrChecksTests(unittest.TestCase):
                  "details_url":"https://github.com/o/r/actions/runs/456/job/789"}
         normalized = normalize_check_run(check, "999")
         result = VERIFY_PR_CHECKS.prove_flutter_scope_skip(check, normalized, "o/r", "", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    @patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+        "name":"Validate and package static Research OS web UI",
+        "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"success",
+    }])
+    @patch.object(VERIFY_PR_CHECKS, "request_json")
+    def test_pages_deploy_skip_is_not_applicable_only_after_exact_pr_build_passes(self, request, _jobs):
+        request.side_effect = [
+            ({"name":"Research OS GitHub Pages",
+              "path":".github/workflows/research-os-github-pages.yml",
+              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+            ({"run_id":456,"head_sha":"abc123","name":"Deploy Research OS GitHub Pages",
+              "status":"completed","conclusion":"skipped"}, {}),
+        ]
+        check = {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",
+                 "head_sha":"abc123","details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = prove_pages_deploy_skip(check, normalized, "o/r", "84", "abc123")
+        self.assertEqual(result["bucket"], "not_applicable")
+        self.assertIn("static-site build and artifact upload passed", result["reason_code"])
+        self.assertEqual(result["source"], "check_run+exact_pages_build_evidence")
+
+    @patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+        "name":"Validate and package static Research OS web UI",
+        "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"failure",
+    }])
+    @patch.object(VERIFY_PR_CHECKS, "request_json")
+    def test_pages_deploy_skip_with_failed_build_remains_unproven(self, request, _jobs):
+        request.side_effect = [
+            ({"name":"Research OS GitHub Pages",
+              "path":".github/workflows/research-os-github-pages.yml",
+              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+            ({"run_id":456,"head_sha":"abc123","name":"Deploy Research OS GitHub Pages",
+              "status":"completed","conclusion":"skipped"}, {}),
+        ]
+        check = {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",
+                 "head_sha":"abc123","details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = prove_pages_deploy_skip(check, normalized, "o/r", "84", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
+        "name":"Research OS GitHub Pages",
+        "path":".github/workflows/research-os-github-pages.yml",
+        "event":"push","head_sha":"abc123","conclusion":"success",
+    }, {}))
+    def test_pages_deploy_skip_from_non_pr_event_remains_unproven(self, request):
+        check = {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",
+                 "head_sha":"abc123","details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = prove_pages_deploy_skip(check, normalized, "o/r", "84", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+        request.assert_called_once()
+
+    def test_pages_deploy_skip_without_pr_number_remains_unproven(self):
+        check = {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",
+                 "head_sha":"abc123","details_url":"https://github.com/o/r/actions/runs/456/job/789"}
+        normalized = normalize_check_run(check, "999")
+        result = prove_pages_deploy_skip(check, normalized, "o/r", "", "abc123")
         self.assertEqual(result["bucket"], "unproven")
 
     def test_neutral_check_run_is_unproven_not_passing(self):

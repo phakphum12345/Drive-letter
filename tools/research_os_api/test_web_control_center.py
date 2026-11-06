@@ -55,6 +55,29 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn('User/Role/Policy/Credential administration', self.html)
         self.assertIn('id="adminCreateForm"', self.html)
 
+    def test_chat_history_is_account_scoped_and_saved_locally(self):
+        self.assertIn('id="chatHistory"', self.html)
+        self.assertIn('id="newChatSession"', self.html)
+        self.assertIn('id="chatHistoryStatus"', self.html)
+        self.assertIn("research-os-chat-history:", self.js)
+        self.assertIn("localStorage.setItem(key,JSON.stringify(state.chatSessions))", self.js)
+        self.assertIn("restoreLocalChatHistory()", self.js)
+        self.assertIn("state.chatSessions.slice(0,50)", self.js)
+        self.assertIn("message.meta.route", self.js)
+        self.assertIn("result.provider", self.js)
+        self.assertIn("result.model", self.js)
+
+    def test_chat_history_is_restored_after_otp_and_cleared_from_memory_on_signout(self):
+        self.assertIn("if(state.account)restoreLocalChatHistory();panel.hidden=true", self.js)
+        self.assertIn("clearChatStateForSignedOut()", self.js)
+        self.assertIn("function clearChatStateForSignedOut", self.js)
+        self.assertIn("state.chatSessions=[];", self.js)
+        self.assertIn("state.messages=[];", self.js)
+        self.assertIn("state.sessionId=null;", self.js)
+        self.assertIn("else clearChatStateForSignedOut()", self.js)
+        self.assertIn("Sign in to view local conversation history.", self.js)
+        self.assertIn("renderLocalChatHistory", self.js) if "renderLocalChatHistory" in self.js else self.assertIn("restoreLocalChatHistory()", self.js)
+
     def test_primary_workspace_destinations_use_live_api_backed_views(self):
         self.assertIn('data-view="workspace" data-module="Projects & Files"', self.html)
         self.assertIn('data-view="workspace" data-module="History & Activity"', self.html)

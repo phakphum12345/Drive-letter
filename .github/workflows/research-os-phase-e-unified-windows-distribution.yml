@@ -412,6 +412,40 @@ jobs:
           if ($provenance.release_authority -ne 'FINAL_GATE' -or $provenance.installer_role -ne 'OWNER_SPECIAL') { throw 'Installed Platform provenance authority mismatch.' }
           $checks['owner_special_platform_binding'] = $true
 
+          # This hosted Windows runner has no Ollama daemon. Keep production
+          # defaults unchanged, but explicitly select the deterministic Mock
+          # provider for this isolated installer E2E and write it as a
+          # per-service override so SCM passes it to both service hosts.
+          foreach ($serviceName in @('ResearchOSOwnerFriendService', 'ResearchOSService')) {
+            $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
+            if (-not (Test-Path $serviceKey)) { throw "Expected installed service registry key missing: $serviceName" }
+            $existingEnvironment = @((Get-ItemProperty -Path $serviceKey -Name Environment -ErrorAction SilentlyContinue).Environment)
+            $serviceEnvironment = @($existingEnvironment | Where-Object { $_ -and $_ -notmatch '^RESEARCH_OS_PROVIDER=' })
+            $serviceEnvironment += 'RESEARCH_OS_PROVIDER=mock'
+            New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Value $serviceEnvironment -Force | Out-Null
+          }
+          # Reinstall Friend through the canonical service installer so the
+          # CI-only provider is present in ServiceHost arguments before startup.
+          # Production installer calls omit -TestProvider and keep Local/Ollama.
+          $friendLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
+          if (-not (Test-Path $friendLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend service installer missing.' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $friendLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -ServiceName 'ResearchOSOwnerFriendService' -OwnerId 'owner' -Port 8790 -TestProvider mock
+          if ($LASTEXITCODE -ne 0) { throw "Owner Friend CI provider installation failed with exit code $LASTEXITCODE." }
+          $friendServiceConfig = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction Stop
+          if (-not $friendServiceConfig -or $friendServiceConfig.State -ne 'Running') { throw 'Owner Friend CI provider service is not running after installation.' }
+          if ($friendServiceConfig.PathName -notmatch '(?i)--provider\s+mock') { throw "Owner Friend ServiceHost did not receive the explicit CI provider argument: $($friendServiceConfig.PathName)" }
+          Write-Host "FRIEND_SERVICE_HOST_PATH=$($friendServiceConfig.PathName)"
+          $friendHeaders = @{
+            'X-Research-OS-Owner' = 'owner'
+            'X-Research-OS-Profile' = 'default'
+            'X-Research-OS-Session' = 'installer-e2e'
+          }
+          $friendProviderHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
+          if ($friendProviderHealth.connected -ne $true -or $friendProviderHealth.provider -ne 'owner-mock') { throw "Owner Friend CI provider mismatch: $($friendProviderHealth | ConvertTo-Json -Compress)" }
+          $checks['friend_provider_ready'] = $true
+          Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (canonical installer ServiceHost argument; CI runner only)'
+          Restart-Service -Name 'ResearchOSService' -Force
+
           # Windows service state is mutable and Get-Service returns a snapshot.
           # The installer may return before the SCM transitions the service to Running,
           # so poll the authoritative service state instead of evaluating a stale object.
@@ -494,12 +528,39 @@ jobs:
 
           $apiReady = $false
           $apiHealth = $null
-          for ($i = 0; $i -lt 30; $i++) {
-            try {
-              $apiHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
-              if ($apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) { $apiReady = $true; break }
-            } catch {}
-            Start-Sleep -Milliseconds 500
+          # Consume non-2xx response bodies before disposing the response.
+          # Invoke-RestMethod's PowerShell 7 exception response may already
+          # be disposed by the time its catch block runs.
+          $healthClient = [System.Net.Http.HttpClient]::new()
+          $healthClient.Timeout = [TimeSpan]::FromSeconds(10)
+          try {
+            for ($i = 0; $i -lt 30; $i++) {
+              $healthResponse = $null
+              try {
+                $healthResponse = $healthClient.GetAsync('http://127.0.0.1:8787/health').GetAwaiter().GetResult()
+                $healthBody = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                try { $apiHealth = $healthBody | ConvertFrom-Json -ErrorAction Stop }
+                catch {
+                  $apiHealth = $null
+                  Write-Host "Research OS API health returned invalid JSON: $healthBody"
+                }
+                if ($healthResponse.IsSuccessStatusCode) {
+                  if ($apiHealth -and $apiHealth.status -eq 'ok' -and $apiHealth.ui -eq $true) {
+                    $apiReady = $true
+                    break
+                  }
+                } else {
+                  Write-Host "Research OS API health probe HTTP $([int]$healthResponse.StatusCode): $healthBody"
+                }
+              } catch {
+                Write-Host "Research OS API health probe transport error: $($_.Exception.Message)"
+              } finally {
+                if ($healthResponse) { $healthResponse.Dispose() }
+              }
+              Start-Sleep -Milliseconds 500
+            }
+          } finally {
+            $healthClient.Dispose()
           }
           if (-not $apiReady) {
             Write-Host "Research OS API health payload: $($apiHealth | ConvertTo-Json -Depth 5 -Compress)"
@@ -507,6 +568,22 @@ jobs:
           }
           $checks['research_os_api_ready'] = $true
           $checks['research_os_api_ui_ready'] = $true
+
+          # Verify actual Friend memory persistence across the service-only
+          # uninstall/reinstall below, using the installed ProgramData store.
+          $memoryMarker = "installer-e2e-memory-$targetSha"
+          $friendChatBody = @{
+            text = "Remember this exact marker: $memoryMarker"
+            complexity = 1
+            risk = 1
+            parallelism = 1
+            helper_budget = 0
+          } | ConvertTo-Json -Compress
+          $friendChatResult = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/chat' -Method Post -Headers $friendHeaders -ContentType 'application/json' -Body $friendChatBody -TimeoutSec 30
+          if ($friendChatResult.provider -ne 'owner-mock') { throw "Friend chat did not use the isolated CI provider: $($friendChatResult.provider)" }
+          $memoryBeforeRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+          if (-not @($memoryBeforeRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory marker was not persisted before service restart.' }
+          $checks['friend_memory_written'] = $true
 
           # Exercise Owner Friend service lifecycle while the main API is live.
           # This catches regressions where cleanup kills the shared bundled Python
@@ -518,20 +595,38 @@ jobs:
           $apiPidBefore = [int]$apiServiceBefore.ProcessId
           $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
             param([int]$ExpectedApiPid)
+            # A single slow health response during Windows service/installer I/O
+            # is transient evidence, not proof that the main API was stopped.
+            # Require sustained failures and always perform a final authoritative
+            # PID + health check after the Owner Friend-only lifecycle completes.
+            $consecutiveHealthFailures = 0
             while ($true) {
+              $service = $null
               try {
                 $service = Get-CimInstance Win32_Service -Filter "Name='ResearchOSService'" -ErrorAction Stop
                 if (-not $service -or $service.State -ne 'Running' -or [int]$service.ProcessId -ne $ExpectedApiPid) {
                   Write-Output "API_SERVICE_PID_OR_STATE_CHANGED expected=$ExpectedApiPid actual=$($service.ProcessId) state=$($service.State)"
                 }
-                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+              } catch {
+                Write-Output "API_SERVICE_STATE_PROBE_FAILED $($_.Exception.Message)"
+              }
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 5
                 if ($health.status -ne 'ok' -or $health.ui -ne $true) {
-                  Write-Output "API_HEALTH_PAYLOAD_INVALID status=$($health.status) ui=$($health.ui)"
+                  $consecutiveHealthFailures++
+                  if ($consecutiveHealthFailures -ge 3) {
+                    Write-Output "API_HEALTH_PAYLOAD_INVALID consecutive_failures=$consecutiveHealthFailures status=$($health.status) ui=$($health.ui)"
+                  }
+                } else {
+                  $consecutiveHealthFailures = 0
                 }
               } catch {
-                Write-Output "API_HEALTH_PROBE_FAILED $($_.Exception.Message)"
+                $consecutiveHealthFailures++
+                if ($consecutiveHealthFailures -ge 3) {
+                  Write-Output "API_HEALTH_PROBE_FAILED consecutive_failures=$consecutiveHealthFailures $($_.Exception.Message)"
+                }
               }
-              Start-Sleep -Milliseconds 250
+              Start-Sleep -Milliseconds 500
             }
           }
           try {
@@ -539,7 +634,7 @@ jobs:
             if (-not (Test-Path $ownerLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend lifecycle script missing.' }
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action uninstall -Root $installRoot -DataDir $ownerDataRoot
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only uninstall failed with exit code $LASTEXITCODE." }
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -TestProvider mock
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only reinstall failed with exit code $LASTEXITCODE." }
             $ownerLifecycleReady = $false
             for ($i = 0; $i -lt 30; $i++) {
@@ -554,6 +649,12 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
+            $providerAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
+            if ($providerAfterRestart.connected -ne $true -or $providerAfterRestart.provider -ne 'owner-mock') { throw 'Owner Friend provider changed after service-only reinstall.' }
+            $memoryAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+            if (-not @($memoryAfterRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory did not survive service-only uninstall/reinstall.' }
+            $checks['friend_memory_survives_service_restart'] = $true
+            $checks['friend_provider_survives_service_restart'] = $true
             Start-Sleep -Seconds 2
           } finally {
             Stop-Job -Job $monitor -ErrorAction SilentlyContinue
@@ -568,7 +669,12 @@ jobs:
           if (-not $apiServiceAfter -or $apiServiceAfter.State -ne 'Running' -or [int]$apiServiceAfter.ProcessId -ne $apiPidBefore) {
             throw "ResearchOSService PID changed across Owner Friend lifecycle. before=$apiPidBefore after=$($apiServiceAfter.ProcessId) state=$($apiServiceAfter.State)"
           }
+          $apiHealthAfter = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 10
+          if ($apiHealthAfter.status -ne 'ok' -or $apiHealthAfter.ui -ne $true) {
+            throw "ResearchOSService final health check failed after Owner Friend lifecycle: $($apiHealthAfter | ConvertTo-Json -Compress)"
+          }
           $checks['owner_friend_lifecycle_api_pid_stable'] = $true
+          $checks['owner_friend_lifecycle_api_final_health'] = $true
           $checks['owner_friend_lifecycle_api_health_continuous'] = $true
           Write-Host "OWNER_FRIEND_LIFECYCLE_API_STABILITY=PASS api_pid=$apiPidBefore"
 

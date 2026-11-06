@@ -149,6 +149,10 @@ jobs:
           if ($friendPort -eq $apiPort) { throw 'Dynamic test ports unexpectedly collided.' }
           $friendUrl = "http://127.0.0.1:$friendPort"
           $apiBase = "http://127.0.0.1:$apiPort"
+          # Hosted Windows CI has no Ollama daemon. Explicitly select the
+          # deterministic mock provider for this isolated Friend + API E2E;
+          # product defaults remain Local/Ollama on Windows.
+          $env:RESEARCH_OS_PROVIDER = 'mock'
           $service = $null
           $gateway = $null
           $app = $null
