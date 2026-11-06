@@ -631,7 +631,7 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
-            $providerAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -TimeoutSec 10
+            $providerAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
             if ($providerAfterRestart.connected -ne $true -or $providerAfterRestart.provider -ne 'owner-mock') { throw 'Owner Friend provider changed after service-only reinstall.' }
             $memoryAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
             if (-not @($memoryAfterRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory did not survive service-only uninstall/reinstall.' }
