@@ -56,11 +56,15 @@ class OwnerFriendService:
         self.port = int(self.httpd.server_address[1])
         self._thread: threading.Thread | None = None
 
-    def _apply_provider(self) -> None:
+    def _apply_provider(self, *, allow_local_override: bool = False) -> None:
         selected = os.getenv("RESEARCH_OS_PROVIDER", "").strip().lower()
-        if selected in {"gemini", "local", "ollama"}:
-            # Explicit deployment mode is authoritative. Do not let a stale
-            # per-owner OpenAI-compatible setting override Gemini or Ollama.
+        if selected == "gemini":
+            # Cloud Gemini is an explicit deployment authority and cannot be
+            # replaced by a per-owner OpenAI-compatible setting.
+            return
+        if selected in {"local", "ollama"} and not allow_local_override:
+            # Keep Ollama as the installed Local Mode default. A deliberate
+            # provider/config API call may switch the active route explicitly.
             return
         self.runtime.orchestrator.providers.remove("openai-compatible")
         provider = self.provider_manager.provider()
@@ -233,7 +237,7 @@ class OwnerFriendService:
                             api_key=str(payload["api_key"]) if payload.get("api_key") is not None else None,
                             enabled=bool(payload.get("enabled", True)),
                         )
-                        service._apply_provider()
+                        service._apply_provider(allow_local_override=True)
                         self._send_json(200, status)
                         return
                     if path == "/owner/provider/test":
