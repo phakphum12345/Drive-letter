@@ -38,7 +38,9 @@ class UserControlCenterCompletionMatrixTests(unittest.TestCase):
     def test_plugin_runtime_registry_is_not_claimed_as_marketplace(self):
         plugin = next(item for item in self.matrix["capabilities"] if item["id"] == "plugin_center.marketplace")
         self.assertEqual("MISSING_EXECUTOR", plugin["status"])
-        self.assertIn("no user-facing", plugin["detail"])
+        self.assertIn("general user-facing plugin marketplace", plugin["detail"])
+        self.assertIn("first-party", plugin["detail"])
+        self.assertIn("still missing", plugin["detail"])
 
     def test_each_capability_has_evidence_and_acceptance_criteria(self):
         for item in self.matrix["capabilities"]:
