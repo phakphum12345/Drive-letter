@@ -40,23 +40,17 @@ GOOGLE_CLIENT_JSON_ENV = "RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE"
 
 
 def load_google_oauth_client_credentials() -> tuple[str, str, tuple[str, ...], bool]:
-    """Load one matched Google OAuth web-client pair from Render Secret Files or env.
+    """Load a matched Google OAuth web-client pair from an explicit Secret File or env.
 
-    An explicitly configured JSON path wins over environment variables. On
-    Render, a single client_secret_*.json in /etc/secrets is auto-discovered.
-    The complete client ID/secret pair is always taken from the same source.
+    Render Secret Files are mounted under /etc/secrets, but they are selected
+    only through RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE. Explicit configuration
+    avoids ambient filesystem discovery during build-time tests and prevents
+    an unrelated mounted client file from silently overriding local/test
+    credentials. The complete client ID/secret pair always comes from one
+    source.
     """
     configured_path = os.environ.get(GOOGLE_CLIENT_JSON_ENV, "").strip()
-    secret_dir = Path("/etc/secrets")
-    if configured_path:
-        path = Path(configured_path).expanduser()
-    elif secret_dir.is_dir():
-        candidates = sorted(secret_dir.glob("client_secret_*.json"))
-        if len(candidates) > 1:
-            raise ValueError("multiple Google OAuth client JSON files found in /etc/secrets")
-        path = candidates[0] if candidates else None
-    else:
-        path = None
+    path = Path(configured_path).expanduser() if configured_path else None
 
     if path is not None:
         try:
