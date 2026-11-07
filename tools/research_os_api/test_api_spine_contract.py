@@ -67,7 +67,7 @@ class APISpineContractTests(unittest.TestCase):
         self.assertNotIn("EmailOtp", native_api)
         self.assertNotIn("RESEARCH_OS_EMAIL_", blueprint)
         self.assertNotIn("RESEARCH_OS_EMAIL_", env_example)
-        self.assertNotIn("Email OTP", docs)
+        self.assertIn("Email OTP ถูกพักการใช้งานชั่วคราว", docs)
         self.assertIn("Google Sign-in", docs)
         self.assertIn("RESEARCH_OS_GEMINI_API_KEY", blueprint)
         self.assertIn("GEMINI_API_KEY", blueprint)
