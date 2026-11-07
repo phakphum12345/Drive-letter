@@ -32,9 +32,17 @@ services:
         value: "false"
       - key: GEMINI_API_KEY
         sync: false
+      - key: RESEARCH_OS_GEMINI_API_KEY
+        sync: false
       - key: RESEARCH_OS_SYNC_KEY
         sync: false
       - key: RESEARCH_OS_SESSION_SECRET
+        sync: false
+      - key: RESEARCH_OS_EMAIL_API_KEY
+        sync: false
+      - key: RESEARCH_OS_EMAIL_OTP_SECRET
+        sync: false
+      - key: RESEARCH_OS_EMAIL_FROM
         sync: false
       - key: RESEARCH_OS_GOOGLE_CLIENT_ID
         sync: false
