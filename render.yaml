@@ -42,6 +42,8 @@ services:
         sync: false
       - key: RESEARCH_OS_GOOGLE_CLIENT_SECRET
         sync: false
+      - key: RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE
+        value: /etc/secrets/client_secret_743220824403-uisrspsdcj4mchmcg5021m8j9r71n7kb.apps.googleusercontent.com.json
       - key: RESEARCH_OS_MICROSOFT_CLIENT_ID
         sync: false
       - key: RESEARCH_OS_MICROSOFT_CLIENT_SECRET
