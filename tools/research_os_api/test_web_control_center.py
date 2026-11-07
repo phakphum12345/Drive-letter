@@ -74,7 +74,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn('data-view="workspace" data-module="History & Activity"', self.html)
         self.assertIn('data-view="workspace" data-module="Settings & Account"', self.html)
         self.assertIn('id="workspaceView"', self.html)
-        self.assertIn("!['registry','workspace'].includes(selected)", self.js)
+        self.assertIn("!['registry','workspace','agents'].includes(selected)", self.js)
         self.assertIn("request('/v1/projects')", self.js)
         self.assertIn("request('/v2/workspaces')", self.js)
         self.assertIn("request('/api/v1/jobs?limit=50')", self.js)
