@@ -46,5 +46,70 @@ class GoogleOAuthBrokerTest(unittest.TestCase):
             self.assertFalse(broker.token_path.exists())
 
 
+    def test_begin_prefers_matched_web_client_credentials_from_secret_file(self):
+        env = {
+            "RESEARCH_OS_GOOGLE_CLIENT_ID": "stale-env-client-id",
+            "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "stale-env-secret",
+            "RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE": "",
+            "RESEARCH_OS_API_BASE_URL": "https://research.example.test",
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
+            client_file = Path(tmp) / "client_secret.json"
+            client_file.write_text(
+                json.dumps({
+                    "web": {
+                        "client_id": "secret-file-client.apps.googleusercontent.com",
+                        "client_secret": "secret-file-secret",
+                        "redirect_uris": [
+                            "https://research.example.test/v1/google-workspace/oauth/callback"
+                        ],
+                    }
+                }),
+                encoding="utf-8",
+            )
+            os.environ["RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE"] = str(client_file)
+            broker = GoogleOAuthBroker(tmp)
+            payload = broker.begin()
+            self.assertIn("secret-file-client.apps.googleusercontent.com", payload["authorization_url"])
+            self.assertNotIn("stale-env-client-id", payload["authorization_url"])
+            self.assertNotIn("secret-file-secret", payload["authorization_url"])
+            self.assertEqual(broker.client_secret, "secret-file-secret")
+
+    def test_begin_rejects_secret_file_with_unregistered_redirect_uri(self):
+        env = {
+            "RESEARCH_OS_GOOGLE_CLIENT_ID": "stale-env-client-id",
+            "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "stale-env-secret",
+            "RESEARCH_OS_API_BASE_URL": "https://research.example.test",
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
+            client_file = Path(tmp) / "client_secret.json"
+            client_file.write_text(
+                json.dumps({
+                    "web": {
+                        "client_id": "file-client-id",
+                        "client_secret": "file-client-secret",
+                        "redirect_uris": ["https://wrong.example.test/callback"],
+                    }
+                }),
+                encoding="utf-8",
+            )
+            os.environ["RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE"] = str(client_file)
+            with self.assertRaisesRegex(GoogleOAuthError, "not listed"):
+                GoogleOAuthBroker(tmp).begin()
+
+    def test_invalid_secret_file_does_not_fall_back_to_environment_credentials(self):
+        env = {
+            "RESEARCH_OS_GOOGLE_CLIENT_ID": "env-client-id",
+            "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "env-client-secret",
+            "RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE": "/missing/client_secret.json",
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
+            broker = GoogleOAuthBroker(tmp)
+            self.assertFalse(broker.config.oauth_configured)
+            with self.assertRaises(GoogleOAuthError):
+                broker.begin()
+
+
+
 if __name__ == "__main__":
     unittest.main()
