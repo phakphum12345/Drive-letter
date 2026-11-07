@@ -3,13 +3,13 @@
 **Status:** Reconciled baseline; the User Control Center is still not complete.  
 **Repository:** `phakphum12345/Drive-letter`  
 **Audited main commit:** `cd582e0940560e7e6dddd2c4b9790d118fffb909`  
-**Pending implementation:** PR #92 — live Web Agent Center and workspace controls.
+**Implementation source:** PR #92 — live Web Agent Center and workspace controls; completion still requires authenticated runtime verification.
 
 ## Executive result
 
 The platform has several real, API-backed control surfaces. The remaining work is not to merge every historical branch blindly; it is to verify each capability against its canonical backend, preserve authorization boundaries, and implement only missing executors.
 
-PR #92 adds a Web Agent Center, Workspace Index search, evidence/timeline drill-down, and live API-backed domain views. Those additions remain pending CI and merge at the time of this audit. Modules without a verified API/executor are explicitly shown as NOT CONNECTED rather than being presented as working controls.
+The Web Agent Center, Workspace Index search, evidence/timeline drill-down, and live API-backed domain views are introduced in PR #92. Modules without a verified API/executor are explicitly shown as NOT CONNECTED rather than being presented as working controls.
 
 The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json`. It deliberately distinguishes observation, supported actions, and missing executors.
 
