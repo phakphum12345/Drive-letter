@@ -30,13 +30,13 @@ jobs:
       - uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v5
         with:
           python-version: "3.11"
-      - name: Install contract schema validator
-        run: python -m pip install -r tools/research_os_api/contract-requirements.txt
-      - name: Run focused API spine tests
+      - name: Install Render API test dependencies
+        run: python -m pip install -r tools/research_os_api/contract-requirements.txt -r tools/research_os_api/cloud-local-requirements.txt
+      - name: Run the exact Render API test discovery command
         env:
           PYTHONPATH: tools/research_os_api:.
         run: |
-          python -m unittest tools.research_os_api.test_email_otp tools.research_os_api.test_email_otp_minimal_emulator tools.research_os_api.test_api_spine_contract tools.research_os_api.test_qr_pairing tools.research_os_api.test_google_oauth tools.research_os_api.test_google_identity tools.research_os_api.test_server_auth_routes tools.research_os_api.test_cloud_local_contract -v
+          python -m unittest discover -s tools/research_os_api -p "test_*.py" -v
 
   owner-special-flutter:
     name: Owner Special Flutter analyze and tests
