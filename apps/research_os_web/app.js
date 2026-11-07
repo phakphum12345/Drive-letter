@@ -402,6 +402,133 @@ async function refreshAdminConsole(){
 }
 
 
+function pluginRecord(container,title,detail,status){
+  const item=document.createElement('div');
+  item.className='plugin-record';
+  const copy=document.createElement('div');
+  copy.className='plugin-record-copy';
+  const heading=document.createElement('strong');
+  heading.textContent=title||'Unnamed integration';
+  const description=document.createElement('small');
+  description.textContent=detail||'';
+  copy.append(heading,description);
+  item.appendChild(copy);
+  if(status){
+    const state=document.createElement('span');
+    state.className='home-status-tag status-'+String(status).toLowerCase().replace(/[^a-z0-9_-]/g,'');
+    state.textContent=status;
+    item.appendChild(state);
+  }
+  container.appendChild(item);
+}
+async function refreshPluginCenter(){
+  if(!$('pluginView')||$('pluginView').hidden)return;
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER'){
+    $('pluginStatus').textContent='OWNER role required. Integration credentials and service scopes are shared backend resources.';
+    return;
+  }
+  $('pluginStatus').textContent='กำลังอ่าน Integration Catalog และสถานะจาก API จริง…';
+  $('pluginRefresh').disabled=true;
+  try{
+    const results=await Promise.allSettled([
+      request('/v1/google-workspace/dashboard'),
+      request('/v1/google-workspace/oauth/status'),
+      request('/v1/ai/connections'),
+      request('/v1/auth/providers'),
+      request('/v1/providers')
+    ]);
+    const dashboard=results[0].status==='fulfilled'?results[0].value:null;
+    const oauth=results[1].status==='fulfilled'?results[1].value:null;
+    if(!dashboard||!oauth){
+      $('pluginGoogleState').textContent='UNAVAILABLE';
+      $('pluginGoogleDetail').textContent='Google Workspace API unavailable: '+String(results[0].reason||results[1].reason);
+      $('pluginGoogleConnect').disabled=true;
+      $('pluginGoogleDisconnect').disabled=true;
+      $('pluginGoogleServices').textContent='No service data available.';
+    }else{
+      const connected=oauth.connected===true;
+      $('pluginGoogleState').textContent=connected?'CONNECTED':dashboard.oauth_configured?'READY FOR OAUTH':'NOT CONFIGURED';
+      $('pluginGoogleDetail').textContent='Account: '+String(oauth.account?.email||'Not connected')+' · token storage: backend only · OAuth configured: '+String(Boolean(dashboard.oauth_configured));
+      $('pluginGoogleConnect').disabled=connected||!dashboard.oauth_configured;
+      $('pluginGoogleDisconnect').disabled=!connected;
+      $('pluginGoogleServices').textContent='';
+      (dashboard.services||[]).forEach(service=>{
+        const label=document.createElement('label');
+        label.className='plugin-service';
+        const input=document.createElement('input');
+        input.type='checkbox';
+        input.checked=service.enabled===true;
+        input.dataset.service=service.service;
+        const copy=document.createElement('span');
+        copy.textContent=service.service+' · '+String(service.state||'UNKNOWN')+' · '+(Array.isArray(service.scopes)?service.scopes.join(', '):'scopes unavailable');
+        label.append(input,copy);
+        $('pluginGoogleServices').appendChild(label);
+      });
+      if(!(dashboard.services||[]).length)$('pluginGoogleServices').textContent='No Workspace services returned.';
+    }
+    $('pluginAIProviders').textContent='';
+    if(results[2].status==='fulfilled'){
+      const providers=Array.isArray(results[2].value.providers)?results[2].value.providers:[];
+      providers.forEach(provider=>pluginRecord(
+        $('pluginAIProviders'),
+        provider.label||provider.provider,
+        'credential configured: '+String(Boolean(provider.credential_configured))+' · endpoint configured: '+String(Boolean(provider.endpoint_configured))+' · model configured: '+String(Boolean(provider.model_configured)),
+        provider.state||'UNKNOWN'
+      ));
+      if(!providers.length)pluginRecord($('pluginAIProviders'),'No AI providers returned','Configure supported providers on the backend','UNKNOWN');
+    }else pluginRecord($('pluginAIProviders'),'AI provider status unavailable',String(results[2].reason),'UNAVAILABLE');
+    $('pluginIdentityProviders').textContent='';
+    if(results[3].status==='fulfilled'){
+      const providers=Array.isArray(results[3].value.providers)?results[3].value.providers:[];
+      providers.forEach(provider=>pluginRecord(
+        $('pluginIdentityProviders'),
+        provider.name||provider.id,
+        'enabled: '+String(Boolean(provider.enabled))+' · configured: '+String(Boolean(provider.configured))+' · scopes: '+(Array.isArray(provider.scopes)?provider.scopes.join(', '):'not reported'),
+        provider.available?'AVAILABLE':provider.enabled?'NOT CONFIGURED':'DISABLED'
+      ));
+      if(!providers.length)pluginRecord($('pluginIdentityProviders'),'No identity providers returned','No provider catalog entries','UNKNOWN');
+    }else pluginRecord($('pluginIdentityProviders'),'Identity catalog unavailable',String(results[3].reason),'UNAVAILABLE');
+    if(results[4].status==='fulfilled'){
+      const value=results[4].value;
+      pluginRecord($('pluginAIProviders'),'Active AI route provider',String(value.active||'UNKNOWN')+' · available adapters: '+(Array.isArray(value.providers)?value.providers.join(', '):'not reported'),'OBSERVED');
+    }
+    $('pluginStatus').textContent='แสดงสถานะจริงจาก Backend · Google Workspace lifecycle ใช้ OAuth และการตั้งค่า service ที่มีอยู่ · AI credentials ไม่ถูกส่งมายัง Browser';
+    $('pluginUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+  }catch(error){
+    $('pluginStatus').textContent='โหลด Plugin Center ไม่สำเร็จ: '+String(error.message||error);
+  }finally{
+    $('pluginRefresh').disabled=false;
+  }
+}
+async function connectGoogleWorkspace(){
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER')return;
+  $('pluginStatus').textContent='กำลังเริ่ม Google OAuth จาก Backend…';
+  try{
+    const result=await request('/v1/google-workspace/oauth/start',{method:'POST',body:JSON.stringify({})});
+    if(!result.authorization_url)throw new Error('Backend did not return an OAuth authorization URL');
+    window.location.assign(result.authorization_url);
+  }catch(error){$('pluginStatus').textContent='เริ่ม OAuth ไม่สำเร็จ: '+String(error.message||error)}
+}
+async function disconnectGoogleWorkspace(){
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER')return;
+  if(!window.confirm('Disconnect Google Workspace? This removes the backend OAuth token.'))return;
+  $('pluginGoogleDisconnect').disabled=true;
+  try{
+    await request('/v1/google-workspace/oauth/disconnect',{method:'POST',body:JSON.stringify({})});
+    await refreshPluginCenter();
+  }catch(error){$('pluginStatus').textContent='Disconnect ไม่สำเร็จ: '+String(error.message||error);$('pluginGoogleDisconnect').disabled=false}
+}
+async function saveGoogleWorkspaceServices(){
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER')return;
+  const enabled=[...$('pluginGoogleServices').querySelectorAll('input[data-service]:checked')].map(input=>input.dataset.service);
+  $('pluginGoogleSave').disabled=true;
+  try{
+    await request('/v1/google-workspace/services',{method:'POST',body:JSON.stringify({enabled_services:enabled})});
+    await refreshPluginCenter();
+  }catch(error){$('pluginStatus').textContent='บันทึก Service settings ไม่สำเร็จ: '+String(error.message||error)}
+  finally{$('pluginGoogleSave').disabled=false}
+}
+
 function workspaceRecord(title, detail, status) {
   const card=document.createElement('article');
   card.className='workspace-record';
@@ -545,10 +672,12 @@ function setPlatformView(view,moduleName){
   $('homeView').hidden=selected!=='home';
   $('chatView').hidden=selected!=='chat';
   $('registryView').hidden=selected!=='registry';
+  if(selected==='plugins'&&String(state.account?.role||'').toUpperCase()!=='OWNER')selected='home';
   $('workspaceView').hidden=selected!=='workspace';
+  $('pluginView').hidden=selected!=='plugins';
   $('adminView').hidden=selected!=='admin';
   document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(!['registry','workspace'].includes(selected)||button.dataset.module===moduleName)));
-  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
+  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='plugins'?'Plugin Center':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
   if(selected==='chat')setChatWide(state.chatWide);else document.body.classList.remove('chat-wide-mode');
@@ -556,6 +685,7 @@ function setPlatformView(view,moduleName){
   $('sidebarScrim').classList.remove('open');
   if(selected==='home')refreshControlCenter();
   if(selected==='workspace')refreshWorkspaceView(moduleName);
+  if(selected==='plugins')refreshPluginCenter();
   if(selected==='admin')refreshAdminConsole();
 }
 document.querySelectorAll('.nav-link').forEach(button=>button.addEventListener('click',()=>{

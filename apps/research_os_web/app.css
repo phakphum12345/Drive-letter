@@ -86,8 +86,21 @@
 .workspace-content .home-empty{grid-column:1/-1}
 @media(max-width:760px){.workspace-view{padding:18px 13px max(20px,env(safe-area-inset-bottom))}.workspace-heading{align-items:flex-start;flex-direction:column;gap:10px}.workspace-heading-actions{width:100%;justify-content:space-between}.workspace-content{grid-template-columns:1fr}}
 
-/* Local-first chat history; stored per signed-in account on this browser only. */
-.chat-history-select{max-width:180px;min-width:130px;border:1px solid var(--line2);border-radius:8px;background:#101a2a;color:#cbd7e8;padding:7px 9px;font:inherit;font-size:9px}
-.chat-response-meta{display:block;margin-top:8px;color:var(--dim);font-size:8px;line-height:1.5}
-#chatHistoryStatus{color:var(--dim);font-size:8px;white-space:nowrap}
-@media(max-width:760px){.chat-history-select{max-width:145px;min-width:110px}.conversation-heading .heading-actions{gap:6px}}
+/* First-party integration catalog; no arbitrary third-party code installation. */
+.plugin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.plugin-panel{min-width:0;padding:16px;border:1px solid #27364b;border-radius:12px;background:linear-gradient(145deg,#111d2d,#0d1726)}
+.plugin-panel header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.plugin-panel h2{margin:5px 0 0;font-size:14px}
+.plugin-panel h3{margin:18px 0 8px;color:#aab9cf;font-size:10px}
+.plugin-panel p{color:var(--muted);font-size:9px;line-height:1.6}
+.plugin-actions{display:flex;gap:8px;flex-wrap:wrap}
+.plugin-actions button:disabled,.plugin-save:disabled{opacity:.4;cursor:not-allowed}
+.plugin-services,.plugin-list{display:flex;flex-direction:column;gap:7px}
+.plugin-service{display:flex;align-items:flex-start;gap:8px;padding:8px;border:1px solid #27364b;border-radius:8px;color:#aebbd0;font-size:8px;line-height:1.5;overflow-wrap:anywhere}
+.plugin-service input{margin-top:2px;accent-color:#70a7ff}
+.plugin-record{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border:1px solid #27364b;border-radius:8px}
+.plugin-record-copy{min-width:0;display:flex;flex-direction:column;gap:4px}
+.plugin-record strong{color:#dce5f2;font-size:9px;overflow-wrap:anywhere}
+.plugin-record small{color:#8191a8;font-size:8px;line-height:1.5;overflow-wrap:anywhere}
+.plugin-save{margin-top:12px;width:100%}
+@media(max-width:760px){.plugin-grid{grid-template-columns:1fr}.plugin-panel{padding:13px}}
