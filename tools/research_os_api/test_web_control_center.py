@@ -107,7 +107,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn('id="agentCreateForm"', self.html)
         self.assertIn("request('/v1/agents')", self.js)
         self.assertIn("request('/v1/agents/readiness')", self.js)
-        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("'/v2/orchestrations?'+params.toString()", self.js)
         self.assertIn("request('/v1/agents/orchestrations',{method:'POST'", self.js)
         self.assertIn("OWNER role required for workflow control actions", self.js)
         self.assertIn("window.confirm(prompts[action]", self.js)
