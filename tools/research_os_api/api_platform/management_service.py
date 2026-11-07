@@ -10,7 +10,7 @@ import os
 import tempfile
 import threading
 from dataclasses import asdict, fields, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Type
@@ -125,6 +125,30 @@ class JsonManagementStore:
             state["resources"].setdefault(resource, {})[identifier] = _jsonable(payload)
             self._write(state)
 
+    def put_with_audit(
+        self,
+        resource: str,
+        identifier: str,
+        payload: dict[str, Any],
+        *,
+        actor: str,
+        action: str,
+        outcome: str = "success",
+    ) -> None:
+        """Persist a metadata mutation and its audit event in one atomic file replace."""
+        with self._lock:
+            state = self._read()
+            state["resources"].setdefault(resource, {})[identifier] = _jsonable(payload)
+            state.setdefault("audit", []).append({
+                "actor": actor,
+                "resource": resource,
+                "identifier": identifier,
+                "action": action,
+                "outcome": outcome,
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            })
+            self._write(state)
+
     def list(self, resource: str) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._read()["resources"].get(resource, {}).values())
@@ -194,8 +218,14 @@ class ManagementService:
     def _persist(self, resource: str, obj: Any, *, actor: str, action: str) -> dict[str, Any]:
         identifier = getattr(obj, ID_FIELDS[resource])
         payload = _jsonable(asdict(obj))
-        self.store.put(resource, identifier, payload)
-        self.store.record_audit(actor, resource, identifier, action, "success")
+        try:
+            self.store.put_with_audit(
+                resource, identifier, payload, actor=actor, action=action, outcome="success"
+            )
+        except Exception:
+            # Keep the in-memory registry aligned with the last committed snapshot.
+            self._load()
+            raise
         return payload
 
     def create_api_key(self, payload: dict[str, Any], *, actor: str = "system") -> dict[str, Any]:
@@ -331,8 +361,9 @@ class ManagementService:
         except Exception:
             self._load()
             raise
+        # Validation updates only the in-memory registry. _persist() is the
+        # single durable commit point for both resource metadata and its audit.
         self.registry = rebuilt
-        self.store.put(resource, identifier, _jsonable(asdict(candidate)))
 
 
 def default_management_service() -> ManagementService:

@@ -52,7 +52,8 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("role!=='OWNER'", self.js)
         self.assertIn("request('/platform/v1/organizations')", self.js)
         self.assertIn("request('/platform/v1/audit')", self.js)
-        self.assertIn("read-only inventory", self.html)
+        self.assertIn('User/Role/Policy/Credential administration', self.html)
+        self.assertIn('id="adminCreateForm"', self.html)
 
     def test_plugin_center_uses_real_first_party_integration_apis_and_owner_boundary(self):
         self.assertIn('data-view="plugins" data-min-role="OWNER"', self.html)
