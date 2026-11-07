@@ -33,18 +33,6 @@ abstract class OwnerFriendApi {
   );
 }
 
-extension OwnerFriendEmailOtp on OwnerFriendApi {
-  Future<Map<String, dynamic>> startEmailOtp(String email) =>
-      researchPost('/v1/auth/email-otp/start', body: <String, dynamic>{'email': email});
-
-  Future<Map<String, dynamic>> verifyEmailOtp(String email, String code) =>
-      researchPost(
-        '/v1/auth/email-otp/verify',
-        body: <String, dynamic>{'email': email, 'code': code},
-        headers: const <String, String>{'X-Research-OS-Client': 'native'},
-      );
-}
-
 OwnerFriendApi? _activeOwnerFriendApi;
 
 OwnerFriendApi? get activeOwnerFriendApi => _activeOwnerFriendApi;

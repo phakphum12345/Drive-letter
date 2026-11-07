@@ -14,9 +14,6 @@ class GoogleIdentityPage extends StatefulWidget {
 
 class _GoogleIdentityPageState extends State<GoogleIdentityPage> {
   Timer? _poller;
-  final _emailController = TextEditingController();
-  final _otpController = TextEditingController();
-  bool _otpRequested = false;
   bool _busy = false;
   String? _email;
   String? _role;
@@ -31,8 +28,6 @@ class _GoogleIdentityPageState extends State<GoogleIdentityPage> {
   @override
   void dispose() {
     _poller?.cancel();
-    _emailController.dispose();
-    _otpController.dispose();
     super.dispose();
   }
 
@@ -103,42 +98,6 @@ class _GoogleIdentityPageState extends State<GoogleIdentityPage> {
     }
   }
 
-  Future<void> _sendEmailCode() async {
-    if (_busy) return;
-    setState(() { _busy = true; _message = null; });
-    try {
-      await widget.api.startEmailOtp(_emailController.text.trim());
-      if (mounted) setState(() { _otpRequested = true; _message = 'If email delivery is configured, a verification code has been sent.'; });
-    } catch (error) {
-      if (mounted) setState(() => _message = error.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _verifyEmailCode() async {
-    if (_busy) return;
-    setState(() { _busy = true; _message = null; });
-    try {
-      final result = await widget.api.verifyEmailOtp(_emailController.text.trim(), _otpController.text.trim());
-      final token = result['session']?.toString();
-      final account = result['account'];
-      if (token == null || token.isEmpty) throw const FormatException('Email OTP response did not include a session');
-      widget.api.setSession(token);
-      if (!mounted) return;
-      setState(() {
-        _email = account is Map ? account['email']?.toString() : _emailController.text.trim();
-        _role = account is Map ? account['role']?.toString() : 'USER';
-        _message = 'Email verification complete';
-        _otpRequested = false;
-      });
-    } catch (error) {
-      if (mounted) setState(() => _message = error.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _signOut() async {
     setState(() => _busy = true);
     try {
@@ -198,14 +157,6 @@ class _GoogleIdentityPageState extends State<GoogleIdentityPage> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                TextField(controller: _emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address for OTP')),
-                const SizedBox(height: 8),
-                if (!_otpRequested)
-                  OutlinedButton.icon(onPressed: _busy || connected ? null : _sendEmailCode, icon: const Icon(Icons.mail_outline), label: const Text('Send Email OTP'))
-                else ...[
-                  TextField(controller: _otpController, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit verification code')),
-                  FilledButton.tonal(onPressed: _busy ? null : _verifyEmailCode, child: const Text('Verify Email OTP')),
-                ],
                 if (connected && _role != null) ...[
                   const SizedBox(height: 16),
                   Wrap(spacing: 8, children: [Chip(label: Text('Role: $_role')), const Chip(label: Text('Signed Research OS session'))]),
