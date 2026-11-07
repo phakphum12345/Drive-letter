@@ -47,14 +47,25 @@ class APISpineContractTests(unittest.TestCase):
             self.assertIn("RESEARCH_OS_API_BASE_URL", source)
             self.assertNotIn("RENDER_EXTERNAL_URL", source)
 
-    def test_email_otp_contract_is_present_and_fail_closed_without_smtp(self):
+    def test_email_otp_uses_https_email_api_and_preserves_auth_contract(self):
         module = self.read("tools/research_os_api/email_otp.py")
         api = self.read("tools/research_os_api/server.py")
+        web = self.read("apps/research_os_web/app.js")
+        blueprint = self.read("render.yaml")
         self.assertIn("OTP_TTL_SECONDS = 300", module)
         self.assertIn("OTP_MAX_ATTEMPTS = 5", module)
         self.assertIn("compare_digest", module)
+        self.assertIn("https://api.resend.com/emails", module)
+        self.assertIn("RESEARCH_OS_EMAIL_API_KEY", module)
+        self.assertNotIn("smtplib", module)
+        self.assertNotIn("RESEARCH_OS_EMAIL_SMTP", module)
         self.assertIn("/v1/auth/email-otp/start", api)
         self.assertIn("/v1/auth/email-otp/verify", api)
+        self.assertIn("RESEARCH_OS_EMAIL_API_KEY", blueprint)
+        self.assertIn("RESEARCH_OS_EMAIL_FROM", blueprint)
+        self.assertIn("If email delivery is configured", web)
+        self.assertNotIn("If SMTP is configured", web)
+        self.assertIn("RESEARCH_OS_API_BASE_URL", self.read("owner_special/flutter_app/lib/main.dart"))
 
     def test_local_launcher_uses_loopback_and_dynamic_default_ports(self):
         launcher = self.read("scripts/start-research-os-local.ps1")
