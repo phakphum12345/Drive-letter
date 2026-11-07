@@ -31,6 +31,8 @@ class UserControlCenterCompletionMatrixTests(unittest.TestCase):
             "plugin_center.marketplace",
             "api_management",
             "control_center_ci",
+            "web.agent_center",
+            "web.platform_directory",
         }.issubset(ids))
 
     def test_plugin_runtime_registry_is_not_claimed_as_marketplace(self):
