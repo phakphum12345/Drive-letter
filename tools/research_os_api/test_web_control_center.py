@@ -78,7 +78,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/v1/projects')", self.js)
         self.assertIn("request('/v2/workspaces')", self.js)
         self.assertIn("request('/api/v1/jobs?limit=50')", self.js)
-        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("'/v2/orchestrations?'+params.toString()", self.js)
         self.assertIn("request('/v1/auth/status')", self.js)
         self.assertIn("request('/v1/ai/connections')", self.js)
         self.assertIn("ยังไม่มี API binding", self.js)
@@ -117,8 +117,8 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
     def test_projects_workspace_supports_real_knowledge_search(self):
         self.assertIn('id="workspaceKnowledgeForm"', self.html)
         self.assertIn('id="workspaceKnowledgeSelect"', self.html)
-        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?q='", self.js)
-        self.assertIn("page_size=20", self.js)
+        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?'+params.toString()", self.js)
+        self.assertIn("page_size:'20'", self.js)
 
     def test_history_activity_has_evidence_and_timeline_drilldown(self):
         self.assertIn("showWorkspaceDetail('job'", self.js)
