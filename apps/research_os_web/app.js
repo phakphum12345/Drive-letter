@@ -569,8 +569,11 @@ async function refreshWorkspaceView(moduleName, cursor=null){
     $('workspaceKnowledgeStatus').textContent='กำลังโหลด Workspace Index…';
   }
   $('workspaceRefresh').disabled=true;
+  if(moduleName==='History & Activity'&&$('historyNextPage'))$('historyNextPage').disabled=true;
   try{
     if(!state.account||!state.account.email){
+      if(moduleName==='History & Activity'){historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;}
+      if(moduleName==='Projects & Files'){knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;}
       $('workspaceStatus').textContent='ต้องลงชื่อเข้าใช้ก่อนจึงจะอ่านข้อมูลบัญชีได้';
       workspaceEmpty('Sign in required. ไม่มีการแสดงข้อมูลตัวอย่าง');
       return;
@@ -689,6 +692,7 @@ async function refreshWorkspaceView(moduleName, cursor=null){
     }
     $('workspaceUpdated').textContent='Updated '+new Date().toLocaleTimeString();
   }catch(error){
+    if(moduleName==='History & Activity'){historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;}
     $('workspaceStatus').textContent='โหลดข้อมูลไม่สำเร็จ: '+String(error.message||error);
     workspaceEmpty('API ไม่พร้อมใช้งาน · ไม่มีการใช้ข้อมูลจำลองแทน');
   }finally{
@@ -702,8 +706,9 @@ async function searchWorkspaceKnowledge(event, cursor=null){
   if(event)event.preventDefault();
   const workspaceId=$('workspaceKnowledgeSelect')?.value||'';
   const query=$('workspaceKnowledgeQuery')?.value.trim()||'';
-  if(!workspaceId||!query){$('workspaceKnowledgeStatus').textContent='เลือก Workspace และระบุคำค้นก่อน';return;}
+  if(!workspaceId||!query){knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;$('workspaceKnowledgeStatus').textContent='เลือก Workspace และระบุคำค้นก่อน';return;}
   $('workspaceKnowledgeSubmit').disabled=true;
+  if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;
   $('workspaceKnowledgeStatus').textContent='กำลังค้นหา Workspace Index…';
   try{
     const params=new URLSearchParams({q:query,page_size:'20'});if(cursor)params.set('cursor',cursor);
@@ -813,11 +818,13 @@ async function refreshAgentCenter(cursor=null){
   $('agentsInventory').textContent='';$('agentRuns').textContent='';$('agentTimeline').textContent='';
   agentCard($('agentTimeline'),'Select a workflow run','เลือก Timeline จากรายการ Workflow เพื่อดูเหตุการณ์จริง','READY');
   if(!state.account||!state.account.email){
+    agentNextCursor=null;if($('agentRunsNext'))$('agentRunsNext').disabled=true;
     $('agentsStatus').textContent='Sign in required · ไม่มีการแสดงข้อมูลตัวอย่าง';
     agentCard($('agentsInventory'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Agent readiness','LOCKED');
     agentCard($('agentRuns'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Workflow runs','LOCKED');
     return;
   }
+  if($('agentRunsNext'))$('agentRunsNext').disabled=true;
   const results=await Promise.allSettled([
     request('/v1/agents'),
     request('/v1/agents/readiness'),
