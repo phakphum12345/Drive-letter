@@ -178,7 +178,7 @@
         "tools/research_os_api/agent_server.py",
         "tools/research_os_api/test_web_control_center.py"
       ],
-      "detail": "PR #92 adds a Web Agent Center for live Agent/readiness/run views, plan creation, timeline inspection, and OWNER-gated approve/execute/retry/cancel actions with explicit browser confirmation. Awaiting merge and live authenticated integration verification.",
+      "detail": "Adds a Web Agent Center for live Agent/readiness/run views, plan creation, timeline inspection, and OWNER-gated approve/execute/retry/cancel actions with explicit browser confirmation. Completion remains PARTIAL until authenticated OWNER and non-OWNER integration paths are verified end-to-end.",
       "acceptance": "Verify create/approve/execute/retry/cancel/timeline end-to-end with an authenticated OWNER and a non-OWNER; server-side authorization must remain authoritative and execution must never happen automatically."
     },
     {
@@ -190,7 +190,7 @@
         "apps/research_os_web/app.js",
         "tools/research_os_api/test_web_control_center.py"
       ],
-      "detail": "PR #92 replaces static directory cards with live API-backed views for graph, evidence, jobs, workspaces, readiness, providers, runtime, orchestration, and audit surfaces. Modules without a verified API/executor explicitly show NOT CONNECTED; hardware/EFI/research-gap/hypothesis executors remain unavailable.",
+      "detail": "Replaces static directory cards with live API-backed views for graph, evidence, jobs, workspaces, readiness, providers, runtime, orchestration, and audit surfaces. Modules without a verified API/executor explicitly show NOT CONNECTED; hardware/EFI/research-gap/hypothesis executors remain unavailable.",
       "acceptance": "Verify every mapped endpoint and role boundary; keep unsupported modules explicitly unavailable until a canonical API/runtime executor and tests exist."
     }
   ]
