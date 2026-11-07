@@ -154,7 +154,7 @@ Render starts the Friend service inside the existing API container on loopback. 
 
 ## Authentication and Security Boundary
 
-Google Sign-in และ Email OTP ใช้ Research OS session ชุดเดียวกัน; QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. Email OTP ต้องตั้ง SMTP host/from, `RESEARCH_OS_SESSION_SECRET` และ `RESEARCH_OS_EMAIL_OTP_SECRET` ก่อนจึงจะส่งรหัสและออก session ได้. กำหนด `RESEARCH_OS_API_BASE_URL` เป็น HTTPS origin กลางเดียวสำหรับ Flutter, Web, Google callbacks และ QR URLs (รองรับ `RESEARCH_OS_PUBLIC_BASE_URL` เป็น alias เดิม). ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
+Google Sign-in และ Email OTP ใช้ Research OS session ชุดเดียวกัน; QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. Email OTP ส่งผ่าน Resend HTTPS API โดยตั้ง `RESEARCH_OS_EMAIL_API_KEY`, `RESEARCH_OS_EMAIL_FROM`, `RESEARCH_OS_SESSION_SECRET` และ `RESEARCH_OS_EMAIL_OTP_SECRET` ก่อนจึงจะส่งรหัสและออก session ได้; sender ต้องเป็นอีเมลจากโดเมนที่ยืนยันกับ Resend แล้ว. ระบบไม่ใช้ SMTP และไม่ต้องเปิดพอร์ต SMTP ขาออก. กำหนด `RESEARCH_OS_API_BASE_URL` เป็น HTTPS origin กลางเดียวสำหรับ Flutter, Web, Google callbacks และ QR URLs (รองรับ `RESEARCH_OS_PUBLIC_BASE_URL` เป็น alias เดิม). ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
 
 API local bind ที่ `127.0.0.1` โดยค่าเริ่มต้น; อย่าเปิด internal API/Friend ports สู่ public internet. ใช้ Tailscale Serve เป็นทางเข้า.
 
