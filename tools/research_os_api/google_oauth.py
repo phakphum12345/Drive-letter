@@ -10,7 +10,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from google_workspace import DEFAULT_SCOPES, GoogleWorkspaceConfig
+from google_workspace import DEFAULT_SCOPES, GoogleWorkspaceConfig, load_google_oauth_client_credentials
 
 AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
@@ -30,13 +30,19 @@ class GoogleOAuthBroker:
         self.state_path = self.root / "oauth_state.json"
         self.token_path = self.root / "oauth_token.json"
 
+    def _client_credentials(self) -> tuple[str, str, tuple[str, ...], bool]:
+        try:
+            return load_google_oauth_client_credentials()
+        except ValueError as exc:
+            raise GoogleOAuthError("Google OAuth client JSON file is invalid") from exc
+
     @property
     def client_id(self) -> str:
-        return (os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_ID") or os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
+        return self._client_credentials()[0]
 
     @property
     def client_secret(self) -> str:
-        return (os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_SECRET") or os.environ.get("GOOGLE_CLIENT_SECRET") or "").strip()
+        return self._client_credentials()[1]
 
     def redirect_uri(self) -> str:
         public_base = (os.environ.get("RESEARCH_OS_API_BASE_URL") or os.environ.get("RESEARCH_OS_PUBLIC_BASE_URL") or "").strip().rstrip("/")
@@ -57,6 +63,11 @@ class GoogleOAuthBroker:
     def begin(self) -> dict[str, Any]:
         if not self.config.oauth_configured:
             raise GoogleOAuthError("Google OAuth client ID/secret is not configured on the backend")
+        _, _, authorized_redirect_uris, from_json_file = self._client_credentials()
+        if from_json_file and self.redirect_uri() not in authorized_redirect_uris:
+            raise GoogleOAuthError(
+                "Google OAuth redirect URI is not listed in the client JSON authorized redirect URIs"
+            )
         state = secrets.token_urlsafe(32)
         payload = {
             "state": state,

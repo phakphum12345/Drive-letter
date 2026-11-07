@@ -36,6 +36,63 @@ DEFAULT_SCOPES = {
 }
 
 
+GOOGLE_CLIENT_JSON_ENV = "RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE"
+
+
+def load_google_oauth_client_credentials() -> tuple[str, str, tuple[str, ...], bool]:
+    """Load one matched Google OAuth web-client pair from Render Secret Files or env.
+
+    An explicitly configured JSON path wins over environment variables. On
+    Render, a single client_secret_*.json in /etc/secrets is auto-discovered.
+    The complete client ID/secret pair is always taken from the same source.
+    """
+    configured_path = os.environ.get(GOOGLE_CLIENT_JSON_ENV, "").strip()
+    secret_dir = Path("/etc/secrets")
+    if configured_path:
+        path = Path(configured_path).expanduser()
+    elif secret_dir.is_dir():
+        candidates = sorted(secret_dir.glob("client_secret_*.json"))
+        if len(candidates) > 1:
+            raise ValueError("multiple Google OAuth client JSON files found in /etc/secrets")
+        path = candidates[0] if candidates else None
+    else:
+        path = None
+
+    if path is not None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Google OAuth client JSON file cannot be read") from exc
+        web = payload.get("web") if isinstance(payload, dict) else None
+        if not isinstance(web, dict):
+            raise ValueError("Google OAuth client JSON must contain a web client")
+        client_id = str(web.get("client_id") or "").strip()
+        client_secret = str(web.get("client_secret") or "").strip()
+        raw_redirects = web.get("redirect_uris")
+        redirects = tuple(
+            str(item).strip()
+            for item in raw_redirects
+            if isinstance(item, str) and item.strip()
+        ) if isinstance(raw_redirects, list) else ()
+        if not client_id or not client_secret:
+            raise ValueError("Google OAuth client JSON is missing client credentials")
+        if not redirects:
+            raise ValueError("Google OAuth client JSON has no authorized redirect URIs")
+        return client_id, client_secret, redirects, True
+
+    client_id = (
+        os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_ID")
+        or os.environ.get("GOOGLE_CLIENT_ID")
+        or ""
+    ).strip()
+    client_secret = (
+        os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_SECRET")
+        or os.environ.get("GOOGLE_CLIENT_SECRET")
+        or ""
+    ).strip()
+    return client_id, client_secret, (), False
+
+
 @dataclass(frozen=True)
 class WorkspaceServiceStatus:
     service: str
@@ -61,11 +118,17 @@ class GoogleWorkspaceConfig:
 
     @property
     def client_id_configured(self) -> bool:
-        return bool(os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_ID") or os.environ.get("GOOGLE_CLIENT_ID"))
+        try:
+            return bool(load_google_oauth_client_credentials()[0])
+        except ValueError:
+            return False
 
     @property
     def client_secret_configured(self) -> bool:
-        return bool(os.environ.get("RESEARCH_OS_GOOGLE_CLIENT_SECRET") or os.environ.get("GOOGLE_CLIENT_SECRET"))
+        try:
+            return bool(load_google_oauth_client_credentials()[1])
+        except ValueError:
+            return False
 
     @property
     def oauth_configured(self) -> bool:

@@ -113,5 +113,36 @@ class GoogleIdentityBrokerTest(unittest.TestCase):
             )
 
 
+    def test_identity_sign_in_uses_secret_file_client_and_identity_callback(self):
+        env = {
+            "RESEARCH_OS_GOOGLE_CLIENT_ID": "stale-env-client-id",
+            "RESEARCH_OS_GOOGLE_CLIENT_SECRET": "stale-env-secret",
+            "RESEARCH_OS_API_BASE_URL": "https://research.example.test",
+        }
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, env, clear=True):
+            client_file = os.path.join(tmp, "client_secret.json")
+            with open(client_file, "w", encoding="utf-8") as stream:
+                import json
+                json.dump({
+                    "web": {
+                        "client_id": "identity-file-client.apps.googleusercontent.com",
+                        "client_secret": "identity-file-secret",
+                        "redirect_uris": [
+                            "https://research.example.test/v1/auth/google/callback"
+                        ],
+                    }
+                }, stream)
+            os.environ["RESEARCH_OS_GOOGLE_CLIENT_JSON_FILE"] = client_file
+            broker = GoogleIdentityBroker(tmp)
+            payload = broker.begin()
+            self.assertIn("identity-file-client.apps.googleusercontent.com", payload["authorization_url"])
+            self.assertIn(
+                "https%3A%2F%2Fresearch.example.test%2Fv1%2Fauth%2Fgoogle%2Fcallback",
+                payload["authorization_url"],
+            )
+            self.assertNotIn("stale-env-client-id", payload["authorization_url"])
+
+
+
 if __name__ == "__main__":
     unittest.main()
