@@ -798,7 +798,8 @@ function agentCard(container,title,detail,status){
 async function refreshAgentCenter(){
   if(!$('agentsView')||$('agentsView').hidden)return;
   $('agentsStatus').textContent='กำลังอ่าน Agent Registry และ Orchestration API…';
-  $('agentsInventory').textContent='';$('agentRuns').textContent='';
+  $('agentsInventory').textContent='';$('agentRuns').textContent='';$('agentTimeline').textContent='';
+  agentCard($('agentTimeline'),'Select a workflow run','เลือก Timeline จากรายการ Workflow เพื่อดูเหตุการณ์จริง','READY');
   if(!state.account||!state.account.email){
     $('agentsStatus').textContent='Sign in required · ไม่มีการแสดงข้อมูลตัวอย่าง';
     agentCard($('agentsInventory'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Agent readiness','LOCKED');
