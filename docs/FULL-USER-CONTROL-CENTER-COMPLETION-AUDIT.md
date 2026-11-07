@@ -41,8 +41,15 @@ A snapshot of 97 branches was inventoried against `main`. Several major feature 
 - User Control Center surfaces: PR #79 is merged; the current `main` Web app is newer than the old feature branch.
 - PR #43 was closed without merge; its six config/export files were checked and match the later merged PR #45 result.
 - PR #7 was closed without merge and is superseded by the merged Local/Render endpoint contract work in PR #8. Do not reintroduce its old deployment-mode changes.
+- PR #65 was closed without merge and superseded by the current-main service integration in PR #68.
+- Developer Environment Manager (PR #47), Google identity verification (PR #52), non-Google login regression coverage (PR #17), QR login session verification (PR #39), dynamic port work (PRs #46/#49), Windows runtime diagnostics (PR #11), atomic resource accounting (PR #15), and AEOS reconciliation/wait-state work (PRs #12/#13) are merged.
 
-A branch being ahead by commit count does not prove its code is missing: this repository has squash merges, so old feature branches can appear divergent even when their file contents are already in `main`. Branches are not deleted by this audit. Any remaining orphan or post-merge branch must be reviewed by file/content and tests before selective porting; no mass merge is safe.
+Targeted orphan-branch checks:
+- `feat/research-os-localization-ui` has no PR. It contains a standalone localization editor MVP and a Web localization script, but its `app.js`/`index.html` are older than current `main`; the catalog is not wired to the current full UI. Do not merge the branch wholesale; port only after catalog coverage and current-shell integration are tested.
+- `backbox/mcp-engine-pre-fix-72c2fe0` has no PR and contains historical snapshot artifacts. The live MCP engine and tests already match the merged PR #50 implementation.
+- `fix/auth-handoff-root-convergence`, `fix/windows-service-api-supervision`, and `test/api-stability-during-owner-service-lifecycle` have no current PR. Checked app-shell/QR-pairing/server/workflow files are older or superseded by current `main`; review only genuinely new tests or diagnostics before porting.
+
+A branch being ahead by commit count does not prove its code is missing: this repository has squash merges, so old feature branches can appear divergent even when their file contents are already in `main`. The 97-branch inventory is an ancestry snapshot plus targeted content checks, not a claim that every orphan branch has been exhaustively diffed. Branches are not deleted by this audit. Any remaining orphan or post-merge branch must be reviewed by file/content and tests before selective porting; no mass merge is safe.
 
 ## Required implementation order
 
