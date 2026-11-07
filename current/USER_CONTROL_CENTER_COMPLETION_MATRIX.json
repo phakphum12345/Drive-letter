@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "status": "BASELINE_AUDIT",
   "baseline_ref": "main",
-  "baseline_commit": "065174320974c30e99f2a8ce185e145ed9c03e84",
+  "baseline_commit": "cd582e0940560e7e6dddd2c4b9790d118fffb909",
   "rules": [
     "A visible page or button is not complete unless it invokes an authoritative API/runtime and renders the returned outcome.",
     "Read-only observation must never be described as execution or authorization.",
@@ -30,8 +30,8 @@
         "apps/research_os_web/app.js",
         "apps/research_os_web/index.html"
       ],
-      "detail": "Calls /v1/ai/generate and supports wide/normal layout; chat state is in-memory only and no model/agent/plugin selector is present.",
-      "acceptance": "Durable conversation history, provider/model selection, explicit agent/workflow routing, and real error/stream behavior."
+      "detail": "Calls /v1/ai/generate and persists local conversation history in browser localStorage; wide layout is persisted. Cross-device durable sync and user-facing provider/model/agent/plugin selection are not complete.",
+      "acceptance": "Verify local history restore/clear and error recovery; add supported provider/model routing only when the backend exposes the active route and validated provider/model contract; do not claim browser storage is durable cloud history."
     },
     {
       "id": "web.projects_files",
@@ -41,8 +41,8 @@
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Web page now reads ProjectRegistry (/v1/projects) and Workspace Index (/v2/workspaces); create/edit/delete and file operations are not exposed.",
-      "acceptance": "Add real file/project actions only after confirming authoritative APIs; preserve ProjectRegistry and shared workspace ownership."
+      "detail": "Reads ProjectRegistry and Workspace Index; PR #92 adds workspace selection and live knowledge search through /v2/workspaces/{id}/knowledge. Project CRUD and file upload/edit/delete remain unavailable because no authoritative API is exposed here.",
+      "acceptance": "Verify workspace selection/search and provenance rendering; add project/file mutations only after authoritative APIs and ownership rules are confirmed."
     },
     {
       "id": "web.history_activity",
@@ -52,8 +52,8 @@
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Web page now reads owner-scoped jobs (/api/v1/jobs) and orchestration runs (/v1/agents/orchestrations); detailed evidence drill-down and history search/filter are not yet implemented.",
-      "acceptance": "Add evidence drill-down, pagination/search, and traceable detail views using authoritative job/orchestration/evidence APIs."
+      "detail": "Reads owner-scoped jobs and orchestration runs; PR #92 adds job evidence and workflow detail/timeline drill-down. Search, filters, and pagination remain outstanding.",
+      "acceptance": "Verify evidence/timeline drill-down against live API responses; add query/filter/pagination using supported API parameters."
     },
     {
       "id": "web.settings_account",
@@ -69,14 +69,14 @@
     {
       "id": "web.admin_console",
       "surface": "web",
-      "status": "WIRED_NOT_EXECUTABLE",
+      "status": "PARTIAL",
       "evidence": [
         "apps/research_os_web/app.js",
         "tools/research_os_api/api_platform/management_http.py",
         "tools/research_os_api/test_web_control_center.py"
       ],
-      "detail": "OWNER-only management inventory and audit reads are wired; UI explicitly states inventory is read-only.",
-      "acceptance": "Keep read-only until durable lifecycle, credential, approval, audit, and recovery contracts are proven; then add individually authorized operations."
+      "detail": "OWNER-only management inventory and audit are live; UI also creates organization/project/application/API metadata and exposes API publish/disable lifecycle actions through the Management API. User/role/policy/credential lifecycle remains unavailable.",
+      "acceptance": "Keep server-side OWNER/RBAC, relationship validation, and audit atomicity; expose additional user/role/policy/credential actions only after their canonical lifecycle and recovery APIs exist."
     },
     {
       "id": "flutter.projects",
@@ -97,7 +97,7 @@
         "apps/research_os_flutter/lib/src/features/workflows/workflow_experience_page.dart",
         "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
       ],
-      "detail": "Workflow Experience reads orchestration runs/timelines and now links directly to Agent Center, which already exposes create, execute, approval/confirm, retry, cancel, and timeline controls through the existing Owner-authorized API.",
+      "detail": "Workflow Experience reads runs/timelines and links to Agent Center; Agent Center exposes create, execute, approval/confirm, retry, cancel, and timeline controls through the existing Owner-authorized API. The workflow page itself remains observational.",
       "acceptance": "Verify navigation and all Agent Center lifecycle actions with Flutter widget/API integration tests; keep Owner authorization and explicit confirmation enforced server-side."
     },
     {
@@ -141,8 +141,8 @@
       "evidence": [
         "v3/assistant_core/plugins.py"
       ],
-      "detail": "A V3 runtime PluginRegistry exists, but no user-facing plugin catalog/install/connect/permission/test/enable/disable/audit service or API was found in the inspected repository paths.",
-      "acceptance": "Design and implement a server-owned plugin manifest/connection/secret/permission/audit lifecycle; never treat runtime handler registration as marketplace installation."
+      "detail": "A general user-facing plugin marketplace/install/permission/audit lifecycle is still missing. Existing Web Plugin Center does provide first-party Google Workspace OAuth connect/disconnect/service selection and secret-safe AI provider connection status; this is not a third-party marketplace.",
+      "acceptance": "If a general marketplace is required, implement a server-owned manifest/connection/secret/permission/audit lifecycle; do not treat first-party connectors or the V3 runtime registry as marketplace installation."
     },
     {
       "id": "api_management",
@@ -165,8 +165,33 @@
         "apps/research_os_flutter/test/features/control_center/native_control_center_page_test.dart",
         "apps/research_os_flutter/test/owner_experience_page_test.dart"
       ],
-      "detail": "Dedicated Control Center workflow currently filters web/API paths; Flutter control/owner tests are not included by its path trigger.",
-      "acceptance": "Add Flutter path triggers and run relevant Flutter analyze/widget tests in the Control Center gate."
+      "detail": "Dedicated Control Center workflow watches Web/API and selected Flutter paths and runs Web syntax/source-contract tests across Ubuntu/Windows/macOS. It does not yet run Flutter analyze/widget tests in this gate.",
+      "acceptance": "Add Flutter analyze and focused widget/API integration tests to the dedicated gate, while retaining exact-SHA Web/API checks."
+    },
+    {
+      "id": "web.agent_center",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/index.html",
+        "apps/research_os_web/app.js",
+        "tools/research_os_api/agent_server.py",
+        "tools/research_os_api/test_web_control_center.py"
+      ],
+      "detail": "PR #92 adds a Web Agent Center for live Agent/readiness/run views, plan creation, timeline inspection, and OWNER-gated approve/execute/retry/cancel actions with explicit browser confirmation. Awaiting merge and live authenticated integration verification.",
+      "acceptance": "Verify create/approve/execute/retry/cancel/timeline end-to-end with an authenticated OWNER and a non-OWNER; server-side authorization must remain authoritative and execution must never happen automatically."
+    },
+    {
+      "id": "web.platform_directory",
+      "surface": "web",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_web/index.html",
+        "apps/research_os_web/app.js",
+        "tools/research_os_api/test_web_control_center.py"
+      ],
+      "detail": "PR #92 replaces static directory cards with live API-backed views for graph, evidence, jobs, workspaces, readiness, providers, runtime, orchestration, and audit surfaces. Modules without a verified API/executor explicitly show NOT CONNECTED; hardware/EFI/research-gap/hypothesis executors remain unavailable.",
+      "acceptance": "Verify every mapped endpoint and role boundary; keep unsupported modules explicitly unavailable until a canonical API/runtime executor and tests exist."
     }
   ]
 }
