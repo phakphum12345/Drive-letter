@@ -41,8 +41,8 @@
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Reads ProjectRegistry and Workspace Index; PR #92 adds workspace selection and live knowledge search through /v2/workspaces/{id}/knowledge. Project CRUD and file upload/edit/delete remain unavailable because no authoritative API is exposed here.",
-      "acceptance": "Verify workspace selection/search and provenance rendering; add project/file mutations only after authoritative APIs and ownership rules are confirmed."
+      "detail": "Reads ProjectRegistry and Workspace Index, supports knowledge search with provenance and cursor pagination through /v2/workspaces/{id}/knowledge. Project CRUD and file upload/edit/delete remain unavailable because no authoritative mutation API is exposed here.",
+      "acceptance": "Verify workspace selection, search, cursor pagination, and provenance rendering; add project/file mutations only after authoritative APIs and ownership rules are confirmed."
     },
     {
       "id": "web.history_activity",
@@ -52,8 +52,8 @@
         "apps/research_os_web/index.html",
         "apps/research_os_web/app.js"
       ],
-      "detail": "Reads owner-scoped jobs and orchestration runs; PR #92 adds job evidence and workflow detail/timeline drill-down. Search, filters, and pagination remain outstanding.",
-      "acceptance": "Verify evidence/timeline drill-down against live API responses; add query/filter/pagination using supported API parameters."
+      "detail": "Reads owner-scoped jobs and orchestration runs, with evidence/timeline drill-down. Workflow history now supports server-side query/status filters and cursor pagination; execution jobs remain capped at the latest 50 because the current jobs API exposes limit but no cursor/filter contract.",
+      "acceptance": "Verify workflow filters/cursor pages and evidence/timeline drill-down against live API responses; add job filters/pagination only after the Cloud+Local jobs API exposes a stable query contract."
     },
     {
       "id": "web.settings_account",
@@ -178,8 +178,8 @@
         "tools/research_os_api/agent_server.py",
         "tools/research_os_api/test_web_control_center.py"
       ],
-      "detail": "Adds a Web Agent Center for live Agent/readiness/run views, plan creation, timeline inspection, and OWNER-gated approve/execute/retry/cancel actions with explicit browser confirmation. Completion remains PARTIAL until authenticated OWNER and non-OWNER integration paths are verified end-to-end.",
-      "acceptance": "Verify create/approve/execute/retry/cancel/timeline end-to-end with an authenticated OWNER and a non-OWNER; server-side authorization must remain authoritative and execution must never happen automatically."
+      "detail": "Web Agent Center reads live agent/readiness data and now supports server-side workflow search/status filters and cursor pagination through authenticated V2 APIs. OWNER-gated approve/execute/retry/cancel actions remain explicit; authenticated OWNER/non-OWNER end-to-end verification is still pending.",
+      "acceptance": "Verify create/approve/execute/retry/cancel/timeline and filtered cursor pages end-to-end with authenticated OWNER and non-OWNER sessions; preserve server-side authorization and never execute automatically."
     },
     {
       "id": "web.platform_directory",
