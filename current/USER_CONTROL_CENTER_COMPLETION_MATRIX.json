@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "status": "BASELINE_AUDIT",
   "baseline_ref": "main",
-  "baseline_commit": "cd582e0940560e7e6dddd2c4b9790d118fffb909",
+  "baseline_commit": "b52ff3cfea0a8d3d30224e81c648feabb9bc830a",
   "rules": [
     "A visible page or button is not complete unless it invokes an authoritative API/runtime and renders the returned outcome.",
     "Read-only observation must never be described as execution or authorization.",
@@ -192,6 +192,53 @@
       ],
       "detail": "Replaces static directory cards with live API-backed views for graph, evidence, jobs, workspaces, readiness, providers, runtime, orchestration, and audit surfaces. Modules without a verified API/executor explicitly show NOT CONNECTED; hardware/EFI/research-gap/hypothesis executors remain unavailable.",
       "acceptance": "Verify every mapped endpoint and role boundary; keep unsupported modules explicitly unavailable until a canonical API/runtime executor and tests exist."
+    },
+    {
+      "id": "recon.back_box.config_snapshot",
+      "surface": "cross_platform",
+      "status": "CANONICAL_WIRED",
+      "evidence": [
+        ".github/workflows/recon-back-box-config.yml",
+        "current/recon-back-box/config/recon-back-box.config.json",
+        "platform/recon-back-box/Export-ReconBackBoxConfig.ps1"
+      ],
+      "detail": "Main snapshots the four versioned Recon Back Box configs after exact-SHA checkout, validates JSON/schema and exports a SHA-256 manifest as a workflow artifact. The workflow is snapshot-only and does not modify or delete source configs.",
+      "acceptance": "Keep exact-SHA validation, no-overwrite behavior, empty-domain crawl guard, source immutability, and artifact verification."
+    },
+    {
+      "id": "recon.back_box.public_github_targets",
+      "surface": "flutter",
+      "status": "CANONICAL_WIRED",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/control_center/recon_back_box_view.dart",
+        "apps/research_os_flutter/lib/src/api/research_os_api_client.dart",
+        "apps/research_os_flutter/test/recon_back_box_view_test.dart"
+      ],
+      "detail": "Native Recon Back Box lists public repositories for a selected GitHub owner and loads a selected repository dashboard through the existing API; owner/repository selection is persisted locally.",
+      "acceptance": "Verify owner/repository switching, empty/error states, and exact selected-target requests against the live API; preserve read-only GitHub observation."
+    },
+    {
+      "id": "recon.back_box.native_ui",
+      "surface": "flutter",
+      "status": "PARTIAL",
+      "evidence": [
+        "apps/research_os_flutter/lib/src/features/control_center/recon_back_box_view.dart",
+        "apps/research_os_flutter/test/recon_back_box_view_test.dart"
+      ],
+      "detail": "Overview, Runs & PRs, Artifacts, Config, and Learning & Evidence tabs exist. Config save and learning notes are local-only; they do not publish config or evidence to GitHub or a durable server store.",
+      "acceptance": "Expose remote write actions only through an authenticated, audited server executor with explicit confirmation; label local-only persistence and user-entered unverified sources accurately."
+    },
+    {
+      "id": "recon.branch_reconciliation",
+      "surface": "verification",
+      "status": "PARTIAL",
+      "evidence": [
+        "docs/FULL-USER-CONTROL-CENTER-COMPLETION-AUDIT.md",
+        "current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json"
+      ],
+      "detail": "Targeted current-main comparison found the core Recon Back Box UI/config/GitHub-target PRs merged or superseded. Historical AEOS/Flutter reconciliation branches contain older or divergent snapshots; branch ancestry alone is not merge evidence.",
+      "acceptance": "Compare each remaining orphan branch by file content and tests before selective porting; never mass-merge stale branches or delete branches as part of reconciliation."
     }
-  ]
+  ],
+  "last_reconciled_commit": "b52ff3cfea0a8d3d30224e81c648feabb9bc830a"
 }
