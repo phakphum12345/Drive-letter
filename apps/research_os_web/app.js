@@ -556,6 +556,12 @@ async function refreshWorkspaceView(moduleName){
   $('workspaceContent').textContent='';
   if($('workspaceDetail')){$('workspaceDetail').hidden=true;$('workspaceDetail').textContent='';}
   if($('workspaceKnowledgeSearch'))$('workspaceKnowledgeSearch').hidden=moduleName!=='Projects & Files';
+  if(moduleName==='Projects & Files'&&$('workspaceKnowledgeSelect')){
+    $('workspaceKnowledgeSelect').textContent='';
+    $('workspaceKnowledgeSelect').disabled=true;
+    $('workspaceKnowledgeSubmit').disabled=true;
+    $('workspaceKnowledgeStatus').textContent='กำลังโหลด Workspace Index…';
+  }
   $('workspaceRefresh').disabled=true;
   try{
     if(!state.account||!state.account.email){
