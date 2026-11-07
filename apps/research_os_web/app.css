@@ -104,3 +104,28 @@
 .plugin-record small{color:#8191a8;font-size:8px;line-height:1.5;overflow-wrap:anywhere}
 .plugin-save{margin-top:12px;width:100%}
 @media(max-width:760px){.plugin-grid{grid-template-columns:1fr}.plugin-panel{padding:13px}}
+
+/* Live user workspace and Agent Center surfaces. */
+.workspace-search,.workspace-detail{margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.workspace-search form{display:grid;grid-template-columns:minmax(150px,1fr) minmax(180px,2fr) auto;gap:10px;align-items:end}
+.workspace-search label{display:block;color:var(--muted);font-size:12px;font-weight:700}
+.workspace-search input,.workspace-search select,.agent-create-panel textarea{width:100%;min-width:0;margin-top:5px;padding:10px 12px;border:1px solid var(--line2);border-radius:9px;background:var(--panel2);color:var(--text)}
+.workspace-search p{margin:10px 0 0;color:var(--muted);font-size:12px}
+.workspace-record-action{margin-top:10px;align-self:flex-start}
+.workspace-detail h2{margin:0 0 12px;font-size:17px}
+.workspace-detail section{margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:10px}
+.workspace-detail pre,.registry-live-card pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:12px;line-height:1.5}
+.registry-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0;color:var(--muted);font-size:13px}
+.registry-live-card{min-width:0;overflow:hidden}
+.registry-live-card pre{max-height:340px;margin:12px 0 0;padding:10px;background:var(--panel2);border-radius:8px}
+.agent-center-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
+.agent-center-layout .admin-panel{min-width:0}
+.agent-create-panel textarea{resize:vertical;font:inherit}
+.agent-create-panel .admin-note{margin:10px 0;color:var(--muted);font-size:12px;line-height:1.5}
+.agent-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.agent-actions button{font-size:12px;padding:7px 10px}
+@media(max-width:760px){
+  .workspace-search form{grid-template-columns:1fr}
+  .registry-toolbar{align-items:flex-start;flex-direction:column}
+  .agent-center-layout{grid-template-columns:1fr}
+}

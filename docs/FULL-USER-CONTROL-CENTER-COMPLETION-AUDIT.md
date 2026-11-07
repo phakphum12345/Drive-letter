@@ -1,35 +1,63 @@
-# Full User Control Center Completion — Baseline Audit
+# Full User Control Center Completion — Reconciled Audit
 
-**Status:** Baseline audit only; this document does not claim completion.  
+**Status:** Reconciled baseline; the User Control Center is still not complete.  
 **Repository:** `phakphum12345/Drive-letter`  
-**Audited main commit:** `065174320974c30e99f2a8ce185e145ed9c03e84`
+**Audited main commit:** `cd582e0940560e7e6dddd2c4b9790d118fffb909`  
+**Implementation source:** PR #92 — live Web Agent Center and workspace controls; completion still requires authenticated runtime verification.
 
 ## Executive result
 
-The User Control Center is **not complete**. The repository contains substantial working surfaces and APIs, but some Web navigation destinations are now API-backed read-only views, while other domain destinations remain static directory placeholders, Flutter workflow UI is primarily observational despite additional lifecycle methods in the API client, Native Control commands are not uniformly bound to real executors, and a user-facing Plugin Center lifecycle was not found.
+The platform has several real, API-backed control surfaces. The remaining work is not to merge every historical branch blindly; it is to verify each capability against its canonical backend, preserve authorization boundaries, and implement only missing executors.
 
-The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json`. Its statuses deliberately distinguish a live read surface from an executable capability.
+The Web Agent Center, Workspace Index search, evidence/timeline drill-down, and live API-backed domain views are introduced in PR #92. Modules without a verified API/executor are explicitly shown as NOT CONNECTED rather than being presented as working controls.
+
+The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MATRIX.json`. It deliberately distinguishes observation, supported actions, and missing executors.
 
 ## Verified findings
 
-1. **Web dashboard:** reads live health, jobs, agents, and evidence. It explicitly reports cloud workers as not deployed and avoids demo data when storage is unavailable.
-2. **Web chat:** sends through `/v1/ai/generate`; wide layout is persisted. Conversation messages remain in browser memory only, and the UI does not yet expose complete model, agent, workflow, or plugin routing.
-3. **Web workspaces:** Projects & Files now reads ProjectRegistry and Workspace Index; History & Activity reads owner-scoped jobs and orchestration runs; Settings & Account reads authenticated account/provider/secret-safe connection status. These are read-only slices, not complete management surfaces. Other domain entries still route to the static Platform Directory.
-4. **Web Admin Console:** OWNER-only read-only inventory and management audit are connected to `/platform/v1`. The UI explicitly defers role, user, policy, and credential mutation pending durable persistence and approval/audit flows.
-5. **Flutter Projects:** reads ProjectRegistry metadata; this is not a full project/file management workspace.
-6. **Flutter Workflow:** reads orchestration runs and timelines. The API client also defines create/execute/confirm/retry/cancel operations, but the inspected page does not expose these actions.
-7. **Flutter Native Control Center:** reads runtime observations. Its command handler performs navigation/local simulation state changes for some commands; this is not equivalent to invoking a live executor. Audit snapshots are assembled in the page and include deferred checks.
-8. **Owner Experience:** server-derived identity and platform observations are present; the page is intentionally read-only.
-9. **Plugin Center:** V3 has a runtime `PluginRegistry`, but this is not a user-facing catalog or secure plugin installation/connection/permission lifecycle.
-10. **CI coverage:** the dedicated User Control Center workflow currently watches Web/API paths, not the Flutter control-center and owner pages whose widget tests already exist.
+1. **Web dashboard:** reads live health, jobs, agents, and job evidence. It explicitly reports cloud workers as not deployed and avoids demo data when storage is unavailable.
+2. **Web chat:** sends through `/v1/ai/generate` and persists local conversation history in browser `localStorage`; this is not durable cross-device history. Complete provider/model/agent/plugin selection and streaming behavior are not exposed.
+3. **Web Projects & Files:** reads ProjectRegistry and Workspace Index. PR #92 adds Workspace selection and knowledge search through `/v2/workspaces/{id}/knowledge`. Project CRUD and file upload/edit/delete remain unavailable in this surface because no authoritative mutation API is exposed here.
+4. **Web History & Activity:** reads owner-scoped jobs and orchestration runs. PR #92 adds job evidence and workflow run/timeline drill-down. Search, filters, and pagination remain outstanding.
+5. **Web Settings & Account:** reads authenticated identity, login provider catalog, active AI provider, and secret-safe connection status. Mutations remain limited to existing first-party flows in Plugin Center.
+6. **Web Admin Console:** OWNER-only Management API inventory and audit are connected. The UI creates organization/project/application/API metadata and exposes API publish/disable lifecycle actions. User/role/policy/credential lifecycle remains unavailable and must not be simulated.
+7. **Flutter Projects:** reads ProjectRegistry metadata. This is not a full project/file management workspace.
+8. **Flutter Workflows and Agent Center:** Workflow Experience reads runs/timelines and links to Agent Center. Agent Center exposes create, execute, approval/confirm, retry, cancel, and timeline controls through the existing Owner-authorized API. Execution remains explicit and server-authorized.
+9. **Flutter Chat:** local conversation persistence and optional cloud conversation sync exist. Provider/model/agent/plugin coverage and cross-device failure recovery still require end-to-end verification.
+10. **Flutter Native Control Center:** runtime observations are API-backed. Some commands remain navigation/local simulation state changes rather than live executors; audit snapshots are assembled in the page and include deferred checks.
+11. **Owner Experience:** server-derived owner identity and platform observations are present; the page is intentionally read-only.
+12. **Plugin Center:** first-party Google Workspace OAuth connect/disconnect/service selection and secret-safe AI provider connection status are present. A general third-party marketplace with install, scoped permissions, test, enable/disable, and audit lifecycle is still missing.
+13. **Platform Directory:** PR #92 maps supported domains to live APIs and shows unsupported domains as NOT CONNECTED. Hardware, EFI/OpenCore, research-gap, and hypothesis executors remain unavailable until canonical APIs exist.
+14. **CI coverage:** the dedicated Control Center workflow watches Web/API and selected Flutter paths and runs Web syntax/source-contract tests on Ubuntu, Windows, and macOS. It does not yet run Flutter analyze/widget tests in that gate.
+
+## Branch reconciliation findings
+
+A snapshot of 97 branches was inventoried against `main`. Several major feature families are already merged or superseded and must not be merged again as stale branches:
+
+- Recon Back Box UI/config/GitHub targets: PRs #44, #45, and #57 are merged; checked config/export files match `main`, and the current native UI is newer than the old PR #44 branch.
+- Capacity Harness and Native MCP Engine: PRs #48 and #50 are merged; their checked workflow, implementation, and test files match `main`.
+- Evidence Recovery: PR #78 is merged; the V2 branch's core recovery, HTTP, store, and test files match `main`.
+- Localization Center: PR #51 is merged; checked localization center/catalog files match `main`.
+- User Control Center surfaces: PR #79 is merged; the current `main` Web app is newer than the old feature branch.
+- PR #43 was closed without merge; its six config/export files were checked and match the later merged PR #45 result.
+- PR #7 was closed without merge and is superseded by the merged Local/Render endpoint contract work in PR #8. Do not reintroduce its old deployment-mode changes.
+- PR #65 was closed without merge and superseded by the current-main service integration in PR #68.
+- Developer Environment Manager (PR #47), Google identity verification (PR #52), non-Google login regression coverage (PR #17), QR login session verification (PR #39), dynamic port work (PRs #46/#49), Windows runtime diagnostics (PR #11), atomic resource accounting (PR #15), and AEOS reconciliation/wait-state work (PRs #12/#13) are merged.
+
+Targeted orphan-branch checks:
+- `feat/research-os-localization-ui` has no PR. It contains a standalone localization editor MVP and a Web localization script, but its `app.js`/`index.html` are older than current `main`; the catalog is not wired to the current full UI. Do not merge the branch wholesale; port only after catalog coverage and current-shell integration are tested.
+- `backbox/mcp-engine-pre-fix-72c2fe0` has no PR and contains historical snapshot artifacts. The live MCP engine and tests already match the merged PR #50 implementation.
+- `fix/auth-handoff-root-convergence`, `fix/windows-service-api-supervision`, and `test/api-stability-during-owner-service-lifecycle` have no current PR. Checked app-shell/QR-pairing/server/workflow files are older or superseded by current `main`; review only genuinely new tests or diagnostics before porting.
+
+A branch being ahead by commit count does not prove its code is missing: this repository has squash merges, so old feature branches can appear divergent even when their file contents are already in `main`. The 97-branch inventory is an ancestry snapshot plus targeted content checks, not a claim that every orphan branch has been exhaustively diffed. Branches are not deleted by this audit. Any remaining orphan or post-merge branch must be reviewed by file/content and tests before selective porting; no mass merge is safe.
 
 ## Required implementation order
 
-- **Phase 1 — Contract and verification:** keep this matrix current; extend the dedicated CI gate to Flutter; add page/action contract tests.
-- **Phase 2 — Real user workspaces:** complete the API-backed Web read views with search, pagination, evidence drill-down, and supported mutations only where authoritative APIs exist; add real Flutter project actions only where authoritative APIs exist.
-- **Phase 3 — Workflow and chat:** expose server-authorized orchestration lifecycle actions; complete provider/model routing and durable chat history without breaking local-first behavior.
+- **Phase 1 — Contract and verification:** keep this matrix current; extend the dedicated CI gate to Flutter; add page/action contract and authenticated integration tests.
+- **Phase 2 — Real user workspaces:** verify Web knowledge search and history evidence drill-down; add pagination/filtering; add project/file mutations only if authoritative APIs exist.
+- **Phase 3 — Workflow and chat:** verify Web/Flutter orchestration lifecycle actions; complete provider/model routing and durable chat history without breaking local-first behavior.
 - **Phase 4 — Native Control:** map every command to a verified executor/observation/evidence path; otherwise label it accurately as navigation, preparation, simulation, or unavailable.
-- **Phase 5 — Plugin Center:** implement manifest discovery, connect/install lifecycle, scoped permissions, secret handling, connection tests, enable/disable, audit, and agent authorization. Do not reuse the V3 runtime registry as a marketplace.
+- **Phase 5 — Plugin Center:** decide whether a general marketplace is required; if so, implement a server-owned manifest/connection/secret/permission/audit lifecycle. Do not reuse the V3 runtime registry as a marketplace.
 - **Phase 6 — Security and release:** verify authentication/RBAC, approval gates, data integrity, failure recovery, Web/Flutter/API E2E, platform builds, and post-merge runtime behavior.
 
 ## Non-negotiable boundaries
@@ -39,6 +67,7 @@ The machine-readable status matrix is `current/USER_CONTROL_CENTER_COMPLETION_MA
 - No direct high-risk execution without server authorization and required human approval.
 - No new runtime, scheduler, evidence store, or plugin secret store that duplicates an existing canonical service.
 - Preserve existing records, chat history, platform identities, installer/release contracts, and evidence provenance.
+- Local Mode, Ollama, API ports, and local runtime settings remain unchanged.
 - Merge only when required checks are green; verify the merged `main` and runtime afterward.
 
 ## Completion definition

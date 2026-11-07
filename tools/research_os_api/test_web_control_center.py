@@ -74,7 +74,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn('data-view="workspace" data-module="History & Activity"', self.html)
         self.assertIn('data-view="workspace" data-module="Settings & Account"', self.html)
         self.assertIn('id="workspaceView"', self.html)
-        self.assertIn("!['registry','workspace'].includes(selected)", self.js)
+        self.assertIn("!['registry','workspace','agents'].includes(selected)", self.js)
         self.assertIn("request('/v1/projects')", self.js)
         self.assertIn("request('/v2/workspaces')", self.js)
         self.assertIn("request('/api/v1/jobs?limit=50')", self.js)
@@ -99,6 +99,39 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("state.messages.length===0", self.js)
         self.assertNotIn("state.messages=[];addMessage('user',prompt)", self.js)
 
+
+
+    def test_agent_center_uses_real_orchestration_api_and_owner_gated_actions(self):
+        self.assertIn('data-view="agents"', self.html)
+        self.assertIn('id="agentsView"', self.html)
+        self.assertIn('id="agentCreateForm"', self.html)
+        self.assertIn("request('/v1/agents')", self.js)
+        self.assertIn("request('/v1/agents/readiness')", self.js)
+        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("request('/v1/agents/orchestrations',{method:'POST'", self.js)
+        self.assertIn("OWNER role required for workflow control actions", self.js)
+        self.assertIn("window.confirm(prompts[action]", self.js)
+        self.assertIn("request(path,{method:'POST'", self.js)
+        self.assertIn("request('/v1/agents/orchestrations/'+encodeURIComponent(runId)+'/timeline')", self.js)
+
+    def test_projects_workspace_supports_real_knowledge_search(self):
+        self.assertIn('id="workspaceKnowledgeForm"', self.html)
+        self.assertIn('id="workspaceKnowledgeSelect"', self.html)
+        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?q='", self.js)
+        self.assertIn("page_size=20", self.js)
+
+    def test_history_activity_has_evidence_and_timeline_drilldown(self):
+        self.assertIn("showWorkspaceDetail('job'", self.js)
+        self.assertIn("showWorkspaceDetail('workflow'", self.js)
+        self.assertIn("'/api/v1/jobs/'+encodeURIComponent(id)+'/evidence'", self.js)
+        self.assertIn("'/v1/agents/orchestrations/'+encodeURIComponent(id)+'/timeline'", self.js)
+
+    def test_platform_directory_loads_live_api_data_or_explicitly_reports_missing_executor(self):
+        self.assertIn('id="registryContent"', self.html)
+        self.assertIn("async function refreshRegistryView(moduleName)", self.js)
+        self.assertIn("const registryBindings=", self.js)
+        self.assertIn("NOT CONNECTED", self.js)
+        self.assertIn("no demo data", self.js)
 
 if __name__ == "__main__":
     unittest.main()

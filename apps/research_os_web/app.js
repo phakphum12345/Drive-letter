@@ -519,7 +519,7 @@ async function saveGoogleWorkspaceServices(){
   finally{$('pluginGoogleSave').disabled=false}
 }
 
-function workspaceRecord(title, detail, status) {
+function workspaceRecord(title, detail, status, action=null) {
   const card=document.createElement('article');
   card.className='workspace-record';
   const heading=document.createElement('strong');
@@ -532,6 +532,14 @@ function workspaceRecord(title, detail, status) {
     badge.className='home-status-tag status-'+String(status).toLowerCase().replace(/[^a-z0-9_-]/g,'');
     badge.textContent=status;
     card.appendChild(badge);
+  }
+  if(action&&typeof action.onClick==='function'){
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='subtle-button workspace-record-action';
+    button.textContent=action.label||'Open';
+    button.addEventListener('click',action.onClick);
+    card.appendChild(button);
   }
   $('workspaceContent').appendChild(card);
 }
@@ -546,6 +554,14 @@ async function refreshWorkspaceView(moduleName){
   $('workspaceTitle').textContent=moduleName||'Workspace';
   $('workspaceStatus').textContent='กำลังอ่านข้อมูลจาก Research OS API…';
   $('workspaceContent').textContent='';
+  if($('workspaceDetail')){$('workspaceDetail').hidden=true;$('workspaceDetail').textContent='';}
+  if($('workspaceKnowledgeSearch'))$('workspaceKnowledgeSearch').hidden=moduleName!=='Projects & Files';
+  if(moduleName==='Projects & Files'&&$('workspaceKnowledgeSelect')){
+    $('workspaceKnowledgeSelect').textContent='';
+    $('workspaceKnowledgeSelect').disabled=true;
+    $('workspaceKnowledgeSubmit').disabled=true;
+    $('workspaceKnowledgeStatus').textContent='กำลังโหลด Workspace Index…';
+  }
   $('workspaceRefresh').disabled=true;
   try{
     if(!state.account||!state.account.email){
@@ -573,6 +589,21 @@ async function refreshWorkspaceView(moduleName){
       }
       if(workspaceResult.status==='fulfilled'){
         const workspaces=Array.isArray(workspaceResult.value.workspaces)?workspaceResult.value.workspaces:[];
+        const selector=$('workspaceKnowledgeSelect');
+        if(selector){
+          selector.textContent='';
+          workspaces.forEach(workspace=>{
+            const id=String(workspace.workspace_id||workspace.id||'').trim();
+            if(!id)return;
+            const option=document.createElement('option');
+            option.value=id;
+            option.textContent=String(workspace.name||id);
+            selector.appendChild(option);
+          });
+          selector.disabled=!workspaces.length;
+          $('workspaceKnowledgeSubmit').disabled=!workspaces.length;
+          $('workspaceKnowledgeStatus').textContent=workspaces.length?'เลือก Workspace แล้วค้นหาความรู้ที่มีการจัดทำดัชนี':'Workspace Index ยังไม่มี workspace สำหรับค้นหา';
+        }
         workspaceRecord('Workspace Index',String(workspaces.length)+' workspace(s) returned by /v2/workspaces','LIVE');
         workspaces.forEach(workspace=>workspaceRecord(
           workspace.name||workspace.workspace_id||workspace.id,
@@ -598,7 +629,8 @@ async function refreshWorkspaceView(moduleName){
         jobs.forEach(job=>workspaceRecord(
           job.task_type||job.job_id,
           String(job.job_id||'unknown')+' · '+formatHomeTime(job.updated_at||job.created_at),
-          job.status||'UNKNOWN'
+          job.status||'UNKNOWN',
+          {label:'View evidence',onClick:()=>showWorkspaceDetail('job',String(job.job_id||''))}
         ));
       }else workspaceRecord('Execution Jobs unavailable',String(results[0].reason),'UNAVAILABLE');
       if(results[1].status==='fulfilled'){
@@ -609,7 +641,8 @@ async function refreshWorkspaceView(moduleName){
         runs.forEach(run=>workspaceRecord(
           run.objective||run.run_id,
           String(run.run_id||'unknown')+' · '+formatHomeTime(run.updated_at||run.created_at),
-          run.status||'UNKNOWN'
+          run.status||'UNKNOWN',
+          {label:'View timeline',onClick:()=>showWorkspaceDetail('workflow',String(run.run_id||''))}
         ));
       }else workspaceRecord('Workflow Runs unavailable',String(results[1].reason),'UNAVAILABLE');
       $('workspaceStatus').textContent='โหลด '+total+' รายการจาก Jobs และ Workflow API · รายละเอียดหลักฐานจะแสดงเมื่อ API ต้นทางส่งกลับ';
@@ -655,6 +688,198 @@ async function refreshWorkspaceView(moduleName){
   }
 }
 
+
+// Live workspace search and evidence drill-down.
+async function searchWorkspaceKnowledge(event){
+  if(event)event.preventDefault();
+  const workspaceId=$('workspaceKnowledgeSelect')?.value||'';
+  const query=$('workspaceKnowledgeQuery')?.value.trim()||'';
+  if(!workspaceId||!query){$('workspaceKnowledgeStatus').textContent='เลือก Workspace และระบุคำค้นก่อน';return;}
+  $('workspaceKnowledgeSubmit').disabled=true;
+  $('workspaceKnowledgeStatus').textContent='กำลังค้นหา Workspace Index…';
+  try{
+    const result=await request('/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?q='+encodeURIComponent(query)+'&page_size=20');
+    const items=Array.isArray(result.items)?result.items:[];
+    $('workspaceContent').textContent='';
+    workspaceRecord('Knowledge search',items.length+' result(s) for “'+query+'”','LIVE');
+    if(!items.length)workspaceEmpty('ไม่พบรายการที่ตรงกับคำค้นใน Workspace Index');
+    items.forEach(item=>{
+      const provenance=item.provenance&&typeof item.provenance==='object'?item.provenance:{};
+      workspaceRecord(item.title||item.record_id||'Knowledge record',
+        String(item.kind||'record')+' · source '+String(provenance.source_type||'unknown')+'/'+String(provenance.source_id||'—')+' · score '+String(item.score??'—'),
+        item.status||'INDEXED');
+    });
+    $('workspaceKnowledgeStatus').textContent='ค้นหาเสร็จแล้ว · '+items.length+' รายการ · แสดงเฉพาะข้อมูลจาก Workspace Index';
+  }catch(error){
+    $('workspaceKnowledgeStatus').textContent='ค้นหาไม่สำเร็จ: '+String(error.message||error);
+  }finally{$('workspaceKnowledgeSubmit').disabled=false;}
+}
+
+async function showWorkspaceDetail(kind,id){
+  const panel=$('workspaceDetail');
+  if(!panel||!id)return;
+  panel.hidden=false;
+  panel.textContent='กำลังโหลดรายละเอียดจาก API…';
+  const requests=kind==='job'
+    ? [{label:'Job evidence',path:'/api/v1/jobs/'+encodeURIComponent(id)+'/evidence'}]
+    : [
+        {label:'Workflow run',path:'/v1/agents/orchestrations/'+encodeURIComponent(id)},
+        {label:'Workflow timeline',path:'/v1/agents/orchestrations/'+encodeURIComponent(id)+'/timeline'}
+      ];
+  const results=await Promise.allSettled(requests.map(item=>request(item.path)));
+  panel.textContent='';
+  const heading=document.createElement('h2');
+  heading.textContent=(kind==='job'?'Job evidence · ':'Workflow details · ')+id;
+  panel.appendChild(heading);
+  results.forEach((result,index)=>{
+    const section=document.createElement('section');
+    const title=document.createElement('strong');
+    title.textContent=requests[index].label+(result.status==='fulfilled'?' · LIVE':' · UNAVAILABLE');
+    const body=document.createElement('pre');
+    body.textContent=result.status==='fulfilled'?JSON.stringify(result.value,null,2):String(result.reason?.message||result.reason);
+    section.append(title,body);
+    panel.appendChild(section);
+  });
+}
+
+const registryBindings={
+  'Work Graph':[{label:'Knowledge graph',path:'/v1/knowledge/graph'}],
+  'Experiments & Observe':[{label:'Execution jobs',path:'/api/v1/jobs?limit=50'},{label:'Orchestration runs',path:'/v1/agents/orchestrations?limit=50'}],
+  'Sources & Evidence':[{label:'Knowledge artifacts',path:'/v1/knowledge/artifacts'},{label:'Work checkpoints',path:'/v1/platform/work-checkpoints'}],
+  'Validation & Preflight':[{label:'Agent readiness',path:'/v1/agents/readiness'},{label:'Control Center audits',path:'/v1/control-center/audits?limit=20'}],
+  'Results & Knowledge':[{label:'Knowledge artifacts',path:'/v1/knowledge/artifacts'},{label:'Knowledge graph',path:'/v1/knowledge/graph'}],
+  'Product & World':[{label:'Project Registry',path:'/v1/projects'},{label:'Workspace Index',path:'/v2/workspaces'}],
+  'Platforms':[{label:'API health',path:'/health'},{label:'Provider catalog',path:'/v1/providers'},{label:'AI connections',path:'/v1/ai/connections'}],
+  'Runtime & Compatibility':[{label:'API health',path:'/health'},{label:'Agent readiness',path:'/v1/agents/readiness'}],
+  'Unified Master & Orchestration':[{label:'Agents',path:'/v1/agents'},{label:'Orchestration runs',path:'/v1/agents/orchestrations?limit=50'}],
+  'Agents & Workers':[{label:'Agents',path:'/v1/agents'},{label:'Agent readiness',path:'/v1/agents/readiness'}],
+  'Providers':[{label:'Provider catalog',path:'/v1/providers'},{label:'AI connections',path:'/v1/ai/connections'}],
+  'Audit & Human Gate':[{label:'Control Center audits',path:'/v1/control-center/audits?limit=50'},{label:'Work checkpoints',path:'/v1/platform/work-checkpoints'}]
+};
+async function refreshRegistryView(moduleName){
+  if(!$('registryView')||$('registryView').hidden)return;
+  const title=moduleName||'Platform domains';
+  $('registryTitle').textContent=title;
+  $('registryStatus').textContent='กำลังอ่านข้อมูลจาก API ที่รองรับ…';
+  $('registryContent').textContent='';
+  const bindings=registryBindings[title]||[];
+  if(!bindings.length){
+    $('registryStatus').textContent='NOT CONNECTED · ยังไม่มี authoritative API หรือ executor สำหรับโมดูลนี้';
+    const note=document.createElement('article');note.className='registry-card';
+    const heading=document.createElement('h2');heading.textContent='Capability unavailable';
+    const detail=document.createElement('p');detail.textContent='โมดูลนี้ยังไม่มี API/runtime ที่ตรวจสอบได้ จึงยังไม่เปิดคำสั่งหรือแสดงข้อมูลจำลอง';
+    note.append(heading,detail);$('registryContent').appendChild(note);return;
+  }
+  if(!state.account||!state.account.email){
+    $('registryStatus').textContent='ต้องลงชื่อเข้าใช้ก่อนอ่านข้อมูลของผู้ใช้';
+    return;
+  }
+  const results=await Promise.allSettled(bindings.map(item=>request(item.path)));
+  let live=0;
+  results.forEach((result,index)=>{
+    const card=document.createElement('article');card.className='registry-card registry-live-card';
+    const label=document.createElement('span');label.textContent=String(index+1).padStart(2,'0')+' / '+(result.status==='fulfilled'?'LIVE':'UNAVAILABLE');
+    const heading=document.createElement('h2');heading.textContent=bindings[index].label;
+    const detail=document.createElement('pre');detail.textContent=result.status==='fulfilled'?JSON.stringify(result.value,null,2):String(result.reason?.message||result.reason);
+    if(result.status==='fulfilled')live+=1;
+    card.append(label,heading,detail);$('registryContent').appendChild(card);
+  });
+  $('registryStatus').textContent=live+'/'+bindings.length+' API source(s) responding · no demo data';
+}
+
+function agentCard(container,title,detail,status){
+  const card=document.createElement('article');card.className='workspace-record';
+  const heading=document.createElement('strong');heading.textContent=title||'Unnamed agent';
+  const description=document.createElement('small');description.textContent=detail||'';
+  card.append(heading,description);
+  if(status){const badge=document.createElement('span');badge.className='home-status-tag';badge.textContent=status;card.appendChild(badge);}
+  container.appendChild(card);return card;
+}
+async function refreshAgentCenter(){
+  if(!$('agentsView')||$('agentsView').hidden)return;
+  $('agentsStatus').textContent='กำลังอ่าน Agent Registry และ Orchestration API…';
+  $('agentsInventory').textContent='';$('agentRuns').textContent='';$('agentTimeline').textContent='';
+  agentCard($('agentTimeline'),'Select a workflow run','เลือก Timeline จากรายการ Workflow เพื่อดูเหตุการณ์จริง','READY');
+  if(!state.account||!state.account.email){
+    $('agentsStatus').textContent='Sign in required · ไม่มีการแสดงข้อมูลตัวอย่าง';
+    agentCard($('agentsInventory'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Agent readiness','LOCKED');
+    agentCard($('agentRuns'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Workflow runs','LOCKED');
+    return;
+  }
+  const results=await Promise.allSettled([
+    request('/v1/agents'),
+    request('/v1/agents/readiness'),
+    request('/v1/agents/orchestrations?limit=50')
+  ]);
+  let agents=[],runs=[],readiness='UNKNOWN';
+  if(results[0].status==='fulfilled'){
+    agents=Array.isArray(results[0].value.agents)?results[0].value.agents:[];
+    if(!agents.length)agentCard($('agentsInventory'),'No agents registered','Agent Registry returned an empty list','EMPTY');
+    agents.forEach(item=>agentCard($('agentsInventory'),item.name||item.agent_id||'Agent',String(item.agent_id||item.id||'unknown')+' · '+(Array.isArray(item.capabilities)?item.capabilities.join(', '):'capabilities not reported'),item.status||'REGISTERED'));
+  }else agentCard($('agentsInventory'),'Agent Registry unavailable',String(results[0].reason?.message||results[0].reason),'UNAVAILABLE');
+  if(results[1].status==='fulfilled')readiness=String(results[1].value.status||results[1].value.readiness||'AVAILABLE');
+  if(results[2].status==='fulfilled')runs=Array.isArray(results[2].value.runs)?results[2].value.runs:[];
+  $('agentRunCount').textContent=runs.length+' run(s)';
+  if(results[2].status!=='fulfilled')agentCard($('agentRuns'),'Workflow API unavailable',String(results[2].reason?.message||results[2].reason),'UNAVAILABLE');
+  else if(!runs.length)agentCard($('agentRuns'),'No workflow runs','Create a plan to begin','EMPTY');
+  const owner=String(state.account.role||'').toUpperCase()==='OWNER';
+  runs.forEach(run=>{
+    const id=String(run.run_id||'');const status=String(run.status||'UNKNOWN');
+    const card=agentCard($('agentRuns'),run.objective||id,id+' · '+String(run.updated_at||run.created_at||''),status);
+    const actions=document.createElement('div');actions.className='agent-actions';
+    const addAction=(label,action)=>{const button=document.createElement('button');button.type='button';button.className='subtle-button';button.textContent=label;button.addEventListener('click',()=>runAgentAction(id,action));actions.appendChild(button);};
+    const timeline=document.createElement('button');timeline.type='button';timeline.className='subtle-button';timeline.textContent='Timeline';timeline.addEventListener('click',()=>loadAgentTimeline(id));actions.appendChild(timeline);
+    if(owner){
+      if(status==='awaiting_confirmation')addAction('Approve','confirm');
+      if(status==='planned')addAction('Execute','execute');
+      if(status==='failed')addAction('Retry','retry');
+      if(!['completed','failed','cancelled'].includes(status))addAction('Cancel','cancel');
+    }
+    card.appendChild(actions);
+  });
+  $('agentsStatus').textContent='Agent readiness: '+readiness+' · '+agents.length+' agent(s) · '+runs.length+' workflow run(s)'+(owner?' · OWNER controls enabled':' · view-only; OWNER required for execution');
+  $('agentsUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+}
+async function createAgentRun(event){
+  event.preventDefault();
+  const objective=$('agentObjective').value.trim();
+  if(!objective){$('agentsStatus').textContent='Objective is required';return;}
+  $('agentCreateButton').disabled=true;
+  try{
+    await request('/v1/agents/orchestrations',{method:'POST',body:JSON.stringify({objective,steps:[
+      {step_id:'understand',objective:'Understand the request and available context.',requested_agent:'auto',max_attempts:2},
+      {step_id:'plan',objective:'Plan the smallest evidence-backed implementation path.',requested_agent:'auto',max_attempts:2},
+      {step_id:'verify',objective:'Verify the result and record runtime evidence.',requested_agent:'auto',max_attempts:2}
+    ]})});
+    $('agentObjective').value='';
+    $('agentsStatus').textContent='Plan created · execution remains separate and requires OWNER authorization';
+    await refreshAgentCenter();
+  }catch(error){$('agentsStatus').textContent='Create plan failed: '+String(error.message||error);}
+  finally{$('agentCreateButton').disabled=false;}
+}
+async function runAgentAction(runId,action){
+  if(String(state.account?.role||'').toUpperCase()!=='OWNER'){
+    $('agentsStatus').textContent='OWNER role required for workflow control actions';return;
+  }
+  const prompts={confirm:'Approve this orchestration?',execute:'Execute this workflow now?',retry:'Retry this failed workflow?',cancel:'Cancel this workflow?'};
+  if(!window.confirm(prompts[action]||'Continue?'))return;
+  const path='/v1/agents/orchestrations/'+encodeURIComponent(runId)+'/'+action;
+  const body=action==='execute'?{confirmed:true}:{};
+  $('agentsStatus').textContent='Submitting '+action+' request…';
+  try{await request(path,{method:'POST',body:JSON.stringify(body)});await refreshAgentCenter();$('agentsStatus').textContent='Workflow '+action+' request completed';}
+  catch(error){$('agentsStatus').textContent='Workflow '+action+' failed: '+String(error.message||error);}
+}
+async function loadAgentTimeline(runId){
+  $('agentTimeline').textContent='Loading timeline…';
+  try{
+    const result=await request('/v1/agents/orchestrations/'+encodeURIComponent(runId)+'/timeline');
+    const events=Array.isArray(result.events)?result.events:[];
+    $('agentTimeline').textContent='';
+    if(!events.length)agentCard($('agentTimeline'),'No timeline events','No events returned by the orchestration API','EMPTY');
+    events.forEach(item=>agentCard($('agentTimeline'),item.event_type||item.title||'Event',String(item.run_status||item.status||'UNKNOWN')+' · '+String(item.step_id||'—')+' · '+String(item.created_at||item.occurred_at||''),item.result||item.run_status||'EVENT'));
+  }catch(error){agentCard($('agentTimeline'),'Timeline unavailable',String(error.message||error),'UNAVAILABLE');}
+}
+
 // Platform workspace navigation and responsive controls.
 function setPlatformView(view,moduleName){
   let selected=view||'home';
@@ -664,10 +889,11 @@ function setPlatformView(view,moduleName){
   $('registryView').hidden=selected!=='registry';
   if(selected==='plugins'&&String(state.account?.role||'').toUpperCase()!=='OWNER')selected='home';
   $('workspaceView').hidden=selected!=='workspace';
+  $('agentsView').hidden=selected!=='agents';
   $('pluginView').hidden=selected!=='plugins';
   $('adminView').hidden=selected!=='admin';
-  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(!['registry','workspace'].includes(selected)||button.dataset.module===moduleName)));
-  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='plugins'?'Plugin Center':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
+  document.querySelectorAll('.nav-link').forEach(button=>button.classList.toggle('active',button.dataset.view===selected&&(!['registry','workspace','agents'].includes(selected)||button.dataset.module===moduleName)));
+  $('pageTitle').textContent=selected==='home'?'Control Center':selected==='chat'?'Research Chat':selected==='admin'?'Admin Console':selected==='plugins'?'Plugin Center':selected==='agents'?'Agent Center':selected==='workspace'?(moduleName||'Workspace'):(moduleName||'Platform Directory');
   if(selected==='registry')$('registryTitle').textContent=moduleName||'Platform domains';
   document.body.classList.remove('focus-mode');
   if(selected==='chat')setChatWide(state.chatWide);else document.body.classList.remove('chat-wide-mode');
@@ -675,6 +901,8 @@ function setPlatformView(view,moduleName){
   $('sidebarScrim').classList.remove('open');
   if(selected==='home')refreshControlCenter();
   if(selected==='workspace')refreshWorkspaceView(moduleName);
+  if(selected==='registry')refreshRegistryView(moduleName);
+  if(selected==='agents')refreshAgentCenter();
   if(selected==='plugins')refreshPluginCenter();
   if(selected==='admin')refreshAdminConsole();
 }
@@ -689,6 +917,10 @@ renderAdminCreateFields();
 
 $('refreshControlCenter').addEventListener('click',refreshControlCenter);
 $('workspaceRefresh').addEventListener('click',()=>refreshWorkspaceView($('workspaceTitle').textContent));
+$('workspaceKnowledgeForm').addEventListener('submit',searchWorkspaceKnowledge);
+$('registryRefresh').addEventListener('click',()=>refreshRegistryView($('registryTitle').textContent));
+$('agentsRefresh').addEventListener('click',refreshAgentCenter);
+$('agentCreateForm').addEventListener('submit',createAgentRun);
 $('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
 $('homeViewDirectory').addEventListener('click',()=>setPlatformView('registry'));
 $('openSidebar').addEventListener('click',()=>{$('sidebar').classList.add('open');$('sidebarScrim').classList.add('open')});
