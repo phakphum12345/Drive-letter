@@ -240,7 +240,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Configure direct Gradle distribution host and network timeout
+      - name: Configure verified Gradle distribution mirror and network timeout
         working-directory: v3/flutter_app
         shell: bash
         run: |
@@ -250,35 +250,35 @@ jobs:
 
           path = Path("android/gradle/wrapper/gradle-wrapper.properties")
           lines = path.read_text(encoding="utf-8").splitlines()
-          updated = []
-          for line in lines:
-              if line.startswith("distributionUrl="):
-                  line = line.replace(
-                      "services.gradle.org/distributions/",
-                      "downloads.gradle-dn.com/distributions/",
-                  )
-                  assert "downloads.gradle-dn.com/distributions/gradle-" in line and line.endswith("-all.zip"), line
-              if not line.startswith("networkTimeout="):
-                  updated.append(line)
-          updated.append("networkTimeout=60000")
-          path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+          assert any(
+              line.startswith("distributionUrl=") and "gradle-9.3.1-all.zip" in line
+              for line in lines
+          ), "Flutter stable template Gradle version changed; review checksum before updating mirror"
+          lines = [
+              line for line in lines
+              if not line.startswith((
+                  "distributionUrl=",
+                  "distributionSha256Sum=",
+                  "networkTimeout=",
+              ))
+          ]
+          lines.extend([
+              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip",
+              "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06",
+              "networkTimeout=60000",
+          ])
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           result = path.read_text(encoding="utf-8")
-          assert "downloads.gradle-dn.com/distributions/gradle-" in result and "-all.zip" in result
+          assert "mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip" in result
+          assert "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06" in result
           assert "networkTimeout=60000" in result
-          print("GRADLE_DISTRIBUTION_HOST=downloads.gradle-dn.com")
+          print("GRADLE_DISTRIBUTION_HOST=mirrors.huaweicloud.com")
+          print("GRADLE_DISTRIBUTION_VERSION=9.3.1")
+          print("GRADLE_DISTRIBUTION_SHA256_PINNED=PASS")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
 
-          distribution_url="$(python3 - <<'PY'
-          from pathlib import Path
-          line = next(
-              item for item in Path("android/gradle/wrapper/gradle-wrapper.properties")
-              .read_text(encoding="utf-8").splitlines()
-              if item.startswith("distributionUrl=")
-          )
-          print(line.split("=", 1)[1].replace("\\:", ":"))
-          PY
-          )"
+          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip"
           attempt=1
           while [ "$attempt" -le 3 ]; do
             set +e
@@ -290,9 +290,9 @@ jobs:
               http_status="${probe%% *}"
               effective_url="${probe#* }"
               case "$effective_url" in
-                https://downloads.gradle-dn.com/*) ;;
+                https://mirrors.huaweicloud.com/*) ;;
                 *)
-                  echo "::error::Gradle distribution did not resolve to an official direct download host: $effective_url"
+                  echo "::error::Gradle mirror resolved to an unexpected host: $effective_url"
                   exit 1
                   ;;
               esac
@@ -303,10 +303,10 @@ jobs:
             fi
             cat "$RUNNER_TEMP/gradle-distribution-probe.log" || true
             if [ "$attempt" -eq 3 ]; then
-              echo "::error::Gradle distribution preflight failed after 3 attempts (curl=$curl_status, HTTP=${http_status:-unknown})."
+              echo "::error::Gradle mirror preflight failed after 3 attempts (curl=$curl_status, HTTP=${http_status:-unknown})."
               exit 1
             fi
-            echo "Gradle distribution preflight did not succeed; retrying in 15s."
+            echo "Gradle mirror preflight did not succeed; retrying in 15s."
             sleep 15
             attempt=$((attempt + 1))
           done
