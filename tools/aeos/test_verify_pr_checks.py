@@ -112,7 +112,7 @@ class VerifyPrChecksTests(unittest.TestCase):
             }]),
             patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[
                 {"filename":".github/workflows/research-os-gate.yml",
-                 "patch":"@@ -1 +1 @@\\n-runs-on: ubuntu-latest\\n+runs-on: macos-latest"},
+                 "patch":"@@ -1 +1 @@\n-runs-on: ubuntu-latest\n+runs-on: macos-latest"},
             ]),
         ):
             result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
