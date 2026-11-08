@@ -249,23 +249,37 @@ class ResearchOSEndToEndTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(health["ui"])
 
-        session_id = "e2e-session"
-        with patch.object(
-            server,
-            "_friend_chat",
-            return_value={"provider": "mock", "text": "ช่วยสรุปภารกิจของบ้าน"},
+        with tempfile.TemporaryDirectory() as data_dir, patch.dict(
+            os.environ,
+            {
+                "RESEARCH_OS_SESSION_SECRET": "living-house-e2e-session-secret",
+                "RESEARCH_OS_DATA_DIR": data_dir,
+            },
+            clear=False,
         ):
-            status, generated = self.request_json(
-                "/v1/ai/generate",
-                {
-                    "provider": "mock",
-                    "prompt": "ช่วยสรุปภารกิจของบ้าน",
-                    "session_id": session_id,
-                },
-            )
+            token = auth_session.issue_session({
+                "user_id": "owner",
+                "email": "owner@example.test",
+                "role": "owner",
+            })
+            expected_session_id = auth_session.verify_session(token)["session_id"]
+            with patch.object(
+                server,
+                "_friend_chat",
+                return_value={"provider": "mock", "text": "ช่วยสรุปภารกิจของบ้าน"},
+            ):
+                status, generated = self.request_json(
+                    "/v1/ai/generate",
+                    {
+                        "provider": "mock",
+                        "prompt": "ช่วยสรุปภารกิจของบ้าน",
+                        "session_id": "untrusted-client-session",
+                    },
+                    headers={"X-Research-OS-Session": token},
+                )
         self.assertEqual(status, 200)
         self.assertEqual(generated["provider"], "mock")
-        self.assertEqual(generated["session_id"], session_id)
+        self.assertEqual(generated["session_id"], expected_session_id)
         self.assertTrue(generated["text"])
 
         status, captured = self.request_json(
