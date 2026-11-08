@@ -350,6 +350,16 @@ class ResearchOSAPITests(unittest.TestCase):
                 self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
         self.assertEqual(403, non_owner.exception.code)
 
+    def test_owner_proxy_accepts_urlsafe_session_ids_with_leading_underscore_or_hyphen(self):
+        with self.identity_sessions() as issue:
+            for index, session_id in enumerate(("_leading-session-id", "-leading-session-id"), start=1):
+                with patch("auth_session.secrets.token_urlsafe", return_value=session_id):
+                    token = issue(f"member-prefix-{index}", role="user")
+                self.assertEqual(session_id, verify_session(token)["session_id"])
+                with self.assertRaises(urllib.error.HTTPError) as non_owner:
+                    self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
+                self.assertEqual(403, non_owner.exception.code)
+
     def test_memory_search_requires_a_verified_session_and_reports_shared_scope(self):
         query = urllib.parse.quote("conversation knowledge")
         with self.assertRaises(urllib.error.HTTPError) as missing:
