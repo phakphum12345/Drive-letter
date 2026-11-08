@@ -340,6 +340,128 @@ def prove_flutter_scope_skip(
     return result
 
 
+
+def prove_apple_scope_skip(
+    check: dict[str, Any],
+    normalized: dict[str, Any],
+    repository: str,
+    pr_number: str,
+    expected_head_sha: str,
+) -> dict[str, Any]:
+    """Prove an Apple Xcode check skip is justified by exact-HEAD change scope.
+
+    The Research OS Gate deliberately skips macOS/iOS Xcode work when the PR
+    changes neither Apple-relevant Flutter inputs nor Apple build workflow
+    configuration. A skip is accepted only after the exact PR run, skipped
+    job, successful scope detector, PR HEAD, and changed-file patches agree.
+    """
+    if not (
+        normalized.get("bucket") == "unproven"
+        and normalized.get("state") == "SKIPPED"
+        and str(check.get("name") or "").strip() == "Flutter macOS and iOS Xcode Recon Build"
+    ):
+        return normalized
+    if not pr_number:
+        return normalized
+
+    details_url = str(check.get("details_url") or check.get("html_url") or "")
+    parsed = urllib.parse.urlparse(details_url)
+    match = re.fullmatch(
+        rf"/{re.escape(repository)}/actions/runs/([0-9]+)/job/([0-9]+)/?",
+        parsed.path,
+    )
+    if parsed.scheme != "https" or parsed.netloc.casefold() != "github.com" or not match:
+        return normalized
+    run_id, job_id = match.groups()
+    repo_path = urllib.parse.quote(repository, safe="/")
+
+    run, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}")
+    if not isinstance(run, dict) or (
+        run.get("name") != "Research OS Gate"
+        or run.get("path") != ".github/workflows/research-os-gate.yml"
+        or run.get("event") != "pull_request"
+        or run.get("head_sha") != expected_head_sha
+        or run.get("conclusion") != "success"
+    ):
+        return normalized
+
+    skipped_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
+    if not isinstance(skipped_job, dict) or (
+        str(skipped_job.get("run_id") or "") != run_id
+        or str(skipped_job.get("name") or "").strip() != "Flutter macOS and iOS Xcode Recon Build"
+        or skipped_job.get("status") != "completed"
+        or skipped_job.get("conclusion") != "skipped"
+        or skipped_job.get("head_sha") != expected_head_sha
+    ):
+        return normalized
+
+    jobs = paginate(
+        f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}/jobs?per_page=100",
+        "jobs",
+    )
+    scope_jobs = [
+        job for job in jobs
+        if job.get("name") == "Decide whether Apple platform validation is relevant"
+        and str(job.get("run_id") or "") == run_id
+        and job.get("head_sha") == expected_head_sha
+    ]
+    if len(scope_jobs) != 1 or (
+        scope_jobs[0].get("status") != "completed"
+        or scope_jobs[0].get("conclusion") != "success"
+    ):
+        return normalized
+
+    pr_path = urllib.parse.quote(str(pr_number), safe="")
+    pr, _ = request_json(f"https://api.github.com/repos/{repo_path}/pulls/{pr_path}")
+    if not isinstance(pr, dict):
+        return normalized
+    head = pr.get("head")
+    base = pr.get("base")
+    if (
+        not isinstance(head, dict) or head.get("sha") != expected_head_sha
+        or not isinstance(base, dict) or not isinstance(base.get("sha"), str) or not base["sha"]
+    ):
+        return normalized
+
+    files = paginate_array(
+        f"https://api.github.com/repos/{repo_path}/pulls/{pr_path}/files?per_page=100"
+    )
+    if not files:
+        return normalized
+
+    apple_scope = re.compile(
+        r"^(v3/flutter_app/|packages/research_os_contracts/|"
+        r"\.github/actions/flutter-setup/)"
+    )
+    apple_workflow_change = re.compile(
+        r"^[+-].*(runs-on: macos-latest|xcodebuild|xcrun|pod --version|"
+        r"flutter create --platforms=ios,macos|flutter build ios|flutter build macos)"
+    )
+    for item in files:
+        filename = str(item.get("filename") or "")
+        if not filename:
+            return normalized
+        if apple_scope.search(filename):
+            return normalized
+        if filename == ".github/workflows/research-os-gate.yml":
+            patch = item.get("patch")
+            if not isinstance(patch, str):
+                return normalized
+            if any(apple_workflow_change.search(line) for line in patch.splitlines()):
+                return normalized
+
+    result = dict(normalized)
+    result.update({
+        "bucket": "not_applicable",
+        "reason_code": (
+            "NOT_APPLICABLE: exact-SHA Research OS Gate passed; Apple scope "
+            "detector passed and PR changes do not affect Apple build inputs"
+        ),
+        "source": "check_run+exact_apple_scope_evidence",
+    })
+    return result
+
+
 def prove_pages_deploy_skip(
     check: dict[str, Any],
     normalized: dict[str, Any],
@@ -436,6 +558,9 @@ def fetch_external_checks(repository: str, head_sha: str, current_run_id: str, p
                     item, normalized, repository, pr_number, head_sha
                 )
                 normalized = prove_flutter_scope_skip(
+                    item, normalized, repository, pr_number, head_sha
+                )
+                normalized = prove_apple_scope_skip(
                     item, normalized, repository, pr_number, head_sha
                 )
             normalized = reconcile_pending_job_check(

@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+# Resolve both contracts from the same namespace as this module. The flat
+# import surface remains supported for standalone Resource Control tests and
+# the package import surface is used by the Friend runtime.
 try:
     from .resource_governance import Usage
 except ImportError:

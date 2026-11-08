@@ -29,10 +29,39 @@ def _prepare_resource_control_imports() -> None:
     value = str(module_root)
     if value not in sys.path:
         sys.path.insert(0, value)
-    for name in ("execution_contract", "resource_governance", "budgets", "api_keys", "admission", "agent_platform", "controlled_router", "policy", "resource_control_plane"):
-        qualified = f"tools.research_os_api.{name}"
-        module = importlib.import_module(qualified)
-        sys.modules.setdefault(name, module)
+    # Load primitive contracts first, then bind the legacy flat names to
+    # those exact package module objects. Friend providers may import
+    # resource_governance before this adapter is installed, so setdefault()
+    # is unsafe: it can preserve a second Usage class and break isinstance().
+    primitive_modules = (
+        "resource_governance",
+        "execution_contract",
+        "budgets",
+        "api_keys",
+        "admission",
+        "agent_platform",
+        "policy",
+    )
+    for name in primitive_modules:
+        module = importlib.import_module(f"tools.research_os_api.{name}")
+        sys.modules[name] = module
+
+    # Composite adapters use legacy flat imports internally. Import them only
+    # after the aliases above have been made canonical, then expose the same
+    # module object to any existing flat-import call sites.
+    adapter_modules = (
+        "controlled_router",
+        "resource_control_plane",
+        "resource_control_friend",
+        "resource_control_execution_pipeline",
+        "resource_control_brain",
+        "resource_control_factory",
+        "resource_control_provider",
+        "resource_control_http",
+    )
+    for name in adapter_modules:
+        module = importlib.import_module(f"tools.research_os_api.{name}")
+        sys.modules[name] = module
 
 
 def _int_env(name: str, default: int, minimum: int = 0) -> int:

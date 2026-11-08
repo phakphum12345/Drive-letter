@@ -30,6 +30,122 @@ class VerifyPrChecksTests(unittest.TestCase):
     def test_aggregator_status_context_is_excluded_across_run_ids(self):
         self.assertIsNone(normalize_status_context({"context":"AEOS One-Shot Comprehensive Review","state":"failure","target_url":"https://github.com/o/r/actions/runs/999"}, "123"))
 
+    def test_apple_xcode_skip_is_not_applicable_only_with_exact_scope_evidence(self):
+        check = {
+            "name": "Flutter macOS and iOS Xcode Recon Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(check, "999")
+        with (
+            patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
+                ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
+                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                ({"run_id":456,"head_sha":"abc123","name":"Flutter macOS and iOS Xcode Recon Build",
+                  "status":"completed","conclusion":"skipped"}, {}),
+                ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+            ]),
+            patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+                "name":"Decide whether Apple platform validation is relevant",
+                "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"success",
+            }]),
+            patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[
+                {"filename":"owner_special/research_os_friend/providers.py"},
+                {"filename":"tools/aeos/verify_pr_checks.py"},
+            ]),
+        ):
+            result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "not_applicable")
+        self.assertEqual(result["source"], "check_run+exact_apple_scope_evidence")
+        self.assertIn("Apple scope detector passed", result["reason_code"])
+
+    def test_apple_xcode_skip_with_flutter_change_remains_unproven(self):
+        check = {
+            "name": "Flutter macOS and iOS Xcode Recon Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(check, "999")
+        with (
+            patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
+                ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
+                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                ({"run_id":456,"head_sha":"abc123","name":"Flutter macOS and iOS Xcode Recon Build",
+                  "status":"completed","conclusion":"skipped"}, {}),
+                ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+            ]),
+            patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+                "name":"Decide whether Apple platform validation is relevant",
+                "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"success",
+            }]),
+            patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[
+                {"filename":"v3/flutter_app/lib/main.dart"},
+            ]),
+        ):
+            result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    def test_apple_xcode_skip_with_relevant_workflow_patch_remains_unproven(self):
+        check = {
+            "name": "Flutter macOS and iOS Xcode Recon Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(check, "999")
+        with (
+            patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
+                ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
+                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                ({"run_id":456,"head_sha":"abc123","name":"Flutter macOS and iOS Xcode Recon Build",
+                  "status":"completed","conclusion":"skipped"}, {}),
+                ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+            ]),
+            patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+                "name":"Decide whether Apple platform validation is relevant",
+                "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"success",
+            }]),
+            patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[
+                {"filename":".github/workflows/research-os-gate.yml",
+                 "patch":"@@ -1 +1 @@\n-runs-on: ubuntu-latest\n+runs-on: macos-latest"},
+            ]),
+        ):
+            result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    def test_apple_xcode_skip_without_exact_scope_detector_remains_unproven(self):
+        check = {
+            "name": "Flutter macOS and iOS Xcode Recon Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(check, "999")
+        with (
+            patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
+                ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
+                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                ({"run_id":456,"head_sha":"abc123","name":"Flutter macOS and iOS Xcode Recon Build",
+                  "status":"completed","conclusion":"skipped"}, {}),
+                ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
+            ]),
+            patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
+                "name":"Decide whether Apple platform validation is relevant",
+                "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"failure",
+            }]),
+            patch.object(VERIFY_PR_CHECKS, "paginate_array", return_value=[
+                {"filename":"owner_special/research_os_friend/providers.py"},
+            ]),
+        ):
+            result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
     def test_skipped_check_run_is_unproven_not_passing(self):
         check = normalize_check_run({"name":"build-ios-unsigned-ipa","status":"completed","conclusion":"skipped","details_url":"https://github.com/o/r/actions/runs/999/job/1"}, "123")
         self.assertEqual(check["bucket"], "unproven")
