@@ -311,6 +311,80 @@ jobs:
             attempt=$((attempt + 1))
           done
 
+      - name: Configure verified Kotlin Maven mirror
+        working-directory: v3/flutter_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_path="org/jetbrains/kotlin/kotlin-compiler-embeddable/2.2.21/kotlin-compiler-embeddable-2.2.21.jar"
+          mirrors=(
+            "https://maven.aliyun.com/repository/central"
+            "https://repo.huaweicloud.com/repository/maven"
+            "https://maven.wso2.org/nexus/content/repositories/central"
+            "https://artifacts-oss.talend.com/nexus/content/repositories/public"
+          )
+          selected=""
+          for mirror in "${mirrors[@]}"; do
+            echo "Checking Kotlin artifact mirror: $mirror"
+            set +e
+            probe="$(curl --head --silent --show-error --location --output /dev/null --write-out '%{http_code} %{url_effective}' --max-time 45 "$mirror/$artifact_path" 2>"$RUNNER_TEMP/kotlin-mirror-probe.log")"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -eq 0 ]; then
+              http_status="${probe%% *}"
+              effective_url="${probe#* }"
+              case "$effective_url" in
+                https://*) ;;
+                *)
+                  echo "::warning::Ignoring non-HTTPS mirror redirect: $effective_url"
+                  continue
+                  ;;
+              esac
+              if [[ "$http_status" == "200" || "$http_status" == "206" ]]; then
+                selected="$mirror"
+                echo "KOTLIN_MAVEN_MIRROR_PROBE=$probe"
+                break
+              fi
+              echo "Mirror returned HTTP $http_status"
+            else
+              cat "$RUNNER_TEMP/kotlin-mirror-probe.log" || true
+            fi
+          done
+          if [ -z "$selected" ]; then
+            echo "::error::No verified HTTPS mirror serves kotlin-compiler-embeddable 2.2.21."
+            exit 1
+          fi
+          echo "KOTLIN_MAVEN_MIRROR=$selected" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/kotlin-central-mirror.gradle" <<'GRADLE'
+          def kotlinMirror = System.getenv("KOTLIN_MAVEN_MIRROR")
+          if (!kotlinMirror || !kotlinMirror.startsWith("https://")) {
+              throw new GradleException("A verified HTTPS Kotlin Maven mirror is required")
+          }
+
+          gradle.beforeSettings { settings ->
+              settings.pluginManagement.repositories.maven {
+                  name = "VerifiedKotlinCentralMirror"
+                  url = uri(kotlinMirror)
+                  content {
+                      includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+                  }
+              }
+          }
+
+          gradle.beforeProject { project ->
+              project.repositories.maven {
+                  name = "VerifiedKotlinCentralMirror"
+                  url = uri(kotlinMirror)
+                  content {
+                      includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+                  }
+              }
+          }
+          GRADLE
+          grep -F 'VerifiedKotlinCentralMirror' "$HOME/.gradle/init.d/kotlin-central-mirror.gradle"
+          echo "KOTLIN_MAVEN_MIRROR_CONFIGURED=PASS"
+
       - name: Flutter debug APK build (retry transient network failures)
         working-directory: v3/flutter_app
         shell: bash
