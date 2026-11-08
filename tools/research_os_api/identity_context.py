@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from api_auth import require_session
+from identity_storage import storage_key
 
 _SAFE_SCOPE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 
@@ -21,7 +22,7 @@ class IdentityContext:
 
     def friend_headers(self) -> dict[str, str]:
         return {
-            "X-Research-OS-Owner": self.user_id,
+            "X-Research-OS-Owner": storage_key(self.user_id),
             "X-Research-OS-Profile": self.profile_id,
             "X-Research-OS-Session": self.session_id,
         }
@@ -40,5 +41,5 @@ def resolve_identity_context(headers: Mapping[str, str]) -> IdentityContext:
     user_id = _scope(principal.get("user_id"), "user_id")
     role = _scope(principal.get("role") or "user", "role").lower()
     session_id = _scope(principal.get("session_id"), "session_id")
-    profile_id = f"user-{user_id}"
+    profile_id = "default"
     return IdentityContext(user_id, role, session_id, profile_id)
