@@ -1,3 +1,4 @@
+import http.client
 import json
 from contextlib import contextmanager
 import os
@@ -61,6 +62,20 @@ class ResearchOSAPITests(unittest.TestCase):
         )
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
+
+
+    def request_http_client(self, method: str, path: str, payload=None, headers=None):
+        data = None if payload is None else json.dumps(payload).encode("utf-8")
+        request_headers = {"Content-Type": "application/json"}
+        request_headers.update(headers or {})
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        try:
+            connection.request(method, path, body=data, headers=request_headers)
+            response = connection.getresponse()
+            raw = response.read()
+            return response.status, json.loads(raw.decode("utf-8")) if raw else {}
+        finally:
+            connection.close()
 
     def test_health(self):
         status, payload = self.request("GET", "/health")
@@ -277,7 +292,7 @@ class ResearchOSAPITests(unittest.TestCase):
         with self.identity_sessions() as issue:
             token = issue("google:alice")
             expected_session = verify_session(token)["session_id"]
-            status, payload = self.request(
+            status, payload = self.request_http_client(
                 "GET",
                 "/owner/status",
                 headers={
@@ -304,7 +319,7 @@ class ResearchOSAPITests(unittest.TestCase):
             token = issue("google:api-e2e")
             expected_session = verify_session(token)["session_id"]
             with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
-                status, payload = self.request(
+                status, payload = self.request_http_client(
                     "POST",
                     "/v1/ai/generate",
                     {"prompt": "e2e", "session_id": "spoofed-session"},
