@@ -31,22 +31,22 @@ function Protect-CommandLine {
     param([AllowNull()][string]$CommandLine)
     if ([string]::IsNullOrWhiteSpace($CommandLine)) { return $null }
     # Keep useful process identity while redacting common inline credential arguments.
-    $safe = $CommandLine -replace '(?i)(--?authorization\s+)(?:Bearer\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)(authorization\s*=\s*)(?:Bearer\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $CommandLine -replace '(?i)(--?authorization\s+)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(authorization\s*=\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
     $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
     $safe = $safe -replace '(?i)((?:token|password|passwd|secret|api[-_]?key)\s*=\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
+    $safe = $safe -replace '(?i)\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
     return $safe
 }
 
 function Protect-LogLine {
     param([AllowNull()][string]$Line)
     if ($null -eq $Line) { return $null }
-    $safe = $Line -replace '(?i)(authorization\s*[:=]\s*)(?:Bearer\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $Line -replace '(?i)(authorization\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
     $safe = $safe -replace '(?i)((?:token|password|passwd|secret|api[-_]?key)\s*[:=]\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)(--?authorization\s+)(?:Bearer\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(--?authorization\s+)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
     $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
+    $safe = $safe -replace '(?i)\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
     return $safe
 }
 
