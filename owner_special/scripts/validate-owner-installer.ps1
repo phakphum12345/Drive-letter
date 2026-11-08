@@ -83,6 +83,22 @@ function Invoke-CleanValidation {
 
         $service = Get-Service $serviceName -ErrorAction Stop
         if ($service.Status -ne 'Running') { throw 'Owner Windows Service is not running after clean install' }
+
+        # The mock OpenAI-compatible provider is deliberately configured below,
+        # after the Windows service has been installed. Windows services do not
+        # inherit this validation process's environment, so provide a bounded,
+        # CI-only reservation through the service-specific Environment value.
+        # This keeps the production Local/Ollama defaults and fail-closed billing
+        # guard unchanged while allowing the simulated provider E2E to run.
+        $serviceRegistryPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$serviceName"
+        $serviceKey = Get-Item -LiteralPath $serviceRegistryPath
+        $existingServiceEnvironment = @($serviceKey.GetValue('Environment', @()))
+        $testServiceEnvironment = @($existingServiceEnvironment | Where-Object {
+            $_ -notmatch '^RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD='
+        }) + @('RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD=1.00')
+        New-ItemProperty -LiteralPath $serviceRegistryPath -Name 'Environment' -PropertyType MultiString -Value $testServiceEnvironment -Force | Out-Null
+        Restart-Service -Name $serviceName -Force
+        Wait-OwnerReady
         $unsafe = @(Get-NetTCPConnection -LocalPort 8790 -State Listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') })
         if ($unsafe) { throw 'Owner Friend Service must be loopback-only' }
 
