@@ -235,7 +235,7 @@ class VerifyPrChecksTests(unittest.TestCase):
 
     @patch.object(VERIFY_PR_CHECKS, "paginate", return_value=[{
         "name":"Validate and package static Research OS web UI",
-        "run_id":456,"status":"completed","conclusion":"success",
+        "run_id":456,"head_sha":"abc123","status":"completed","conclusion":"success",
     }])
     @patch.object(VERIFY_PR_CHECKS, "request_json")
     def test_pages_deploy_skip_is_not_applicable_only_after_exact_pr_build_passes(self, request, _jobs):
