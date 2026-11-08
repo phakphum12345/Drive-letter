@@ -363,21 +363,32 @@ jobs:
           }
 
           gradle.beforeSettings { settings ->
-              settings.pluginManagement.repositories.maven {
-                  name = "VerifiedKotlinCentralMirror"
-                  url = uri(kotlinMirror)
-                  content {
-                      includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+              // Keep the standard plugin sources available. The Kotlin mirror is
+              // additive and narrowly filtered; it must not replace the Plugin Portal.
+              settings.pluginManagement.repositories {
+                  gradlePluginPortal()
+                  google()
+                  mavenCentral()
+                  maven {
+                      name = "VerifiedKotlinCentralMirror"
+                      url = uri(kotlinMirror)
+                      content {
+                          includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+                      }
                   }
               }
-          }
 
-          gradle.beforeSettings { settings ->
-              settings.dependencyResolutionManagement.repositories.maven {
-                  name = "VerifiedKotlinCentralMirror"
-                  url = uri(kotlinMirror)
-                  content {
-                      includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+              // Respect FAIL_ON_PROJECT_REPOS by adding dependency sources at
+              // settings level rather than mutating project.repositories.
+              settings.dependencyResolutionManagement.repositories {
+                  google()
+                  mavenCentral()
+                  maven {
+                      name = "VerifiedKotlinCentralMirror"
+                      url = uri(kotlinMirror)
+                      content {
+                          includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
+                      }
                   }
               }
           }
