@@ -104,6 +104,14 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$TARGET_SHA"
           echo "AEOS_TARGET_SHA=$actual"
+      - name: Run AEOS verifier regression tests
+        run: |
+          set -euo pipefail
+          python -m unittest \\
+            tools.aeos.test_verify_pr_checks \\
+            tools.aeos.test_verify_pr_checks_scope_waiver \\
+            -v
+
       - name: Execute existing AEOS Master Assurance
         env:
           AEOS_EXPECTED_SHA: ${{ env.TARGET_SHA }}
