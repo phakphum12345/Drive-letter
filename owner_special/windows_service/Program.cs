@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,7 @@ var host = Host.CreateDefaultBuilder(args)
     .Build();
 await host.RunAsync();
 
-sealed record ServiceOptions(string Root, string PythonExecutable, int Port, string DataDir, string ServiceName, string OwnerId, string? Provider)
+sealed record ServiceOptions(string Root, string PythonExecutable, int Port, string DataDir, string ServiceName, string OwnerId, string? Provider, decimal? ResourceCostCeilingUsd)
 {
     public static ServiceOptions FromArgs(string[] args)
     {
@@ -27,7 +28,15 @@ sealed record ServiceOptions(string Root, string PythonExecutable, int Port, str
         var serviceName = ReadOption(args, "--service-name") ?? "ResearchOSOwnerFriendService";
         var ownerId = ReadOption(args, "--owner-id") ?? "owner";
         var provider = ReadOption(args, "--provider");
-        return new ServiceOptions(root, python, port, dataDir, serviceName, ownerId, provider);
+        var ceilingText = ReadOption(args, "--resource-cost-ceiling-usd");
+        decimal? resourceCostCeilingUsd = null;
+        if (!string.IsNullOrWhiteSpace(ceilingText))
+        {
+            if (!decimal.TryParse(ceilingText, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsedCeiling) || parsedCeiling <= 0)
+                throw new ArgumentOutOfRangeException(nameof(args), "Resource cost ceiling must be a positive USD amount");
+            resourceCostCeilingUsd = parsedCeiling;
+        }
+        return new ServiceOptions(root, python, port, dataDir, serviceName, ownerId, provider, resourceCostCeilingUsd);
     }
 
     private static string? ReadOption(string[] args, string name)
@@ -106,6 +115,11 @@ sealed class OwnerFriendWorker : BackgroundService
             string.IsNullOrWhiteSpace(configuredOllamaUrl) ? "http://127.0.0.1:11434/v1" : configuredOllamaUrl;
         start.Environment["OLLAMA_MODEL"] =
             string.IsNullOrWhiteSpace(configuredOllamaModel) ? "llama3.2:3b" : configuredOllamaModel;
+        // An explicit service-host argument is used only by bounded installer E2E
+        // validation; pass it to the Friend child process rather than relying on
+        // SCM to synthesize a per-service environment block.
+        if (_options.ResourceCostCeilingUsd is decimal ceiling)
+            start.Environment["RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD"] = ceiling.ToString(CultureInfo.InvariantCulture);
 
         _process = new Process { StartInfo = start, EnableRaisingEvents = true };
         if (!_process.Start()) throw new InvalidOperationException("Failed to start Owner Friend process");
