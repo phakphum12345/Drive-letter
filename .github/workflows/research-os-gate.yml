@@ -255,17 +255,17 @@ jobs:
               if line.startswith("distributionUrl="):
                   line = line.replace(
                       "services.gradle.org/distributions/",
-                      "downloads.gradle.org/distributions/",
+                      "downloads.gradle-dn.com/distributions/",
                   )
-                  assert "downloads.gradle.org/distributions/gradle-" in line and line.endswith("-all.zip"), line
+                  assert "downloads.gradle-dn.com/distributions/gradle-" in line and line.endswith("-all.zip"), line
               if not line.startswith("networkTimeout="):
                   updated.append(line)
           updated.append("networkTimeout=60000")
           path.write_text("\n".join(updated) + "\n", encoding="utf-8")
           result = path.read_text(encoding="utf-8")
-          assert "downloads.gradle.org/distributions/gradle-" in result and "-all.zip" in result
+          assert "downloads.gradle-dn.com/distributions/gradle-" in result and "-all.zip" in result
           assert "networkTimeout=60000" in result
-          print("GRADLE_DISTRIBUTION_HOST=downloads.gradle.org")
+          print("GRADLE_DISTRIBUTION_HOST=downloads.gradle-dn.com")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
 
@@ -290,7 +290,7 @@ jobs:
               http_status="${probe%% *}"
               effective_url="${probe#* }"
               case "$effective_url" in
-                https://downloads.gradle.org/*|https://downloads.gradle-dn.com/*) ;;
+                https://downloads.gradle-dn.com/*) ;;
                 *)
                   echo "::error::Gradle distribution did not resolve to an official direct download host: $effective_url"
                   exit 1
