@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 import os
 import tempfile
 import threading
@@ -11,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import server
+from auth_session import issue_session, verify_session
 
 
 class ResearchOSAPITests(unittest.TestCase):
@@ -26,6 +28,25 @@ class ResearchOSAPITests(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
         cls.thread.join(timeout=2)
+
+
+    @contextmanager
+    def identity_sessions(self):
+        """Issue signed test sessions against an isolated revocation store."""
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "RESEARCH_OS_SESSION_SECRET": "friend-identity-tests-only-secret",
+                    "RESEARCH_OS_DATA_DIR": data_dir,
+                },
+                clear=False,
+            ):
+                def issue(user_id: str, role: str = "owner") -> str:
+                    email = user_id.replace(":", ".") + "@example.test"
+                    return issue_session({"user_id": user_id, "email": email, "role": role})
+
+                yield issue
 
     def request(self, method: str, path: str, payload=None, headers=None):
         data = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -118,15 +139,19 @@ class ResearchOSAPITests(unittest.TestCase):
     @patch("server._friend_chat")
     def test_mock_provider_generation(self, friend_chat):
         friend_chat.return_value = {"provider": "mock", "text": "วิเคราะห์แนวคิดนี้"}
-        with patch.dict(
-            os.environ,
-            {"RESEARCH_OS_AI_ROUTE": "friend"},
-            clear=False,
-        ):
-            status, payload = self.request("POST", "/v1/ai/generate", {
-                "provider": "mock",
-                "prompt": "วิเคราะห์แนวคิดนี้",
-            })
+        with self.identity_sessions() as issue:
+            token = issue("owner")
+            with patch.dict(
+                os.environ,
+                {"RESEARCH_OS_AI_ROUTE": "friend"},
+                clear=False,
+            ):
+                status, payload = self.request(
+                    "POST",
+                    "/v1/ai/generate",
+                    {"provider": "mock", "prompt": "วิเคราะห์แนวคิดนี้"},
+                    headers={"X-Research-OS-Session": token},
+                )
         self.assertEqual(200, status)
         self.assertEqual("mock", payload["provider"])
         self.assertIn("วิเคราะห์", payload["text"])
@@ -155,23 +180,30 @@ class ResearchOSAPITests(unittest.TestCase):
             },
         }
 
-        with patch.dict(
-            os.environ,
-            {"RESEARCH_OS_AI_ROUTE": "friend"},
-            clear=False,
-        ):
-            status, payload = self.request(
-                "POST",
-                "/v1/ai/generate",
-                {
-                    "prompt": "mega project",
-                    "session_id": "api-friend-test",
-                    "complexity": 9,
-                    "risk": 7,
-                    "parallelism": 128,
-                    "helper_budget": 1_000_000,
-                },
-            )
+        with self.identity_sessions() as issue:
+            token = issue("owner")
+            with patch.dict(
+                os.environ,
+                {"RESEARCH_OS_AI_ROUTE": "friend"},
+                clear=False,
+            ):
+                status, payload = self.request(
+                    "POST",
+                    "/v1/ai/generate",
+                    {
+                        "prompt": "mega project",
+                        "session_id": "untrusted-client-session",
+                        "complexity": 9,
+                        "risk": 7,
+                        "parallelism": 128,
+                        "helper_budget": 1_000_000,
+                    },
+                    headers={
+                        "X-Research-OS-Session": token,
+                        "X-Research-OS-Owner": "attacker-owner",
+                        "X-Research-OS-Profile": "attacker-profile",
+                    },
+                )
 
         self.assertEqual(200, status)
         self.assertEqual("friend", payload["route"])
@@ -179,6 +211,93 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual("10^10", payload["decision"]["scale"])
         self.assertEqual("10^10", payload["factory"]["scale"])
         self.assertTrue(payload["helpers"]["bounded"])
+
+
+    def test_friend_generation_requires_verified_owner_session(self):
+        with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
+            with patch("server._friend_chat") as friend_chat:
+                with self.assertRaises(urllib.error.HTTPError) as raised:
+                    self.request("POST", "/v1/ai/generate", {"prompt": "private"})
+        self.assertEqual(401, raised.exception.code)
+        friend_chat.assert_not_called()
+
+    def test_friend_generation_rejects_non_owner_session(self):
+        with self.identity_sessions() as issue:
+            token = issue("member-1", role="user")
+            with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
+                with patch("server._friend_chat") as friend_chat:
+                    with self.assertRaises(urllib.error.HTTPError) as raised:
+                        self.request(
+                            "POST",
+                            "/v1/ai/generate",
+                            {"prompt": "private"},
+                            headers={"X-Research-OS-Session": token},
+                        )
+        self.assertEqual(403, raised.exception.code)
+        friend_chat.assert_not_called()
+
+    def test_friend_scope_uses_verified_user_and_session_not_client_overrides(self):
+        with self.identity_sessions() as issue:
+            alice_token = issue("google:alice")
+            bob_token = issue("google:bob")
+            with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
+                with patch("server._friend_chat", return_value={"provider": "mock", "text": "ok"}) as friend_chat:
+                    alice_headers = {
+                        "X-Research-OS-Session": alice_token,
+                        "X-Research-OS-Owner": "spoofed-owner",
+                        "X-Research-OS-Profile": "spoofed-profile",
+                    }
+                    _, first = self.request("POST", "/v1/ai/generate", {"prompt": "one", "session_id": "spoofed-session"}, headers=alice_headers)
+                    _, second = self.request("POST", "/v1/ai/generate", {"prompt": "two", "session_id": "another-spoof"}, headers=alice_headers)
+                    _, third = self.request("POST", "/v1/ai/generate", {"prompt": "three"}, headers={"X-Research-OS-Session": bob_token})
+
+        identities = [call.kwargs["identity"] for call in friend_chat.call_args_list]
+        self.assertEqual(3, len(identities))
+        self.assertEqual("google:alice", identities[0].user_id)
+        self.assertEqual(identities[0].profile_id, identities[1].profile_id)
+        self.assertEqual(identities[0].session_id, identities[1].session_id)
+        self.assertEqual(server.FRIEND_OWNER_ID, identities[0].owner_id)
+        self.assertNotEqual(identities[0].profile_id, identities[2].profile_id)
+        self.assertNotEqual(identities[0].session_id, identities[2].session_id)
+        self.assertEqual(identities[0].session_id, first["session_id"])
+        self.assertEqual(identities[1].session_id, second["session_id"])
+        self.assertEqual(identities[2].session_id, third["session_id"])
+
+    @patch("server.urllib.request.urlopen")
+    def test_owner_proxy_replaces_client_identity_with_verified_scope(self, urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        response.__enter__.return_value.headers.get_content_type.return_value = "application/json"
+        response.__enter__.return_value.read.return_value = b'{"status":"ok"}'
+        urlopen.return_value = response
+        with self.identity_sessions() as issue:
+            token = issue("google:alice")
+            status, payload = self.request(
+                "GET",
+                "/owner/status",
+                headers={
+                    "X-Research-OS-Session": token,
+                    "X-Research-OS-Owner": "attacker-owner",
+                    "X-Research-OS-Profile": "attacker-profile",
+                },
+            )
+        self.assertEqual(200, status)
+        self.assertEqual("ok", payload["status"])
+        forwarded = urlopen.call_args.args[0]
+        headers = {key.lower(): value for key, value in forwarded.header_items()}
+        self.assertEqual(server.FRIEND_OWNER_ID, headers["x-research-os-owner"])
+        self.assertTrue(headers["x-research-os-profile"].startswith("user-"))
+        self.assertEqual(verify_session(token)["session_id"], headers["x-research-os-session"])
+
+    def test_owner_proxy_rejects_missing_or_non_owner_session(self):
+        with self.assertRaises(urllib.error.HTTPError) as missing:
+            self.request("GET", "/owner/status")
+        self.assertEqual(401, missing.exception.code)
+        with self.identity_sessions() as issue:
+            token = issue("member-2", role="user")
+            with self.assertRaises(urllib.error.HTTPError) as non_owner:
+                self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
+        self.assertEqual(403, non_owner.exception.code)
 
     def test_memory_search(self):
         query = urllib.parse.quote("conversation knowledge")
@@ -191,19 +310,27 @@ class ResearchOSAPITests(unittest.TestCase):
     @patch("server._friend_chat")
     def test_answer_with_memory_uses_mock_provider(self, friend_chat):
         friend_chat.return_value = {"provider": "mock", "text": "memory-backed mock answer"}
-        with patch.dict(
-            os.environ,
-            {"RESEARCH_OS_AI_ROUTE": "friend"},
-            clear=False,
-        ):
-            status, payload = self.request("POST", "/v1/ai/answer-with-memory", {
-                "provider": "mock",
-                "question": "conversation knowledge",
-                "session_id": "memory-test",
-            })
+        with self.identity_sessions() as issue:
+            token = issue("owner")
+            expected_session = verify_session(token)["session_id"]
+            with patch.dict(
+                os.environ,
+                {"RESEARCH_OS_AI_ROUTE": "friend"},
+                clear=False,
+            ):
+                status, payload = self.request(
+                    "POST",
+                    "/v1/ai/answer-with-memory",
+                    {
+                        "provider": "mock",
+                        "question": "conversation knowledge",
+                        "session_id": "untrusted-memory-session",
+                    },
+                    headers={"X-Research-OS-Session": token},
+                )
         self.assertEqual(200, status)
         self.assertEqual("mock", payload["provider"])
-        self.assertEqual("memory-test", payload["session_id"])
+        self.assertEqual(expected_session, payload["session_id"])
         self.assertGreaterEqual(payload["memory_count"], 1)
         self.assertTrue(payload["text"])
 
