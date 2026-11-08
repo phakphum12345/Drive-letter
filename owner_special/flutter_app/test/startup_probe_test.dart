@@ -19,16 +19,6 @@ class FakeApi extends OwnerFriendApi {
   Future<Map<String, dynamic>> testProvider() async => <String, dynamic>{};
   @override
   Future<Map<String, dynamic>> chat(String text, {int complexity = 4, int risk = 2, int parallelism = 2, int helperBudget = 0, List<String> requestedSkills = const <String>[], List<String> requestedTools = const <String>[]}) async => <String, dynamic>{};
-  test('startup probe does not call protected endpoints before sign-in', () async {
-    final api = _UnauthenticatedApi();
-    final result = await OwnerStartupProbe(api).run();
-    expect((result['health'] as Map)['status'], 'ok');
-    expect((result['identity'] as Map)['connected'], isFalse);
-    expect(result.containsKey('status'), isFalse);
-    expect(result.containsKey('provider'), isFalse);
-    expect(api.protectedCalls, 0);
-  });
-
 }
 
 class _UnauthenticatedApi extends FakeApi {
@@ -51,10 +41,20 @@ class _UnauthenticatedApi extends FakeApi {
 }
 
 void main() {
-  test('startup probe proves health status and provider boundary', () async {
+  test('startup probe proves health status and provider boundary after sign-in', () async {
     final result = await OwnerStartupProbe(FakeApi()).run();
     expect((result['health'] as Map)['status'], 'ok');
     expect((result['status'] as Map)['version'], '1.3.1-owner');
     expect(result.containsKey('provider'), isTrue);
+  });
+
+  test('startup probe does not call protected endpoints before sign-in', () async {
+    final api = _UnauthenticatedApi();
+    final result = await OwnerStartupProbe(api).run();
+    expect((result['health'] as Map)['status'], 'ok');
+    expect((result['identity'] as Map)['connected'], isFalse);
+    expect(result.containsKey('status'), isFalse);
+    expect(result.containsKey('provider'), isFalse);
+    expect(api.protectedCalls, 0);
   });
 }
