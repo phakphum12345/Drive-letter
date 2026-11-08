@@ -35,6 +35,15 @@ def _intent(**overrides):
 
 
 class ActionIntentTests(unittest.TestCase):
+    def test_url_safe_session_ids_allow_leading_underscore_and_hyphen(self):
+        for session_id in ("_leading-session-id", "-leading-session-id"):
+            with self.subTest(session_id=session_id):
+                self.assertEqual(_intent(session_id=session_id).session_id, session_id)
+
+    def test_session_id_rejects_path_separators(self):
+        with self.assertRaises(ActionIntentError):
+            _intent(session_id="../outside")
+
     def test_valid_intent_is_deterministic_and_bounded(self):
         first = _intent()
         second = _intent()
