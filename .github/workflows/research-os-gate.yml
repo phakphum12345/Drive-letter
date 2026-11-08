@@ -240,7 +240,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Configure Gradle wrapper network timeout
+      - name: Configure direct Gradle distribution host and network timeout
         working-directory: v3/flutter_app
         shell: bash
         run: |
@@ -250,12 +250,50 @@ jobs:
 
           path = Path("android/gradle/wrapper/gradle-wrapper.properties")
           lines = path.read_text(encoding="utf-8").splitlines()
-          lines = [line for line in lines if not line.startswith("networkTimeout=")]
-          lines.append("networkTimeout=60000")
-          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-          assert "networkTimeout=60000" in path.read_text(encoding="utf-8")
+          updated = []
+          for line in lines:
+              if line.startswith("distributionUrl="):
+                  line = line.replace(
+                      "services.gradle.org/distributions/",
+                      "downloads.gradle.org/distributions/",
+                  )
+                  assert "downloads.gradle.org/distributions/gradle-9.3.1-all.zip" in line, line
+              if not line.startswith("networkTimeout="):
+                  updated.append(line)
+          updated.append("networkTimeout=60000")
+          path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+          result = path.read_text(encoding="utf-8")
+          assert "downloads.gradle.org/distributions/gradle-9.3.1-all.zip" in result
+          assert "networkTimeout=60000" in result
+          print("GRADLE_DISTRIBUTION_HOST=downloads.gradle.org")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
+
+          distribution_url="$(python3 - <<'PY'
+          from pathlib import Path
+          line = next(
+              item for item in Path("android/gradle/wrapper/gradle-wrapper.properties")
+              .read_text(encoding="utf-8").splitlines()
+              if item.startswith("distributionUrl=")
+          )
+          print(line.split("=", 1)[1].replace("\\:", ":"))
+          PY
+          )"
+          probe="$(curl --head --silent --show-error --location --output /dev/null --write-out '%{http_code} %{url_effective}' --max-time 45 "$distribution_url")"
+          echo "GRADLE_DISTRIBUTION_PROBE=$probe"
+          http_status="${probe%% *}"
+          effective_url="${probe#* }"
+          case "$effective_url" in
+            https://downloads.gradle.org/*|https://downloads.gradle-dn.com/*) ;;
+            *)
+              echo "::error::Gradle distribution did not resolve to an official direct download host: $effective_url"
+              exit 1
+              ;;
+          esac
+          if [[ "$http_status" != "200" && "$http_status" != "206" ]]; then
+            echo "::error::Gradle distribution preflight failed with HTTP $http_status"
+            exit 1
+          fi
 
       - name: Flutter debug APK build (retry transient network failures)
         working-directory: v3/flutter_app
