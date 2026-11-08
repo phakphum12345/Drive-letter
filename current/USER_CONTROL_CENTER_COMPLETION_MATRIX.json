@@ -159,14 +159,14 @@
     {
       "id": "control_center_ci",
       "surface": "verification",
-      "status": "PARTIAL",
+      "status": "CANONICAL_WIRED",
       "evidence": [
         ".github/workflows/research-os-user-control-center.yml",
         "apps/research_os_flutter/test/features/control_center/native_control_center_page_test.dart",
         "apps/research_os_flutter/test/owner_experience_page_test.dart"
       ],
-      "detail": "Dedicated Control Center workflow watches Web/API and selected Flutter paths and runs Web syntax/source-contract tests across Ubuntu/Windows/macOS. It does not yet run Flutter analyze/widget tests in this gate.",
-      "acceptance": "Add Flutter analyze and focused widget/API integration tests to the dedicated gate, while retaining exact-SHA Web/API checks."
+      "detail": "The dedicated workflow watches Web/API and Flutter application/control-center paths. It runs JavaScript syntax and Python control-center/RBAC/matrix contract tests on Ubuntu, Windows, and macOS, plus Flutter dependency resolution, flutter analyze, and the full flutter test suite on Ubuntu. The workflow definition was inspected on the current mainline; exact-PR execution evidence is required for every matrix update.",
+      "acceptance": "Keep path filters synchronized with Control Center surfaces; require validate-web matrix and validate-flutter success on the exact PR SHA, including Flutter analyze and widget/API tests. Do not mark UI capabilities complete based on this CI gate alone."
     },
     {
       "id": "web.agent_center",
