@@ -294,6 +294,35 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertTrue(headers["x-research-os-profile"].startswith("user-"))
         self.assertEqual(expected_session, headers["x-research-os-session"])
 
+
+    @patch("server.urllib.request.urlopen")
+    def test_friend_generation_forwards_only_verified_scope_to_friend_service(self, urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"provider":"owner-mock","text":"friend-ok"}'
+        urlopen.return_value = response
+        with self.identity_sessions() as issue:
+            token = issue("google:api-e2e")
+            expected_session = verify_session(token)["session_id"]
+            with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
+                status, payload = self.request(
+                    "POST",
+                    "/v1/ai/generate",
+                    {"prompt": "e2e", "session_id": "spoofed-session"},
+                    headers={
+                        "X-Research-OS-Session": token,
+                        "X-Research-OS-Owner": "spoofed-owner",
+                        "X-Research-OS-Profile": "spoofed-profile",
+                    },
+                )
+        self.assertEqual(200, status)
+        self.assertEqual("friend-ok", payload["text"])
+        self.assertEqual(expected_session, payload["session_id"])
+        forwarded = urlopen.call_args.args[0]
+        headers = {key.lower(): value for key, value in forwarded.header_items()}
+        self.assertEqual(server.FRIEND_OWNER_ID, headers["x-research-os-owner"])
+        self.assertTrue(headers["x-research-os-profile"].startswith("user-"))
+        self.assertEqual(expected_session, headers["x-research-os-session"])
+
     def test_owner_proxy_rejects_missing_or_non_owner_session(self):
         with self.assertRaises(urllib.error.HTTPError) as missing:
             self.request("GET", "/owner/status")
