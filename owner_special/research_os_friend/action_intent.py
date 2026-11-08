@@ -30,6 +30,7 @@ class ActionApproval(str, Enum):
 
 _ALLOWED_ACTIONS = frozenset({"inspect", "fetch", "list", "observe", "snapshot"})
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _BLOCKED = re.compile(
     r"(?:^|[^a-z])(shell|powershell|cmd(?:\.exe)?|bash|subprocess|os\.system|"
@@ -103,7 +104,9 @@ class ActionIntentValidator:
         if intent.schema != ActionIntent.SCHEMA or intent.version != ActionIntent.VERSION:
             raise ActionIntentError("unsupported action intent schema or version")
         cls._text(intent.owner_id, "owner_id", identifier=True)
-        cls._text(intent.session_id, "session_id", identifier=True)
+        cls._text(intent.session_id, "session_id")
+        if not _SESSION_ID_RE.fullmatch(intent.session_id):
+            raise ActionIntentError("session_id is invalid")
         cls._text(intent.intent_id, "intent_id", identifier=True)
         cls._text(intent.correlation_id, "correlation_id", identifier=True)
         cls._text(intent.action_type, "action_type")

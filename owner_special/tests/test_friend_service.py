@@ -13,6 +13,28 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 class OwnerFriendServiceTests(unittest.TestCase):
+    def test_status_accepts_url_safe_session_ids_with_leading_underscore_or_hyphen(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            service = OwnerFriendService(
+                owner_id="owner",
+                port=0,
+                data_root=Path(temporary),
+                repository_root=REPOSITORY_ROOT,
+            )
+            service.start()
+            base = f"http://127.0.0.1:{service.port}"
+            try:
+                for session_id in ("_leading-session-id", "-leading-session-id"):
+                    with self.subTest(session_id=session_id):
+                        status, payload = self._request(
+                            base + "/owner/status",
+                            session=session_id,
+                        )
+                        self.assertEqual(status, 200)
+                        self.assertEqual(payload["session_id"], session_id)
+            finally:
+                service.close()
+
     def _request(
         self,
         url: str,

@@ -40,6 +40,7 @@ class ResearchOSAPITests(unittest.TestCase):
                 {
                     "RESEARCH_OS_SESSION_SECRET": "friend-identity-tests-only-secret",
                     "RESEARCH_OS_DATA_DIR": data_dir,
+                    "RESEARCH_OS_V3_DATA_DIR": data_dir,
                 },
                 clear=False,
             ):
@@ -311,6 +312,40 @@ class ResearchOSAPITests(unittest.TestCase):
 
 
     @patch("server.urllib.request.urlopen")
+    def test_friend_generation_accepts_urlsafe_session_ids_with_leading_characters(self, urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"provider":"owner-mock","text":"friend-ok"}'
+        urlopen.return_value = response
+        with self.identity_sessions() as issue:
+            with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
+                for index, session_id in enumerate(("_leading-session-id", "-leading-session-id"), start=1):
+                    with self.subTest(session_id=session_id):
+                        with patch("auth_session.secrets.token_urlsafe", return_value=session_id):
+                            token = issue(f"google:prefix-{index}")
+                        status, payload = self.request_http_client(
+                            "POST",
+                            "/v1/ai/generate",
+                            {
+                                "prompt": "verify URL-safe identity",
+                                "owner_id": "attacker-owner",
+                                "profile_id": "attacker-profile",
+                                "session_id": "attacker-session",
+                            },
+                            headers={
+                                "X-Research-OS-Session": token,
+                                "X-Research-OS-Owner": "attacker-header-owner",
+                                "X-Research-OS-Profile": "attacker-header-profile",
+                            },
+                        )
+                        self.assertEqual(200, status)
+                        self.assertEqual(session_id, payload["session_id"])
+                        forwarded = urlopen.call_args_list[index - 1].args[0]
+                        headers = {key.lower(): value for key, value in forwarded.header_items()}
+                        self.assertEqual(server.FRIEND_OWNER_ID, headers["x-research-os-owner"])
+                        self.assertTrue(headers["x-research-os-profile"].startswith("user-"))
+                        self.assertEqual(session_id, headers["x-research-os-session"])
+
+    @patch("server.urllib.request.urlopen")
     def test_friend_generation_forwards_only_verified_scope_to_friend_service(self, urlopen):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = b'{"provider":"owner-mock","text":"friend-ok"}'
@@ -344,9 +379,20 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual(401, missing.exception.code)
         with self.identity_sessions() as issue:
             token = issue("member-2", role="user")
+            self.assertEqual("user", verify_session(token)["role"])
             with self.assertRaises(urllib.error.HTTPError) as non_owner:
                 self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
         self.assertEqual(403, non_owner.exception.code)
+
+    def test_owner_proxy_accepts_urlsafe_session_ids_with_leading_underscore_or_hyphen(self):
+        with self.identity_sessions() as issue:
+            for index, session_id in enumerate(("_leading-session-id", "-leading-session-id"), start=1):
+                with patch("auth_session.secrets.token_urlsafe", return_value=session_id):
+                    token = issue(f"member-prefix-{index}", role="user")
+                self.assertEqual(session_id, verify_session(token)["session_id"])
+                with self.assertRaises(urllib.error.HTTPError) as non_owner:
+                    self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
+                self.assertEqual(403, non_owner.exception.code)
 
     def test_memory_search_requires_a_verified_session_and_reports_shared_scope(self):
         query = urllib.parse.quote("conversation knowledge")

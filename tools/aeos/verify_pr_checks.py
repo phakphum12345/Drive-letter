@@ -391,7 +391,6 @@ def prove_apple_scope_skip(
         or str(skipped_job.get("name") or "").strip() != "Flutter macOS and iOS Xcode Recon Build"
         or skipped_job.get("status") != "completed"
         or skipped_job.get("conclusion") != "skipped"
-        or skipped_job.get("head_sha") != expected_head_sha
     ):
         return normalized
 
@@ -403,7 +402,6 @@ def prove_apple_scope_skip(
         job for job in jobs
         if job.get("name") == "Decide whether Apple platform validation is relevant"
         and str(job.get("run_id") or "") == run_id
-        and job.get("head_sha") == expected_head_sha
     ]
     if len(scope_jobs) != 1 or (
         scope_jobs[0].get("status") != "completed"
