@@ -85,18 +85,23 @@ function Invoke-CleanValidation {
         if ($service.Status -ne 'Running') { throw 'Owner Windows Service is not running after clean install' }
 
         # The mock OpenAI-compatible provider is deliberately configured below,
-        # after the Windows service has been installed. Windows services do not
-        # inherit this validation process's environment, so provide a bounded,
-        # CI-only reservation through the service-specific Environment value.
-        # This keeps the production Local/Ollama defaults and fail-closed billing
-        # guard unchanged while allowing the simulated provider E2E to run.
+        # after the Windows service has been installed. Pass a bounded, CI-only
+        # reservation as an explicit ServiceHost argument; the host forwards it
+        # to the Friend child process. Do not rely on an SCM per-service
+        # Environment registry value, which is not propagated by this host.
         $serviceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
-        $serviceKey = Get-Item -LiteralPath $serviceRegistryPath
-        $existingServiceEnvironment = @($serviceKey.GetValue('Environment', @()))
-        $testServiceEnvironment = @($existingServiceEnvironment | Where-Object {
-            $_ -notmatch '^RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD='
-        }) + @('RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD=1.00')
-        New-ItemProperty -LiteralPath $serviceRegistryPath -Name 'Environment' -PropertyType MultiString -Value $testServiceEnvironment -Force | Out-Null
+        $serviceRegistryKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services\$serviceName", $true)
+        if (-not $serviceRegistryKey) { throw "Owner service registry key not found: $serviceRegistryPath" }
+        try {
+            $serviceImagePath = [string]$serviceRegistryKey.GetValue('ImagePath', '')
+            if ([string]::IsNullOrWhiteSpace($serviceImagePath)) { throw 'Owner service ImagePath is empty' }
+            if ($serviceImagePath -notmatch '--resource-cost-ceiling-usd(?:\s|=)') {
+                $serviceImagePath += ' --resource-cost-ceiling-usd 1.00'
+                $serviceRegistryKey.SetValue('ImagePath', $serviceImagePath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            }
+        } finally {
+            $serviceRegistryKey.Dispose()
+        }
         Restart-Service -Name $serviceName -Force
         Wait-OwnerReady
         $unsafe = @(Get-NetTCPConnection -LocalPort 8790 -State Listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') })
