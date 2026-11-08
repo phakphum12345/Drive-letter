@@ -40,6 +40,7 @@ class ResearchOSAPITests(unittest.TestCase):
                 {
                     "RESEARCH_OS_SESSION_SECRET": "friend-identity-tests-only-secret",
                     "RESEARCH_OS_DATA_DIR": data_dir,
+                    "RESEARCH_OS_V3_DATA_DIR": data_dir,
                 },
                 clear=False,
             ):
@@ -344,6 +345,7 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual(401, missing.exception.code)
         with self.identity_sessions() as issue:
             token = issue("member-2", role="user")
+            self.assertEqual("user", verify_session(token)["role"])
             with self.assertRaises(urllib.error.HTTPError) as non_owner:
                 self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
         self.assertEqual(403, non_owner.exception.code)
