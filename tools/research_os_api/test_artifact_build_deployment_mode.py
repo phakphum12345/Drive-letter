@@ -13,7 +13,8 @@ class ArtifactDeploymentModeTests(unittest.TestCase):
         self.assertIn("deployment_mode:", text)
         self.assertIn("          - local\n          - render", text)
         self.assertIn("default: local", text)
-        self.assertIn("https://research-os-api-phakphoum.onrender.com", text)
+        self.assertIn("https://research-os-api-phakphoum-v0wf.onrender.com", text)
+        self.assertNotIn("https://research-os-api-phakphoum.onrender.com", text)
         self.assertIn("http://127.0.0.1:8787", text)
 
     def test_all_flutter_targets_use_the_selected_endpoint(self) -> None:
@@ -21,6 +22,19 @@ class ArtifactDeploymentModeTests(unittest.TestCase):
         self.assertIn('flutter build web --release --dart-define=RESEARCH_OS_API_BASE_URL="$API_BASE_URL"', text)
         self.assertIn('flutter build windows --release --dart-define=RESEARCH_OS_API_BASE_URL="$env:API_BASE_URL"', text)
         self.assertIn('flutter build ios --release --no-codesign --dart-define=RESEARCH_OS_API_BASE_URL="$API_BASE_URL"', text)
+
+    def test_website_artifact_checksum_includes_deployment_manifest(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Generate website artifact checksums", text)
+        self.assertIn('root.rglob("*")', text)
+        self.assertIn('path.name != "SHA256SUMS.txt"', text)
+        self.assertIn('(root / "SHA256SUMS.txt").write_text', text)
+        self.assertIn('path.relative_to(root).as_posix()', text)
+
+    def test_windows_checksums_use_portable_relative_paths(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("[IO.Path]::GetRelativePath($checksumRoot, $_.FullName)", text)
+        self.assertIn('deployment-manifest.json', text)
 
     def test_manifests_bind_mode_endpoint_and_target_sha(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
