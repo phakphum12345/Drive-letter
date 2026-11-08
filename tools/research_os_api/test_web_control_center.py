@@ -78,7 +78,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn("request('/v1/projects')", self.js)
         self.assertIn("request('/v2/workspaces')", self.js)
         self.assertIn("request('/api/v1/jobs?limit=50')", self.js)
-        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("'/v2/orchestrations?'+params.toString()", self.js)
         self.assertIn("request('/v1/auth/status')", self.js)
         self.assertIn("request('/v1/ai/connections')", self.js)
         self.assertIn("ยังไม่มี API binding", self.js)
@@ -107,7 +107,7 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
         self.assertIn('id="agentCreateForm"', self.html)
         self.assertIn("request('/v1/agents')", self.js)
         self.assertIn("request('/v1/agents/readiness')", self.js)
-        self.assertIn("request('/v1/agents/orchestrations?limit=50')", self.js)
+        self.assertIn("'/v2/orchestrations?'+params.toString()", self.js)
         self.assertIn("request('/v1/agents/orchestrations',{method:'POST'", self.js)
         self.assertIn("OWNER role required for workflow control actions", self.js)
         self.assertIn("window.confirm(prompts[action]", self.js)
@@ -117,14 +117,33 @@ class ResearchOSControlCenterWebTests(unittest.TestCase):
     def test_projects_workspace_supports_real_knowledge_search(self):
         self.assertIn('id="workspaceKnowledgeForm"', self.html)
         self.assertIn('id="workspaceKnowledgeSelect"', self.html)
-        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?q='", self.js)
-        self.assertIn("page_size=20", self.js)
+        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?'+params.toString()", self.js)
+        self.assertIn("page_size:'20'", self.js)
 
     def test_history_activity_has_evidence_and_timeline_drilldown(self):
         self.assertIn("showWorkspaceDetail('job'", self.js)
         self.assertIn("showWorkspaceDetail('workflow'", self.js)
         self.assertIn("'/api/v1/jobs/'+encodeURIComponent(id)+'/evidence'", self.js)
         self.assertIn("'/v1/agents/orchestrations/'+encodeURIComponent(id)+'/timeline'", self.js)
+
+    def test_agent_center_uses_v2_server_filters_and_cursor_pagination(self):
+        self.assertIn('id="agentRunFilters"', self.html)
+        self.assertIn('id="agentRunQuery"', self.html)
+        self.assertIn('id="agentRunStatus"', self.html)
+        self.assertIn('id="agentRunsNext"', self.html)
+        self.assertIn("page_size:'20'", self.js)
+        self.assertIn("params.set('q',q)", self.js)
+        self.assertIn("params.set('status',status)", self.js)
+        self.assertIn("params.set('cursor',cursor)", self.js)
+        self.assertIn("'/v2/orchestrations?'+params.toString()", self.js)
+
+    def test_history_and_workspace_knowledge_support_api_cursor_pagination(self):
+        self.assertIn('id="historyFilterForm"', self.html)
+        self.assertIn('id="historyNextPage"', self.html)
+        self.assertIn('id="workspaceKnowledgeNext"', self.html)
+        self.assertIn("historyNextCursor=results[1].value.page?.next_cursor", self.js)
+        self.assertIn("knowledgeNextCursor=result.page?.next_cursor", self.js)
+        self.assertIn("'/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?'+params.toString()", self.js)
 
     def test_platform_directory_loads_live_api_data_or_explicitly_reports_missing_executor(self):
         self.assertIn('id="registryContent"', self.html)

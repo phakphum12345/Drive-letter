@@ -1,5 +1,8 @@
 const API_BASE_URL=(window.RESEARCH_OS_API_BASE_URL||'https://research-os-api-phakphoum-v0wf.onrender.com').replace(/\/$/,'');
 const state={sessionId:null,sending:false,messages:[],deepMode:true,account:null,chatWide:false,chatSessions:[]};
+let agentNextCursor=null;
+let historyNextCursor=null;
+let knowledgeNextCursor=null;
 const stages=['define','plan','gather','verify','synthesize','remember'];
 const $=id=>document.getElementById(id);
 function appendMessageNode(message){
@@ -549,13 +552,16 @@ function workspaceEmpty(message){
   empty.textContent=message;
   $('workspaceContent').appendChild(empty);
 }
-async function refreshWorkspaceView(moduleName){
+async function refreshWorkspaceView(moduleName, cursor=null){
   if(!$('workspaceView')||$('workspaceView').hidden)return;
   $('workspaceTitle').textContent=moduleName||'Workspace';
   $('workspaceStatus').textContent='กำลังอ่านข้อมูลจาก Research OS API…';
   $('workspaceContent').textContent='';
   if($('workspaceDetail')){$('workspaceDetail').hidden=true;$('workspaceDetail').textContent='';}
   if($('workspaceKnowledgeSearch'))$('workspaceKnowledgeSearch').hidden=moduleName!=='Projects & Files';
+  if($('historyFilters'))$('historyFilters').hidden=moduleName!=='History & Activity';
+  if(moduleName!=='Projects & Files'){knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;}
+  if(moduleName!=='History & Activity'){historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;}
   if(moduleName==='Projects & Files'&&$('workspaceKnowledgeSelect')){
     $('workspaceKnowledgeSelect').textContent='';
     $('workspaceKnowledgeSelect').disabled=true;
@@ -563,8 +569,11 @@ async function refreshWorkspaceView(moduleName){
     $('workspaceKnowledgeStatus').textContent='กำลังโหลด Workspace Index…';
   }
   $('workspaceRefresh').disabled=true;
+  if(moduleName==='History & Activity'&&$('historyNextPage'))$('historyNextPage').disabled=true;
   try{
     if(!state.account||!state.account.email){
+      if(moduleName==='History & Activity'){historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;}
+      if(moduleName==='Projects & Files'){knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;}
       $('workspaceStatus').textContent='ต้องลงชื่อเข้าใช้ก่อนจึงจะอ่านข้อมูลบัญชีได้';
       workspaceEmpty('Sign in required. ไม่มีการแสดงข้อมูลตัวอย่าง');
       return;
@@ -618,7 +627,7 @@ async function refreshWorkspaceView(moduleName){
       $('workspaceDescription').textContent='งานและ Workflow ที่อ่านได้จาก API จริง พร้อมสถานะและเวลา · read-only';
       const results=await Promise.allSettled([
         request('/api/v1/jobs?limit=50'),
-        request('/v1/agents/orchestrations?limit=50')
+        request((()=>{const params=new URLSearchParams({page_size:'20'});const q=$('historyWorkflowQuery')?.value.trim()||'';const status=$('historyWorkflowStatus')?.value||'';if(q)params.set('q',q);if(status)params.set('status',status);if(cursor)params.set('cursor',cursor);return '/v2/orchestrations?'+params.toString();})())
       ]);
       let total=0;
       if(results[0].status==='fulfilled'){
@@ -634,7 +643,9 @@ async function refreshWorkspaceView(moduleName){
         ));
       }else workspaceRecord('Execution Jobs unavailable',String(results[0].reason),'UNAVAILABLE');
       if(results[1].status==='fulfilled'){
-        const runs=Array.isArray(results[1].value.runs)?results[1].value.runs:(Array.isArray(results[1].value.orchestrations)?results[1].value.orchestrations:[]);
+        const runs=Array.isArray(results[1].value.items)?results[1].value.items:[];
+        historyNextCursor=results[1].value.page?.next_cursor||null;
+        if($('historyNextPage'))$('historyNextPage').disabled=!historyNextCursor;
         workspaceRecord('Workflow Runs',runs.length+' run(s) returned by orchestration API','LIVE');
         total+=runs.length;
         if(!runs.length)workspaceEmpty('ยังไม่มี workflow runs');
@@ -644,7 +655,7 @@ async function refreshWorkspaceView(moduleName){
           run.status||'UNKNOWN',
           {label:'View timeline',onClick:()=>showWorkspaceDetail('workflow',String(run.run_id||''))}
         ));
-      }else workspaceRecord('Workflow Runs unavailable',String(results[1].reason),'UNAVAILABLE');
+      }else{historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;workspaceRecord('Workflow Runs unavailable',String(results[1].reason),'UNAVAILABLE');}
       $('workspaceStatus').textContent='โหลด '+total+' รายการจาก Jobs และ Workflow API · รายละเอียดหลักฐานจะแสดงเมื่อ API ต้นทางส่งกลับ';
     }else if(moduleName==='Settings & Account'){
       $('workspaceDescription').textContent='ข้อมูลบัญชี ผู้ให้บริการ และสถานะการเชื่อมต่อ · ไม่มีการเปิดเผย Secret';
@@ -681,6 +692,7 @@ async function refreshWorkspaceView(moduleName){
     }
     $('workspaceUpdated').textContent='Updated '+new Date().toLocaleTimeString();
   }catch(error){
+    if(moduleName==='History & Activity'){historyNextCursor=null;if($('historyNextPage'))$('historyNextPage').disabled=true;}
     $('workspaceStatus').textContent='โหลดข้อมูลไม่สำเร็จ: '+String(error.message||error);
     workspaceEmpty('API ไม่พร้อมใช้งาน · ไม่มีการใช้ข้อมูลจำลองแทน');
   }finally{
@@ -690,15 +702,19 @@ async function refreshWorkspaceView(moduleName){
 
 
 // Live workspace search and evidence drill-down.
-async function searchWorkspaceKnowledge(event){
+async function searchWorkspaceKnowledge(event, cursor=null){
   if(event)event.preventDefault();
   const workspaceId=$('workspaceKnowledgeSelect')?.value||'';
   const query=$('workspaceKnowledgeQuery')?.value.trim()||'';
-  if(!workspaceId||!query){$('workspaceKnowledgeStatus').textContent='เลือก Workspace และระบุคำค้นก่อน';return;}
+  if(!workspaceId||!query){knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;$('workspaceKnowledgeStatus').textContent='เลือก Workspace และระบุคำค้นก่อน';return;}
   $('workspaceKnowledgeSubmit').disabled=true;
+  if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;
   $('workspaceKnowledgeStatus').textContent='กำลังค้นหา Workspace Index…';
   try{
-    const result=await request('/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?q='+encodeURIComponent(query)+'&page_size=20');
+    const params=new URLSearchParams({q:query,page_size:'20'});if(cursor)params.set('cursor',cursor);
+    const result=await request('/v2/workspaces/'+encodeURIComponent(workspaceId)+'/knowledge?'+params.toString());
+    knowledgeNextCursor=result.page?.next_cursor||null;
+    if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=!knowledgeNextCursor;
     const items=Array.isArray(result.items)?result.items:[];
     $('workspaceContent').textContent='';
     workspaceRecord('Knowledge search',items.length+' result(s) for “'+query+'”','LIVE');
@@ -711,6 +727,7 @@ async function searchWorkspaceKnowledge(event){
     });
     $('workspaceKnowledgeStatus').textContent='ค้นหาเสร็จแล้ว · '+items.length+' รายการ · แสดงเฉพาะข้อมูลจาก Workspace Index';
   }catch(error){
+    knowledgeNextCursor=null;if($('workspaceKnowledgeNext'))$('workspaceKnowledgeNext').disabled=true;
     $('workspaceKnowledgeStatus').textContent='ค้นหาไม่สำเร็จ: '+String(error.message||error);
   }finally{$('workspaceKnowledgeSubmit').disabled=false;}
 }
@@ -795,21 +812,23 @@ function agentCard(container,title,detail,status){
   if(status){const badge=document.createElement('span');badge.className='home-status-tag';badge.textContent=status;card.appendChild(badge);}
   container.appendChild(card);return card;
 }
-async function refreshAgentCenter(){
+async function refreshAgentCenter(cursor=null){
   if(!$('agentsView')||$('agentsView').hidden)return;
   $('agentsStatus').textContent='กำลังอ่าน Agent Registry และ Orchestration API…';
   $('agentsInventory').textContent='';$('agentRuns').textContent='';$('agentTimeline').textContent='';
   agentCard($('agentTimeline'),'Select a workflow run','เลือก Timeline จากรายการ Workflow เพื่อดูเหตุการณ์จริง','READY');
   if(!state.account||!state.account.email){
+    agentNextCursor=null;if($('agentRunsNext'))$('agentRunsNext').disabled=true;
     $('agentsStatus').textContent='Sign in required · ไม่มีการแสดงข้อมูลตัวอย่าง';
     agentCard($('agentsInventory'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Agent readiness','LOCKED');
     agentCard($('agentRuns'),'Sign in required','ลงชื่อเข้าใช้เพื่อดู Workflow runs','LOCKED');
     return;
   }
+  if($('agentRunsNext'))$('agentRunsNext').disabled=true;
   const results=await Promise.allSettled([
     request('/v1/agents'),
     request('/v1/agents/readiness'),
-    request('/v1/agents/orchestrations?limit=50')
+    request((()=>{const params=new URLSearchParams({page_size:'20'});const q=$('agentRunQuery')?.value.trim()||'';const status=$('agentRunStatus')?.value||'';if(q)params.set('q',q);if(status)params.set('status',status);if(cursor)params.set('cursor',cursor);return '/v2/orchestrations?'+params.toString();})())
   ]);
   let agents=[],runs=[],readiness='UNKNOWN';
   if(results[0].status==='fulfilled'){
@@ -818,7 +837,11 @@ async function refreshAgentCenter(){
     agents.forEach(item=>agentCard($('agentsInventory'),item.name||item.agent_id||'Agent',String(item.agent_id||item.id||'unknown')+' · '+(Array.isArray(item.capabilities)?item.capabilities.join(', '):'capabilities not reported'),item.status||'REGISTERED'));
   }else agentCard($('agentsInventory'),'Agent Registry unavailable',String(results[0].reason?.message||results[0].reason),'UNAVAILABLE');
   if(results[1].status==='fulfilled')readiness=String(results[1].value.status||results[1].value.readiness||'AVAILABLE');
-  if(results[2].status==='fulfilled')runs=Array.isArray(results[2].value.runs)?results[2].value.runs:[];
+  if(results[2].status==='fulfilled'){
+    runs=Array.isArray(results[2].value.items)?results[2].value.items:[];
+    agentNextCursor=results[2].value.page?.next_cursor||null;
+  }else agentNextCursor=null;
+  if($('agentRunsNext'))$('agentRunsNext').disabled=!agentNextCursor;
   $('agentRunCount').textContent=runs.length+' run(s)';
   if(results[2].status!=='fulfilled')agentCard($('agentRuns'),'Workflow API unavailable',String(results[2].reason?.message||results[2].reason),'UNAVAILABLE');
   else if(!runs.length)agentCard($('agentRuns'),'No workflow runs','Create a plan to begin','EMPTY');
@@ -918,8 +941,13 @@ renderAdminCreateFields();
 $('refreshControlCenter').addEventListener('click',refreshControlCenter);
 $('workspaceRefresh').addEventListener('click',()=>refreshWorkspaceView($('workspaceTitle').textContent));
 $('workspaceKnowledgeForm').addEventListener('submit',searchWorkspaceKnowledge);
+$('workspaceKnowledgeNext').addEventListener('click',()=>{if(knowledgeNextCursor)searchWorkspaceKnowledge(null,knowledgeNextCursor)});
+$('historyFilterForm').addEventListener('submit',event=>{event.preventDefault();historyNextCursor=null;refreshWorkspaceView('History & Activity')});
+$('historyNextPage').addEventListener('click',()=>{if(historyNextCursor)refreshWorkspaceView('History & Activity',historyNextCursor)});
 $('registryRefresh').addEventListener('click',()=>refreshRegistryView($('registryTitle').textContent));
-$('agentsRefresh').addEventListener('click',refreshAgentCenter);
+$('agentsRefresh').addEventListener('click',()=>{agentNextCursor=null;refreshAgentCenter()});
+$('agentRunFilters').addEventListener('submit',event=>{event.preventDefault();agentNextCursor=null;refreshAgentCenter()});
+$('agentRunsNext').addEventListener('click',()=>{if(agentNextCursor)refreshAgentCenter(agentNextCursor)});
 $('agentCreateForm').addEventListener('submit',createAgentRun);
 $('homeStartResearch').addEventListener('click',()=>{setPlatformView('chat');$('prompt').focus()});
 $('homeViewDirectory').addEventListener('click',()=>setPlatformView('registry'));

@@ -129,3 +129,7 @@
   .registry-toolbar{align-items:flex-start;flex-direction:column}
   .agent-center-layout{grid-template-columns:1fr}
 }
+
+
+/* API-backed cursor and filter controls for long-running workspaces. */
+.control-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:12px 0 14px}.control-filters label{display:flex;flex-direction:column;gap:5px;color:#8797ad;font-size:8px}.control-filters input,.control-filters select{min-width:150px;max-width:100%;padding:7px 9px;border:1px solid var(--line2);border-radius:7px;background:#0b1422;color:var(--text);font:inherit}.control-filters button:disabled{opacity:.4;cursor:not-allowed}
