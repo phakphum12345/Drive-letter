@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+import importlib
 import os
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
-from owner_special.research_os_friend.resource_control_runtime import _measure_friend, install_friend_resource_control
+from owner_special.research_os_friend.resource_control_runtime import (
+    _measure_friend,
+    _prepare_resource_control_imports,
+    install_friend_resource_control,
+)
 from owner_special.research_os_friend.models import FriendResponse, FriendDecision, ScaleProfile
 from tools.research_os_api.execution_contract import MeasuredExecution
 from tools.research_os_api.resource_governance import Usage
@@ -53,6 +60,36 @@ class _Runtime:
 
 
 class ResourceControlRuntimeTests(unittest.TestCase):
+    def test_resource_control_imports_rebind_legacy_alias_to_canonical_usage(self):
+        canonical = importlib.import_module("tools.research_os_api.resource_governance")
+        # Reproduce a stale flat import that may have been loaded by Friend
+        # before OwnerFriendService installs the resource-control adapter.
+        stale = types.ModuleType("resource_governance")
+        sys.modules["resource_governance"] = stale
+
+        _prepare_resource_control_imports()
+
+        self.assertIs(sys.modules["resource_governance"], canonical)
+        self.assertIs(Usage, canonical.Usage)
+        self.assertEqual(MeasuredExecution.__module__, "tools.research_os_api.execution_contract")
+
+        from owner_special.research_os_friend.providers import ProviderResult
+
+        provider_result = ProviderResult(
+            text="ok",
+            usage={"requests": 1},
+            actual_cost=Decimal("0"),
+            currency="USD",
+        )
+        self.assertIs(type(provider_result.measurement.usage), Usage)
+        measured = MeasuredExecution(
+            provider_result,
+            provider_result.measurement.usage,
+            Decimal("0"),
+            "USD",
+        )
+        self.assertIsInstance(measured, MeasuredExecution)
+
     def test_mock_provider_is_measured_as_exact_zero_cost(self):
         response = FriendResponse(
             text="ok",
