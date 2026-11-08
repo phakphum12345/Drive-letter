@@ -90,7 +90,7 @@ function Invoke-CleanValidation {
         # CI-only reservation through the service-specific Environment value.
         # This keeps the production Local/Ollama defaults and fail-closed billing
         # guard unchanged while allowing the simulated provider E2E to run.
-        $serviceRegistryPath = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$serviceName"
+        $serviceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
         $serviceKey = Get-Item -LiteralPath $serviceRegistryPath
         $existingServiceEnvironment = @($serviceKey.GetValue('Environment', @()))
         $testServiceEnvironment = @($existingServiceEnvironment | Where-Object {
