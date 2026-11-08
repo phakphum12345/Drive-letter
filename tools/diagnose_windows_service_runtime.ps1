@@ -31,16 +31,22 @@ function Protect-CommandLine {
     param([AllowNull()][string]$CommandLine)
     if ([string]::IsNullOrWhiteSpace($CommandLine)) { return $null }
     # Keep useful process identity while redacting common inline credential arguments.
-    $safe = $CommandLine -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key|authorization)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)((?:token|password|passwd|secret|api[-_]?key|authorization)\s*=\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $CommandLine -replace '(?i)(--?authorization\s+)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(authorization\s*=\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)((?:token|password|passwd|secret|api[-_]?key)\s*=\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
     return $safe
 }
 
 function Protect-LogLine {
     param([AllowNull()][string]$Line)
     if ($null -eq $Line) { return $null }
-    $safe = $Line -replace '(?i)((?:token|password|passwd|secret|api[-_]?key|authorization)\s*[:=]\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
-    $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key|authorization)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $Line -replace '(?i)(authorization\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)((?:token|password|passwd|secret|api[-_]?key)\s*[:=]\s*)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(--?authorization\s+)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)(--?(?:token|password|passwd|secret|api[-_]?key)\s+)(?:"[^"]*"|\S+)', '$1<REDACTED>'
+    $safe = $safe -replace '(?i)\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*', 'Bearer <REDACTED>'
     return $safe
 }
 
@@ -60,7 +66,7 @@ function Get-ServiceEvidence {
             process_id = [int]$svc.ProcessId
             exit_code = $svc.ExitCode
             service_specific_exit_code = $svc.ServiceSpecificExitCode
-            path_name = $svc.PathName
+            path_name = Protect-CommandLine -CommandLine $svc.PathName
             start_name = $svc.StartName
         }
     } catch {
@@ -226,7 +232,7 @@ foreach ($logName in @('Application','System')) {
                 provider = $event.ProviderName
                 event_id = $event.Id
                 level = $event.LevelDisplayName
-                message = $event.Message
+                message = Protect-LogLine -Line $event.Message
             }
         }
     } catch {

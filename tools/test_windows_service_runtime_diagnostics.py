@@ -106,6 +106,10 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
     def test_process_command_line_redacts_common_inline_credentials(self) -> None:
         self.assertIn("Protect-CommandLine", self.source)
         self.assertIn("<REDACTED>", self.source)
+        self.assertIn("Bearer|Basic", self.source)
+        self.assertIn(r"(?:Bearer|Basic)\s+", self.source)
+        self.assertIn("path_name = Protect-CommandLine -CommandLine $svc.PathName", self.source)
+        self.assertIn("message = Protect-LogLine -Line $event.Message", self.source)
         self.assertNotIn("Get-ChildItem Env:", self.source)
         self.assertNotIn("Get-Item Env:", self.source)
 
