@@ -188,6 +188,28 @@ class V2CompatibilityTests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(missing["error"]["code"], "workspace_not_found")
 
+    def test_v2_workspace_and_orchestration_reads_require_authenticated_session(self) -> None:
+        self.create_run(99)
+        engine = WorkspaceKnowledgeEngine(self.temp.name)
+        engine.create_workspace("Private research", workspace_id="private-research")
+
+        protected_paths = (
+            "/v2/orchestrations",
+            "/v2/workspaces",
+            "/v2/workspaces/private-research/knowledge?q=research",
+        )
+        for path in protected_paths:
+            with self.subTest(path=path):
+                status, payload = self.request(path, authenticated=False)
+                self.assertEqual(status, 401)
+                self.assertEqual(payload["error"]["code"], "authentication_required")
+
+        # Existing authenticated clients retain the same read functionality.
+        for path in protected_paths:
+            with self.subTest(authenticated_path=path):
+                status, _ = self.request(path)
+                self.assertEqual(status, 200)
+
     def test_v2_errors_have_machine_readable_envelope(self) -> None:
         status, payload = self.request("/v2/orchestrations?page_size=101")
         self.assertEqual(status, 400)

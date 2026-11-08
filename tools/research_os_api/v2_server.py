@@ -40,6 +40,18 @@ class V2ResearchOSHandler(AgentResearchOSHandler):
         parsed = urlsplit(self.path)
         self._v2_request = parsed.path.startswith("/v2/")
 
+        # These routes expose user workspace content and orchestration history.
+        # Keep their read boundary consistent with the protected V1 APIs.
+        protected_read = (
+            parsed.path in {"/v2/orchestrations", "/v2/workspaces"}
+            or (
+                parsed.path.startswith("/v2/workspaces/")
+                and parsed.path.endswith("/knowledge")
+            )
+        )
+        if protected_read and not self._require_principal():
+            return
+
         if parsed.path == "/v2/health/readiness":
             payload = readiness_snapshot()
             self._send(
