@@ -20,12 +20,23 @@ OWNER_HEADER = "X-Research-OS-Owner"
 PROFILE_HEADER = "X-Research-OS-Profile"
 SESSION_HEADER = "X-Research-OS-Session"
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+# Research OS session IDs come from secrets.token_urlsafe(), whose first
+# character may legally be "_" or "-". Keep the broader alphabet scoped to
+# session IDs only; owner/profile identifiers retain the stricter rule.
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$")
 
 
 def _safe_scope(value: str, field: str) -> str:
     candidate = value.strip()
     if candidate in {"", ".", ".."} or not _ID_RE.fullmatch(candidate):
         raise ValueError(f"invalid {field}")
+    return candidate
+
+
+def _safe_session_id(value: str) -> str:
+    candidate = value.strip()
+    if candidate in {"", ".", ".."} or not _SESSION_ID_RE.fullmatch(candidate):
+        raise ValueError("invalid session_id")
     return candidate
 
 
@@ -102,7 +113,7 @@ class OwnerFriendService:
                 if not claimed_owner or not service.runtime.owner.matches(claimed_owner):
                     raise PermissionError("owner identity rejected")
                 profile_id = _safe_scope(self.headers.get(PROFILE_HEADER, "default"), "profile_id")
-                session_id = _safe_scope(self.headers.get(SESSION_HEADER, "default"), "session_id")
+                session_id = _safe_session_id(self.headers.get(SESSION_HEADER, "default"))
                 return claimed_owner, profile_id, session_id
 
             def _read_payload(self) -> dict[str, object]:
