@@ -431,7 +431,7 @@ def prove_apple_scope_skip(
 
     apple_scope = re.compile(
         r"^(v3/flutter_app/|packages/research_os_contracts/|"
-        r"\\.github/actions/flutter-setup/)"
+        r"\.github/actions/flutter-setup/)"
     )
     apple_workflow_change = re.compile(
         r"^[+-].*(runs-on: macos-latest|xcodebuild|xcrun|pod --version|"
