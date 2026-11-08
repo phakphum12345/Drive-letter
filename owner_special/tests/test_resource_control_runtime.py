@@ -114,6 +114,48 @@ class ResourceControlRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authoritative Friend provider usage/cost"):
             _measure_friend({"response": response}, {"provider": "openai-compatible"})
 
+    def test_gemini_flash_reserves_price_ceiling_for_token_allowance(self):
+        provider = types.SimpleNamespace(name="gemini", model="gemini-3-flash-preview")
+        runtime = types.SimpleNamespace(
+            orchestrator=types.SimpleNamespace(
+                providers=types.SimpleNamespace(primary=lambda: provider)
+            )
+        )
+        with patch.dict(os.environ, {"RESEARCH_OS_RESOURCE_TOKENS_PER_REQUEST": "1000000"}, clear=True):
+            self.assertEqual(_estimated_cost_reservation(runtime), Decimal("3.00"))
+
+    def test_local_provider_keeps_zero_cost_reservation(self):
+        provider = types.SimpleNamespace(name="ollama-local", local=True)
+        runtime = types.SimpleNamespace(
+            orchestrator=types.SimpleNamespace(
+                providers=types.SimpleNamespace(primary=lambda: provider)
+            )
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_estimated_cost_reservation(runtime), Decimal("0"))
+
+    def test_paid_provider_without_pricing_or_ceiling_fails_before_execution(self):
+        provider = types.SimpleNamespace(name="openai-compatible", local=False)
+        runtime = types.SimpleNamespace(
+            orchestrator=types.SimpleNamespace(
+                providers=types.SimpleNamespace(primary=lambda: provider)
+            )
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "positive RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD"):
+                _estimated_cost_reservation(runtime)
+
+    def test_paid_provider_rejects_zero_explicit_cost_ceiling(self):
+        provider = types.SimpleNamespace(name="gemini", model="custom-model")
+        runtime = types.SimpleNamespace(
+            orchestrator=types.SimpleNamespace(
+                providers=types.SimpleNamespace(primary=lambda: provider)
+            )
+        )
+        with patch.dict(os.environ, {"RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD": "0"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "must be positive"):
+                _estimated_cost_reservation(runtime)
+
     def test_resource_control_patch_is_idempotent(self):
         install_friend_resource_control()
         install_friend_resource_control()
