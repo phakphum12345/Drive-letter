@@ -121,6 +121,7 @@ jobs:
   flutter-quality:
     name: Flutter Analyze Test Build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout exact target SHA
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -228,9 +229,137 @@ jobs:
         working-directory: v3/flutter_app
         run: flutter test
 
-      - name: Flutter debug APK build
+      # Persist Gradle distributions and dependency caches between hosted-runner jobs.
+      - name: Cache Gradle wrapper and dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: gradle-${{ runner.os }}-${{ hashFiles('v3/flutter_app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Configure verified Gradle distribution mirror and network timeout
         working-directory: v3/flutter_app
-        run: flutter build apk --debug
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          assert any(
+              line.startswith("distributionUrl=") and "gradle-9.3.1-all.zip" in line
+              for line in lines
+          ), "Flutter stable template Gradle version changed; review checksum before updating mirror"
+          lines = [
+              line for line in lines
+              if not line.startswith((
+                  "distributionUrl=",
+                  "distributionSha256Sum=",
+                  "networkTimeout=",
+              ))
+          ]
+          lines.extend([
+              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip",
+              "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06",
+              "networkTimeout=60000",
+          ])
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          result = path.read_text(encoding="utf-8")
+          assert "mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip" in result
+          assert "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06" in result
+          assert "networkTimeout=60000" in result
+          print("GRADLE_DISTRIBUTION_HOST=mirrors.huaweicloud.com")
+          print("GRADLE_DISTRIBUTION_VERSION=9.3.1")
+          print("GRADLE_DISTRIBUTION_SHA256_PINNED=PASS")
+          print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
+          PY
+
+          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip"
+          attempt=1
+          while [ "$attempt" -le 3 ]; do
+            set +e
+            probe="$(curl --head --silent --show-error --location --output /dev/null --write-out '%{http_code} %{url_effective}' --max-time 45 "$distribution_url" 2>"$RUNNER_TEMP/gradle-distribution-probe.log")"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -eq 0 ]; then
+              echo "GRADLE_DISTRIBUTION_PROBE=$probe"
+              http_status="${probe%% *}"
+              effective_url="${probe#* }"
+              case "$effective_url" in
+                https://mirrors.huaweicloud.com/*) ;;
+                *)
+                  echo "::error::Gradle mirror resolved to an unexpected host: $effective_url"
+                  exit 1
+                  ;;
+              esac
+              if [[ "$http_status" == "200" || "$http_status" == "206" ]]; then
+                echo "GRADLE_DISTRIBUTION_PREFLIGHT=PASS"
+                break
+              fi
+            fi
+            cat "$RUNNER_TEMP/gradle-distribution-probe.log" || true
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Gradle mirror preflight failed after 3 attempts (curl=$curl_status, HTTP=${http_status:-unknown})."
+              exit 1
+            fi
+            echo "Gradle mirror preflight did not succeed; retrying in 15s."
+            sleep 15
+            attempt=$((attempt + 1))
+          done
+
+      - name: Flutter debug APK build (retry transient network failures)
+        working-directory: v3/flutter_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          max_attempts=3
+          attempt=1
+          last_status=1
+          apk="build/app/outputs/flutter-apk/app-debug.apk"
+
+          while [ "$attempt" -le "$max_attempts" ]; do
+            log="$RUNNER_TEMP/flutter-apk-build-attempt-${attempt}.log"
+            echo "::group::Flutter debug APK build attempt ${attempt}/${max_attempts}"
+            set +e
+            flutter build apk --debug 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+            echo "::endgroup::"
+            last_status="$status"
+
+            if [ "$status" -eq 0 ]; then
+              if [ ! -s "$apk" ]; then
+                echo "::error::Flutter build exited successfully but the expected APK is missing or empty: $apk"
+                exit 1
+              fi
+              sha256sum "$apk"
+              echo "FLUTTER_DEBUG_APK_BUILD=PASS"
+              echo "FLUTTER_DEBUG_APK_PATH=$apk"
+              exit 0
+            fi
+
+            if ! grep -Eqi 'HTTP (5[0-9][0-9]|429)|HTTP response code: (5[0-9][0-9]|429)|status code (5[0-9][0-9]|429)|response code: (5[0-9][0-9]|429)|504 Gateway Time-out|502 Bad Gateway|503 Service Unavailable|timed out|Read timed out|Connect timed out|UnknownHostException|Temporary failure in name resolution|Connection reset|Could not (GET|HEAD)' "$log"; then
+              echo "::error::APK build failed with a non-transient or unclassified error (exit $status); not retrying."
+              exit "$status"
+            fi
+
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              echo "::error::APK build exhausted $max_attempts attempts after transient network failures."
+              exit "$status"
+            fi
+
+            delay=$((attempt * 15))
+            echo "Transient Gradle/dependency network failure detected; retrying in ${delay}s."
+            sleep "$delay"
+            attempt=$((attempt + 1))
+          done
+
+          echo "::error::APK build did not complete."
+          exit "$last_status"
 
   linux-desktop-quality:
     name: Flutter Linux Desktop Recon Build
