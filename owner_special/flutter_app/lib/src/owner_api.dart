@@ -134,9 +134,9 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
       final request = await client.postUrl(uri).timeout(chatTimeout);
       request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
       request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
-      request.headers.set('X-Research-OS-Owner', ownerId);
-      request.headers.set('X-Research-OS-Profile', profileId);
-      request.headers.set('X-Research-OS-Session', _sessionToken ?? sessionId);
+      if (_sessionToken != null) {
+        request.headers.set('X-Research-OS-Session', _sessionToken!);
+      }
       final payload = utf8.encode(jsonEncode(<String, dynamic>{'text': text}));
       request.contentLength = payload.length;
       request.add(payload);
@@ -191,9 +191,9 @@ final class HttpOwnerFriendApi implements OwnerFriendApi {
       final request = method == 'POST' ? await client.postUrl(uri).timeout(requestTimeout) : await client.getUrl(uri).timeout(requestTimeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (authenticated) {
-        request.headers.set('X-Research-OS-Owner', ownerId);
-        request.headers.set('X-Research-OS-Profile', profileId);
-        request.headers.set('X-Research-OS-Session', _sessionToken ?? sessionId);
+        if (_sessionToken != null) {
+          request.headers.set('X-Research-OS-Session', _sessionToken!);
+        }
       }
       headers?.forEach(request.headers.set);
       if (body != null) {

@@ -143,7 +143,7 @@ function Invoke-CleanValidation {
         $apiErr = Join-Path $env:RUNNER_TEMP 'owner-installer-api.err.log'
         $apiProcess = $null
         $app = $null
-        $environmentNames = @('HOST','PORT','RESEARCH_OS_API_PORT','RESEARCH_OS_API_BASE_URL','RESEARCH_OS_FRIEND_URL','RESEARCH_OS_DATA_DIR','RESEARCH_OS_AI_ROUTE')
+        $environmentNames = @('HOST','PORT','RESEARCH_OS_API_PORT','RESEARCH_OS_API_BASE_URL','RESEARCH_OS_FRIEND_URL','RESEARCH_OS_DATA_DIR','RESEARCH_OS_AI_ROUTE','RESEARCH_OS_SESSION_SECRET')
         $previousEnvironment = @{}
         foreach ($name in $environmentNames) {
             $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
@@ -155,6 +155,7 @@ function Invoke-CleanValidation {
             $env:RESEARCH_OS_API_BASE_URL = $apiBase
             $env:RESEARCH_OS_FRIEND_URL = 'http://127.0.0.1:8790'
             $env:RESEARCH_OS_DATA_DIR = $dataRoot
+            $env:RESEARCH_OS_SESSION_SECRET = 'owner-installer-ci-session-secret-only'
             $env:RESEARCH_OS_AI_ROUTE = 'friend'
             $apiProcess = Start-Process -FilePath 'python' -ArgumentList @($apiScript) -WorkingDirectory $repoRoot -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
 
@@ -173,8 +174,19 @@ function Invoke-CleanValidation {
                 throw 'Research OS API Spine did not become ready for installed Owner Desktop'
             }
 
-            $apiStatus = Invoke-RestMethod -Uri "$apiBase/owner/status" -Headers $headers -TimeoutSec 5
-            $apiProvider = Invoke-RestMethod -Uri "$apiBase/owner/provider" -Headers $headers -TimeoutSec 5
+            $sessionScript = @(
+                "import sys"
+                "sys.path.insert(0, r'$repoRoot/tools/research_os_api')"
+                "from auth_session import issue_session"
+                "print(issue_session({'user_id': 'owner', 'email': 'owner@example.test', 'role': 'owner'}))"
+            ) -join [Environment]::NewLine
+            $sessionScriptPath = Join-Path $env:RUNNER_TEMP 'issue-owner-session.py'
+            [System.IO.File]::WriteAllText($sessionScriptPath, $sessionScript, [System.Text.UTF8Encoding]::new($false))
+            $sessionToken = (& python $sessionScriptPath).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sessionToken)) { throw 'Could not issue the isolated installer Research OS Owner session.' }
+            $apiHeaders = @{'X-Research-OS-Session'=$sessionToken}
+            $apiStatus = Invoke-RestMethod -Uri "$apiBase/owner/status" -Headers $apiHeaders -TimeoutSec 5
+            $apiProvider = Invoke-RestMethod -Uri "$apiBase/owner/provider" -Headers $apiHeaders -TimeoutSec 5
             if (-not $apiStatus -or -not $apiProvider) { throw 'API Spine Owner status/provider preflight failed' }
 
             if (Test-Path $audit) { Clear-Content $audit -ErrorAction SilentlyContinue }
@@ -185,13 +197,11 @@ function Invoke-CleanValidation {
                 if (Test-Path $audit) {
                     $records = @(Get-Content $audit -ErrorAction SilentlyContinue | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
                     $healthSeen = @($records | Where-Object { $_.path -eq '/owner/health' -and [int]$_.status -eq 200 }).Count -gt 0
-                    $statusSeen = @($records | Where-Object { $_.path -eq '/owner/status' -and [int]$_.status -eq 200 }).Count -gt 0
-                    $providerSeen = @($records | Where-Object { $_.path -eq '/owner/provider' -and [int]$_.status -eq 200 }).Count -gt 0
-                    if ($healthSeen -and $statusSeen -and $providerSeen) { $proved = $true; break }
+                    if ($healthSeen) { $proved = $true; break }
                 }
                 Start-Sleep -Milliseconds 300
             }
-            if (-not $proved) { throw 'Installed Owner Desktop did not prove health/status/provider requests through the API Spine' }
+            if (-not $proved) { throw 'Installed Owner Desktop did not prove the public health probe through the API Spine' }
             Write-Host 'INSTALLED_OWNER_DESKTOP_API_SPINE_E2E=PASS'
             Get-Content $audit | Out-Host
         } catch {

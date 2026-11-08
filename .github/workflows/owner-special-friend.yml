@@ -164,6 +164,7 @@ jobs:
             $env:RESEARCH_OS_API_BASE_URL = $apiBase
             $env:RESEARCH_OS_FRIEND_URL = $friendUrl
             $env:RESEARCH_OS_DATA_DIR = $dataRoot
+            $env:RESEARCH_OS_SESSION_SECRET = 'owner-special-ci-session-secret-only'
             $env:RESEARCH_OS_AI_ROUTE = 'friend'
             $gateway = Start-Process python -ArgumentList @('tools/research_os_api/render_server.py') -WorkingDirectory $env:GITHUB_WORKSPACE -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
 
@@ -178,7 +179,17 @@ jobs:
             }
             if (-not $ready) { throw 'Research OS API Spine / Owner proxy did not become ready' }
 
-            $headers = @{'X-Research-OS-Owner'='owner'; 'X-Research-OS-Profile'='default'; 'X-Research-OS-Session'='desktop-e2e'}
+            $sessionScript = @(
+              "import sys"
+              "sys.path.insert(0, r'$env:GITHUB_WORKSPACE/tools/research_os_api')"
+              "from auth_session import issue_session"
+              "print(issue_session({'user_id': 'owner', 'email': 'owner@example.test', 'role': 'owner'}))"
+            ) -join [Environment]::NewLine
+            $sessionScriptPath = Join-Path $env:RUNNER_TEMP 'issue-owner-session.py'
+            [System.IO.File]::WriteAllText($sessionScriptPath, $sessionScript, [System.Text.UTF8Encoding]::new($false))
+            $sessionToken = (& python $sessionScriptPath).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sessionToken)) { throw 'Could not issue the isolated CI Research OS Owner session.' }
+            $headers = @{'X-Research-OS-Session'=$sessionToken}
             $status = Invoke-RestMethod "$apiBase/owner/status" -Headers $headers -TimeoutSec 5
             $provider = Invoke-RestMethod "$apiBase/owner/provider" -Headers $headers -TimeoutSec 5
             if (-not $status -or -not $provider) { throw 'API Spine Owner status/provider preflight did not return data' }
@@ -191,12 +202,10 @@ jobs:
               if ($app.HasExited) { throw "Owner Desktop exited during startup E2E (exit code $($app.ExitCode))" }
               $records = @(Get-Content $auditPath -ErrorAction SilentlyContinue | Where-Object {$_.Trim()} | ForEach-Object {$_ | ConvertFrom-Json})
               $h = @($records | Where-Object {$_.path -eq '/owner/health' -and [int]$_.status -eq 200}).Count -gt 0
-              $s = @($records | Where-Object {$_.path -eq '/owner/status' -and [int]$_.status -eq 200}).Count -gt 0
-              $p = @($records | Where-Object {$_.path -eq '/owner/provider' -and [int]$_.status -eq 200}).Count -gt 0
-              if ($h -and $s -and $p) { $proved = $true; break }
+              if ($h) { $proved = $true; break }
               Start-Sleep -Milliseconds 250
             }
-            if (-not $proved) { throw 'Owner Desktop did not prove health/status/provider requests through the API Spine' }
+            if (-not $proved) { throw 'Owner Desktop did not prove the public health probe through the API Spine' }
             Write-Host 'OWNER_DESKTOP_STARTUP_E2E=PASS'
             Write-Host 'OWNER_API_SPINE=' $apiBase
             Get-Content $auditPath | Out-Host

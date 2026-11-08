@@ -36,7 +36,7 @@ from google_oauth import GoogleOAuthBroker, GoogleOAuthError
 from google_workspace import GoogleWorkspaceConfig, get_google_workspace_dashboard
 from server_auth_routes import auth_pairing_authorize, auth_provider_handoff
 from identity_providers import provider_catalog
-from identity_context import resolve_identity_context
+from identity_context import IdentityContext, resolve_identity_context
 from memory import build_context, search_memory
 from multi_login import MultiLoginError, begin_login
 from multi_login_runtime import MultiLoginRuntimeError, begin_runtime_login, complete_runtime_login
@@ -119,9 +119,32 @@ FRIEND_BASE_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").r
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner")
 
 
-def _friend_chat(text: str, *, session_id: str | None = None, complexity: int = 3, risk: int = 1, parallelism: int = 2, helper_budget: int = 0) -> dict[str, Any]:
-    payload = {"text": text, "complexity": max(1, int(complexity)), "risk": max(1, int(risk)), "parallelism": max(1, int(parallelism)), "helper_budget": max(0, int(helper_budget))}
-    request = urllib.request.Request(f"{FRIEND_BASE_URL}/owner/chat", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Content-Type": "application/json; charset=utf-8", "X-Research-OS-Owner": FRIEND_OWNER_ID, "X-Research-OS-Profile": "default", "X-Research-OS-Session": session_id or "main-api"}, method="POST")
+def _friend_chat(
+    text: str,
+    *,
+    identity: IdentityContext,
+    complexity: int = 3,
+    risk: int = 1,
+    parallelism: int = 2,
+    helper_budget: int = 0,
+) -> dict[str, Any]:
+    payload = {
+        "text": text,
+        "complexity": max(1, int(complexity)),
+        "risk": max(1, int(risk)),
+        "parallelism": max(1, int(parallelism)),
+        "helper_budget": max(0, int(helper_budget)),
+    }
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        **identity.friend_headers(),
+    }
+    request = urllib.request.Request(
+        f"{FRIEND_BASE_URL}/owner/chat",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             value = json.loads(response.read().decode("utf-8"))
@@ -133,7 +156,6 @@ def _friend_chat(text: str, *, session_id: str | None = None, complexity: int = 
     if not isinstance(value, dict):
         raise RuntimeError("Friend service returned an invalid response")
     return value
-
 
 def _friend_provider_health() -> dict[str, Any]:
     """Check the actual loopback Friend provider without exposing credentials."""
@@ -251,14 +273,53 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _resolve_friend_identity(self, *, owner_only: bool = True) -> IdentityContext | None:
+        """Require a signed session and derive Friend scope only from its claims."""
+        try:
+            identity = resolve_identity_context(
+                self.headers,
+                friend_owner_id=FRIEND_OWNER_ID,
+            )
+        except ValueError:
+            self._send(
+                HTTPStatus.UNAUTHORIZED,
+                {"error": "invalid_session", "detail": "A valid Research OS session is required."},
+            )
+            return None
+        except RuntimeError:
+            self._send(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "identity_service_unavailable", "detail": "Research OS session verification is not configured."},
+            )
+            return None
+        if owner_only and identity.role != "owner":
+            self._send(HTTPStatus.FORBIDDEN, {"error": "owner_required"})
+            return None
+        return identity
+
     def _proxy_friend(self, method: str, path: str, body: dict[str, Any] | None = None) -> None:
-        """Proxy Owner Special paths through this canonical API origin."""
-        headers = {"Accept": self.headers.get("Accept", "application/json"), "Content-Type": "application/json"}
-        for name in ("X-Research-OS-Owner", "X-Research-OS-Profile", "X-Research-OS-Session"):
-            value = self.headers.get(name)
-            if value: headers[name] = value
-        payload = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(f"{FRIEND_BASE_URL}{path}", data=payload, headers=headers, method=method)
+        """Proxy Friend paths using only server-derived Owner/profile/session scope."""
+        headers = {"Accept": self.headers.get("Accept", "application/json")}
+        public_health = method == "GET" and path == "/owner/health"
+        if not public_health:
+            identity = self._resolve_friend_identity()
+            if identity is None:
+                return
+            headers.update(identity.friend_headers())
+        if body is not None:
+            safe_body = dict(body)
+            for key in ("owner_id", "user_id", "profile_id", "profile", "role", "session_id"):
+                safe_body.pop(key, None)
+            payload = json.dumps(safe_body, ensure_ascii=False).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        else:
+            payload = None
+        request = urllib.request.Request(
+            f"{FRIEND_BASE_URL}{path}",
+            data=payload,
+            headers=headers,
+            method=method,
+        )
         try:
             with urllib.request.urlopen(request, timeout=35) as response:
                 if response.headers.get_content_type() == "text/event-stream":
@@ -268,7 +329,8 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     while True:
                         chunk = response.read(8192)
-                        if not chunk: break
+                        if not chunk:
+                            break
                         self.wfile.write(chunk)
                         self.wfile.flush()
                     return
@@ -278,7 +340,8 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         except urllib.error.URLError as exc:
             self._send(HTTPStatus.BAD_GATEWAY, {"error": "friend_service_unavailable", "detail": str(exc.reason)})
             return
-        try: result = json.loads(raw.decode("utf-8")) if raw else {}
+        try:
+            result = json.loads(raw.decode("utf-8")) if raw else {}
         except (UnicodeDecodeError, json.JSONDecodeError):
             status, result = HTTPStatus.BAD_GATEWAY, {"error": "invalid_friend_response"}
         self._send(status, result)
@@ -619,13 +682,16 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self._send(HTTPStatus.OK, {"sessions": sessions, "count": len(sessions), "durability": "ephemeral-json", "knowledge_persisted": False})
                 return
             if path == "/v1/memory/search":
+                identity = self._resolve_friend_identity(owner_only=False)
+                if identity is None:
+                    return
                 params = parse_qs(parsed.query)
                 query = str(params.get("q", [""])[0]).strip()
                 if not query:
                     raise ValueError("q is required")
                 limit = int(params.get("limit", ["5"])[0])
                 hits = search_memory(ARTIFACT_DIR, query, limit)
-                self._send(HTTPStatus.OK, {"query": query, "count": len(hits), "hits": hits, "source": "research/artifacts"})
+                self._send(HTTPStatus.OK, {"query": query, "count": len(hits), "hits": hits, "source": "research/artifacts", "scope": "shared-owner-artifact-corpus"})
                 return
             if path == "/v1/knowledge/artifacts":
                 self._send(HTTPStatus.OK, {"artifacts": self._artifact_index()})
@@ -920,29 +986,35 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 if not prompt:
                     raise ValueError("prompt is required")
                 route = os.getenv("RESEARCH_OS_AI_ROUTE", "friend").strip().lower()
+                identity = self._resolve_friend_identity(owner_only=route != "direct-provider")
+                if identity is None:
+                    return
                 if route == "direct-provider":
                     result = build_provider(body.get("provider")).generate(prompt, system=str(body.get("system", "")), model=body.get("model"))
-                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "session_id": body.get("session_id"), "route": "direct-provider"})
+                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "session_id": identity.session_id, "route": "direct-provider"})
                     return
-                friend = _friend_chat(prompt, session_id=str(body.get("session_id") or "main-api"), complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
-                self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "session_id": body.get("session_id"), "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers"), "metadata": friend.get("metadata")})
+                friend = _friend_chat(prompt, identity=identity, complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
+                self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "session_id": identity.session_id, "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers"), "metadata": friend.get("metadata")})
                 return
             if path == "/v1/ai/answer-with-memory":
                 question = str(body.get("question", "")).strip()
                 if not question:
                     raise ValueError("question is required")
+                route = os.getenv("RESEARCH_OS_AI_ROUTE", "friend").strip().lower()
+                identity = self._resolve_friend_identity(owner_only=route != "direct-provider")
+                if identity is None:
+                    return
                 limit = int(body.get("limit", 5))
                 hits = search_memory(ARTIFACT_DIR, question, limit)
                 context = build_context(hits)
-                system = "Answer using the supplied Research OS memory. Distinguish stored facts from inference. When memory is insufficient, say so. Do not invent artifact contents."
+                system = "Answer using the supplied shared Research OS artifact corpus. Distinguish stored facts from inference. When memory is insufficient, say so. Do not invent artifact contents."
                 prompt = f"Memory:\n{context or '(no matching memory)'}\n\nQuestion:\n{question}"
-                route = os.getenv("RESEARCH_OS_AI_ROUTE", "friend").strip().lower()
                 if route == "direct-provider":
                     result = build_provider(body.get("provider")).generate(prompt, system=system, model=body.get("model"))
-                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "memory_hits": hits, "memory_count": len(hits), "session_id": body.get("session_id"), "route": "direct-provider"})
+                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "memory_hits": hits, "memory_count": len(hits), "session_id": identity.session_id, "route": "direct-provider"})
                     return
-                friend = _friend_chat(f"{system}\n\n{prompt}", session_id=str(body.get("session_id") or "main-api-memory"), complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
-                self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "memory_hits": hits, "memory_count": len(hits), "session_id": body.get("session_id"), "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers")})
+                friend = _friend_chat(f"{system}\n\n{prompt}", identity=identity, complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
+                self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "memory_hits": hits, "memory_count": len(hits), "session_id": identity.session_id, "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers")})
                 return
             if path == "/v1/copilot/chat":
                 identity = resolve_identity_context(self.headers)
@@ -952,9 +1024,14 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self._send(HTTPStatus.OK, self._analyze_conversation(body))
                 return
             if path == "/v1/memory/commit":
+                identity = self._resolve_friend_identity()
+                if identity is None:
+                    return
                 if not self._authorize_sync_key():
                     return
-                self._send(HTTPStatus.OK, self._commit_memory(body))
+                result = self._commit_memory(body)
+                result["scope"] = "shared-owner-artifact-corpus"
+                self._send(HTTPStatus.OK, result)
                 return
             self._send(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path})
         except (TypeError, ValueError, GoogleOAuthError, MultiLoginError, MultiLoginRuntimeError) as exc:
