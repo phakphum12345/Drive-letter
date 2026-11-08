@@ -254,6 +254,7 @@ class ResearchOSEndToEndTests(unittest.TestCase):
             {
                 "RESEARCH_OS_SESSION_SECRET": "living-house-e2e-session-secret",
                 "RESEARCH_OS_DATA_DIR": data_dir,
+                "RESEARCH_OS_V3_DATA_DIR": data_dir,
             },
             clear=False,
         ):
