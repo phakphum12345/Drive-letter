@@ -69,6 +69,10 @@ function Invoke-CleanValidation {
     if (Test-Path $statePath) { Remove-Item $statePath -Force }
 
     $env:RESEARCH_OS_MOCK_PROVIDER_KEY = 'ci-owner-provider-key'
+    # Set before Setup.exe starts: Inno Setup -> install-owner-service.ps1
+    # inherits this CI-only value and embeds it in the ServiceHost command line.
+    # Production installs do not set this variable and retain Local/Ollama defaults.
+    $env:RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD = '1.00'
     $mock = Start-Process -FilePath python -ArgumentList @('owner_special/scripts/mock_openai_provider.py','--port','18991') -PassThru
     try {
         Start-Sleep -Seconds 1
@@ -84,26 +88,17 @@ function Invoke-CleanValidation {
         $service = Get-Service $serviceName -ErrorAction Stop
         if ($service.Status -ne 'Running') { throw 'Owner Windows Service is not running after clean install' }
 
-        # The mock OpenAI-compatible provider is deliberately configured below,
-        # after the Windows service has been installed. Pass a bounded, CI-only
-        # reservation as an explicit ServiceHost argument; the host forwards it
-        # to the Friend child process. Do not rely on an SCM per-service
-        # Environment registry value, which is not propagated by this host.
-        $serviceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
-        $serviceRegistryKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services\$serviceName", $true)
-        if (-not $serviceRegistryKey) { throw "Owner service registry key not found: $serviceRegistryPath" }
-        try {
-            $serviceImagePath = [string]$serviceRegistryKey.GetValue('ImagePath', '')
-            if ([string]::IsNullOrWhiteSpace($serviceImagePath)) { throw 'Owner service ImagePath is empty' }
-            if ($serviceImagePath -notmatch '--resource-cost-ceiling-usd(?:\s|=)') {
-                $serviceImagePath += ' --resource-cost-ceiling-usd 1.00'
-                $serviceRegistryKey.SetValue('ImagePath', $serviceImagePath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
-            }
-        } finally {
-            $serviceRegistryKey.Dispose()
+        # Verify the installed service was created with the bounded CI-only
+        # reservation from the installer's inherited environment. Assert both
+        # SCM configuration and the actual running ServiceHost command line.
+        $serviceConfig = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
+        if ($serviceConfig.PathName -notmatch '--resource-cost-ceiling-usd\s+1(?:\.0+)?(?:\s|$)') {
+            throw "Installed ServiceHost ImagePath is missing the CI cost ceiling: $($serviceConfig.PathName)"
         }
-        Restart-Service -Name $serviceName -Force
-        Wait-OwnerReady
+        $serviceProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($serviceConfig.ProcessId)" -ErrorAction Stop
+        if (-not $serviceProcess.CommandLine -or $serviceProcess.CommandLine -notmatch '--resource-cost-ceiling-usd\s+1(?:\.0+)?(?:\s|$)') {
+            throw "Running ServiceHost process did not receive the CI cost ceiling argument: $($serviceProcess.CommandLine)"
+        }
         $unsafe = @(Get-NetTCPConnection -LocalPort 8790 -State Listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') })
         if ($unsafe) { throw 'Owner Friend Service must be loopback-only' }
 
