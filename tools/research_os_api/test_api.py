@@ -240,6 +240,8 @@ class ResearchOSAPITests(unittest.TestCase):
         with self.identity_sessions() as issue:
             alice_token = issue("google:alice")
             bob_token = issue("google:bob")
+            alice_session_id = verify_session(alice_token)["session_id"]
+            bob_session_id = verify_session(bob_token)["session_id"]
             with patch.dict(os.environ, {"RESEARCH_OS_AI_ROUTE": "friend"}, clear=False):
                 with patch("server._friend_chat", return_value={"provider": "mock", "text": "ok"}) as friend_chat:
                     alice_headers = {
@@ -256,6 +258,8 @@ class ResearchOSAPITests(unittest.TestCase):
         self.assertEqual("google:alice", identities[0].user_id)
         self.assertEqual(identities[0].profile_id, identities[1].profile_id)
         self.assertEqual(identities[0].session_id, identities[1].session_id)
+        self.assertEqual(alice_session_id, identities[0].session_id)
+        self.assertEqual(bob_session_id, identities[2].session_id)
         self.assertEqual(server.FRIEND_OWNER_ID, identities[0].owner_id)
         self.assertNotEqual(identities[0].profile_id, identities[2].profile_id)
         self.assertNotEqual(identities[0].session_id, identities[2].session_id)
@@ -272,6 +276,7 @@ class ResearchOSAPITests(unittest.TestCase):
         urlopen.return_value = response
         with self.identity_sessions() as issue:
             token = issue("google:alice")
+            expected_session = verify_session(token)["session_id"]
             status, payload = self.request(
                 "GET",
                 "/owner/status",
@@ -287,7 +292,7 @@ class ResearchOSAPITests(unittest.TestCase):
         headers = {key.lower(): value for key, value in forwarded.header_items()}
         self.assertEqual(server.FRIEND_OWNER_ID, headers["x-research-os-owner"])
         self.assertTrue(headers["x-research-os-profile"].startswith("user-"))
-        self.assertEqual(verify_session(token)["session_id"], headers["x-research-os-session"])
+        self.assertEqual(expected_session, headers["x-research-os-session"])
 
     def test_owner_proxy_rejects_missing_or_non_owner_session(self):
         with self.assertRaises(urllib.error.HTTPError) as missing:
