@@ -157,6 +157,20 @@ if ($TestProvider) {
     $binary += ' --provider ' + $TestProvider
     Write-Host "Owner Friend CI-only provider override: $TestProvider"
 }
+# A bounded cost ceiling may be supplied by the isolated installer E2E
+# process. Inno Setup and this child PowerShell inherit that process environment,
+# so the ServiceHost receives the argument from its first start. Normal installs
+# leave this unset and preserve the production Local/Ollama behavior.
+$testCostCeiling = [Environment]::GetEnvironmentVariable('RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD', 'Process')
+if (-not [string]::IsNullOrWhiteSpace($testCostCeiling)) {
+    $parsedCostCeiling = [decimal]::Zero
+    $culture = [Globalization.CultureInfo]::InvariantCulture
+    if (-not [decimal]::TryParse($testCostCeiling, [Globalization.NumberStyles]::Number, $culture, [ref]$parsedCostCeiling) -or $parsedCostCeiling -le 0) {
+        throw 'RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD must be a positive invariant-culture amount when supplied to the installer'
+    }
+    $binary += ' --resource-cost-ceiling-usd ' + $parsedCostCeiling.ToString($culture)
+    Write-Host 'Owner Friend CI-only cost reservation ceiling configured through ServiceHost arguments.'
+}
 New-Service -Name $ServiceName -BinaryPathName $binary -DisplayName 'Research OS Owner Friend Service' -Description 'Local loopback Friend Runtime for Research OS Owner Special' -StartupType Automatic | Out-Null
 Start-Service -Name $ServiceName
 
