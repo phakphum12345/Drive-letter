@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from owner_special.research_os_friend.resource_control_runtime import (
+    _estimated_cost_reservation,
     _measure_friend,
     _prepare_resource_control_imports,
     install_friend_resource_control,
