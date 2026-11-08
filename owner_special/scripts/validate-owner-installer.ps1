@@ -174,12 +174,12 @@ function Invoke-CleanValidation {
                 throw 'Research OS API Spine did not become ready for installed Owner Desktop'
             }
 
-            $sessionScript = @'
-            import sys
-            sys.path.insert(0, 'tools/research_os_api')
-            from auth_session import issue_session
-            print(issue_session({'user_id': 'owner', 'email': 'owner@example.test', 'role': 'owner'}))
-            '@
+            $sessionScript = @(
+                "import sys"
+                "sys.path.insert(0, r'$repoRoot/tools/research_os_api')"
+                "from auth_session import issue_session"
+                "print(issue_session({'user_id': 'owner', 'email': 'owner@example.test', 'role': 'owner'}))"
+            ) -join [Environment]::NewLine
             $sessionScriptPath = Join-Path $env:RUNNER_TEMP 'issue-owner-session.py'
             [System.IO.File]::WriteAllText($sessionScriptPath, $sessionScript, [System.Text.UTF8Encoding]::new($false))
             $sessionToken = (& python $sessionScriptPath).Trim()
