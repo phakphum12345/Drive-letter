@@ -82,7 +82,16 @@ class RenderServerEntrypointTests(unittest.TestCase):
 
     def test_starts_internal_friend_when_loopback_endpoint_is_unavailable(self):
         with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
-            with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
+            with patch.dict(
+                os.environ,
+                {
+                    "RESEARCH_OS_PROVIDER": "gemini",
+                    "RESEARCH_OS_OWNER_DATA_ROOT": os.path.join(
+                        os.getcwd(), ".test-owner-data"
+                    ),
+                },
+                clear=True,
+            ):
                 with patch.object(render_server, "_friend_service_health", side_effect=urllib.error.URLError("offline")):
                     with patch.object(render_server, "_assert_friend_provider_ready", return_value={"providers": ["gemini"]}):
                         with patch("owner_special.research_os_friend.OwnerFriendService") as service_factory:
