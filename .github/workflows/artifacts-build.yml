@@ -46,7 +46,7 @@ jobs:
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
       DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
-      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum-v0wf.onrender.com' || 'http://127.0.0.1:8787' }}
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -74,6 +74,24 @@ jobs:
           from pathlib import Path
           Path("artifact/manifest.json").write_text(json.dumps({"artifact":"research-os-website","target_sha":os.environ["TARGET_SHA"],"deployment_mode":os.environ["DEPLOYMENT_MODE"],"parts":["website-static","flutter-web"],"api_base_default":os.environ["API_BASE_URL"]}, indent=2), encoding="utf-8")
           PY
+      - name: Generate website artifact checksums
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          root = Path("artifact")
+          entries = []
+          for path in sorted(root.rglob("*")):
+              if path.is_file() and path.name != "SHA256SUMS.txt":
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  entries.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          if not any(line.endswith("manifest.json") for line in entries):
+              raise SystemExit("Website deployment manifest is missing from checksum inventory")
+          (root / "SHA256SUMS.txt").write_text("\n".join(entries) + "\n", encoding="utf-8")
+          print(f"WEBSITE_CHECKSUM_ENTRIES={len(entries)}")
+          PY
+
       - name: Upload website artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -89,7 +107,7 @@ jobs:
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
       DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
-      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum-v0wf.onrender.com' || 'http://127.0.0.1:8787' }}
       RESEARCH_OS_PROVIDER: mock
       RESEARCH_OS_SYNC_KEY: artifact-build-test-key
     steps:
@@ -219,7 +237,12 @@ jobs:
             api_base_default = $env:API_BASE_URL
           } | ConvertTo-Json -Depth 4
           Set-Content -Path "$out\deployment-manifest.json" -Value $manifest -Encoding utf8
-          Get-ChildItem "$out" -Recurse -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path)" } | Set-Content "$out\SHA256SUMS.txt" -Encoding utf8
+          $checksumRoot = (Resolve-Path $out).Path
+          Get-ChildItem "$out" -Recurse -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $relative = [IO.Path]::GetRelativePath($checksumRoot, $_.FullName).Replace('\', '/')
+            "$hash  $relative"
+          } | Set-Content "$out\SHA256SUMS.txt" -Encoding utf8
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -235,7 +258,7 @@ jobs:
     env:
       TARGET_SHA: ${{ inputs.target_sha || github.sha }}
       DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'local' }}
-      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum.onrender.com' || 'http://127.0.0.1:8787' }}
+      API_BASE_URL: ${{ inputs.deployment_mode == 'render' && 'https://research-os-api-phakphoum-v0wf.onrender.com' || 'http://127.0.0.1:8787' }}
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
