@@ -6,6 +6,8 @@ class FakeApi extends OwnerFriendApi {
   @override
   Future<Map<String, dynamic>> health() async => <String, dynamic>{'status': 'ok'};
   @override
+  Future<Map<String, dynamic>> authStatus() async => <String, dynamic>{'connected': true};
+  @override
   Future<Map<String, dynamic>> status() async => <String, dynamic>{'version': '1.3.1-owner'};
   @override
   Future<Map<String, dynamic>> providerStatus() async => <String, dynamic>{'enabled': false};
