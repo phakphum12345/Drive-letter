@@ -107,10 +107,7 @@ jobs:
       - name: Run AEOS verifier regression tests
         run: |
           set -euo pipefail
-          python -m unittest \\
-            tools.aeos.test_verify_pr_checks \\
-            tools.aeos.test_verify_pr_checks_scope_waiver \\
-            -v
+          python -m unittest tools.aeos.test_verify_pr_checks tools.aeos.test_verify_pr_checks_scope_waiver -v
 
       - name: Execute existing AEOS Master Assurance
         env:
