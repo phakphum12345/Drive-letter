@@ -33,7 +33,18 @@ class UserControlCenterCompletionMatrixTests(unittest.TestCase):
             "control_center_ci",
             "web.agent_center",
             "web.platform_directory",
+            "recon.back_box.config_snapshot",
+            "recon.back_box.public_github_targets",
+            "recon.back_box.native_ui",
+            "recon.branch_reconciliation",
         }.issubset(ids))
+
+    def test_recon_capabilities_are_tracked_without_claiming_local_only_actions_are_remote(self):
+        by_id = {item["id"]: item for item in self.matrix["capabilities"]}
+        self.assertEqual("CANONICAL_WIRED", by_id["recon.back_box.config_snapshot"]["status"])
+        self.assertEqual("CANONICAL_WIRED", by_id["recon.back_box.public_github_targets"]["status"])
+        self.assertEqual("PARTIAL", by_id["recon.back_box.native_ui"]["status"])
+        self.assertIn("local-only", by_id["recon.back_box.native_ui"]["detail"])
 
     def test_plugin_runtime_registry_is_not_claimed_as_marketplace(self):
         plugin = next(item for item in self.matrix["capabilities"] if item["id"] == "plugin_center.marketplace")

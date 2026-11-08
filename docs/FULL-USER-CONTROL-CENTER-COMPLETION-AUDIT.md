@@ -2,7 +2,7 @@
 
 **Status:** Reconciled baseline; the User Control Center is still not complete.  
 **Repository:** `phakphum12345/Drive-letter`  
-**Audited main commit:** `cd582e0940560e7e6dddd2c4b9790d118fffb909`  
+**Audited main commit:** `b52ff3cfea0a8d3d30224e81c648feabb9bc830a`  
 **Implementation source:** PR #92 — live Web Agent Center and workspace controls; completion still requires authenticated runtime verification.
 
 ## Executive result
@@ -77,3 +77,38 @@ The project is complete only when every visible page, menu, button, and form is 
 - explicitly disabled/labeled as unavailable with a documented dependency.
 
 All required Web, Flutter, API, security, regression, and E2E gates must pass. An audit document or green documentation-only workflow is not completion evidence.
+
+
+## Follow-up audit — 2026-11-07
+
+**Current main:** `b52ff3cfea0a8d3d30224e81c648feabb9bc830a`  
+**Merged control-center and OAuth work:** PRs #90, #91, and #92 are merged.
+
+### Current Recon branch reconciliation
+
+Targeted comparison against the current main commit found:
+
+- PR #44 (native Recon Back Box UI), PR #45 (validated config snapshot/export), and PR #57 (public GitHub owner/repository targets) are merged.
+- The old PR #43 was closed without merge; its config/export files match the later merged PR #45 result. Its branch is not a source of missing functionality.
+- `feat/recon-back-box-public-github-targets` has no commits ahead of current main.
+- The config-export branch's exporter file is byte-identical to current main.
+- `fix/aeos-advanced-base-squash-reconciliation`, `fix/aeos-job-check-reconciliation-20261020`, and `fix/flutter-sdk-post-download-recon` contain older/divergent snapshots of workflows or verification code. Current main has newer versions of the checked files; do not merge those branches wholesale.
+- `repair/full-platform-reconciliation-20261021` is behind current main and has no commits ahead in the comparison.
+
+No Recon branch was deleted. No stale branch was merged merely because it exists.
+
+### Recon capability boundary
+
+The config snapshot workflow is live on main and creates a validated SHA-256 manifest artifact without changing source configs. The native Recon Back Box UI has Overview, Runs & PRs, Artifacts, Config, and Learning & Evidence tabs. Its config save and learning notes are local-only; they are not remote repository writes or durable cloud evidence. These actions must remain labelled accurately until an authenticated, audited remote executor exists.
+
+### Deployment and verification evidence
+
+- PR #92 merged as `b52ff3c`.
+- GitHub Pages workflow for PR #92 completed successfully.
+- Dedicated User Control Center workflow for PR #92 completed successfully.
+- Render service `research-os-api-phakphoum` deployed `b52ff3c` with status `live`; subsequent health requests returned HTTP 200.
+- This proves deployment health, not an end-to-end Google OAuth login. A browser sign-in/token-exchange test is still required to prove the uploaded Google client secret works.
+
+### Remaining User Control Center work
+
+The capability matrix remains intentionally incomplete. The main gaps are real Project/File mutations, durable cross-device chat history and user-facing provider/model routing, History filters/pagination, Settings mutations, full user/role/policy/credential lifecycle, a general third-party plugin marketplace, Flutter project mutations, and authenticated OWNER/non-OWNER end-to-end tests for Web Agent Center. Unsupported platform modules must continue to show NOT CONNECTED until an authoritative API and executor exist.

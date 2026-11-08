@@ -4,7 +4,8 @@ on:
   pull_request:
     paths:
       - "apps/research_os_web/**"
-      - "apps/research_os_flutter/lib/src/features/control_center/**"
+      - "apps/research_os_flutter/**"
+      - "packages/research_os_contracts/**"
       - "apps/research_os_flutter/lib/src/api/research_os_api_client.dart"
       - "tools/research_os_api/server.py"
       - "tools/research_os_api/api_platform/**"
@@ -63,3 +64,30 @@ jobs:
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
         run: python -m unittest tools.research_os_api.test_web_control_center tools.research_os_api.test_management_http_rbac tools.research_os_api.test_admin_console_management tools.test_user_control_center_completion_matrix -v
+
+  validate-flutter:
+    name: Validate Flutter User Control Center
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Flutter SDK
+        uses: ./.github/actions/flutter-setup
+        with:
+          channel: stable
+          cache: true
+      - name: Verify Flutter and Dart toolchains
+        run: |
+          set -euo pipefail
+          flutter --version
+          dart --version
+      - name: Resolve Research OS Flutter dependencies
+        working-directory: apps/research_os_flutter
+        run: flutter pub get
+      - name: Analyze Research OS Flutter
+        working-directory: apps/research_os_flutter
+        run: flutter analyze
+      - name: Test Research OS Flutter user surfaces
+        working-directory: apps/research_os_flutter
+        run: flutter test
