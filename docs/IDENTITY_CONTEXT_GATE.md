@@ -19,11 +19,22 @@ The signed session contains `user_id`, `email`, `role`, `session_id`, `iat`, and
 
 The Owner Friend Service already validates `X-Research-OS-Owner`, `X-Research-OS-Profile`, and `X-Research-OS-Session` before protected operations and passes those scopes into Friend requests and memory recall.
 
-## Current gap
+## Implementation added — exact-head verification pending
 
-The canonical `/v1/ai/generate` Friend route currently forwards only the request body's `session_id` to the Friend proxy and uses the server's configured Friend owner/profile values. It does not yet derive the Friend owner/profile context from the verified Research OS session.
+The canonical API-to-Friend handoff now resolves a trusted `IdentityContext` from `require_session(headers)`:
 
-That means the identity boundary is stronger inside the Owner Friend Service than at the canonical API-to-Friend handoff. This must be closed before treating multi-user Friend isolation as complete.
+- `user_id` and `role` are taken only from the verified signed session.
+- Friend owner scope is supplied by the server's configured `FRIEND_OWNER_ID`; the client cannot choose it.
+- Profile scope is a stable opaque identifier derived from the verified `user_id`.
+- Session scope is copied from the verified signed session claim. URL-safe session IDs produced by `secrets.token_urlsafe()` are accepted, including IDs beginning with `_` or `-`.
+- Friend proxy headers are generated from this context. Request-body identity keys are removed before forwarding.
+- The same identity context is used by Friend generation and the memory-related paths that call the canonical identity resolver.
+
+The Owner Friend Service validates owner/profile/session independently. Its session validator now accepts the URL-safe leading characters that Python's token generator may produce, while owner/profile identifiers retain their stricter validation. The controlled ActionIntent contract applies the same URL-safe rule only to its session field.
+
+Regression coverage includes missing/non-owner session rejection, client identity override resistance, same-user session continuity, cross-user separation, URL-safe leading session characters, and owner/profile/session-scoped preview authorization.
+
+**Verification status:** implementation and regression tests are committed on the PR branch. Do not mark this gate complete until all exact-head API, Friend, Windows installer, and final-gate checks pass. CI evidence does not replace a separate read-only check of the user's actual Windows service host.
 
 ## Required invariant
 
