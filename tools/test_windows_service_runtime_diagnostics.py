@@ -107,7 +107,7 @@ class WindowsServiceRuntimeDiagnosticsContractTests(unittest.TestCase):
         self.assertIn("Protect-CommandLine", self.source)
         self.assertIn("<REDACTED>", self.source)
         self.assertIn("Bearer|Basic", self.source)
-        self.assertIn(r"(?:Bearer|Basic)\\s+", self.source)
+        self.assertIn(r"(?:Bearer|Basic)\s+", self.source)
         self.assertIn("path_name = Protect-CommandLine -CommandLine $svc.PathName", self.source)
         self.assertIn("message = Protect-LogLine -Line $event.Message", self.source)
         self.assertNotIn("Get-ChildItem Env:", self.source)
