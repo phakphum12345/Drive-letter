@@ -273,8 +273,8 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _resolve_friend_identity(self) -> IdentityContext | None:
-        """Require an Owner session and derive all Friend scope from its claims."""
+    def _resolve_friend_identity(self, *, owner_only: bool = True) -> IdentityContext | None:
+        """Require a signed session and derive Friend scope only from its claims."""
         try:
             identity = resolve_identity_context(
                 self.headers,
@@ -286,7 +286,13 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 {"error": "invalid_session", "detail": "A valid Research OS session is required."},
             )
             return None
-        if identity.role != "owner":
+        except RuntimeError:
+            self._send(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": "identity_service_unavailable", "detail": "Research OS session verification is not configured."},
+            )
+            return None
+        if owner_only and identity.role != "owner":
             self._send(HTTPStatus.FORBIDDEN, {"error": "owner_required"})
             return None
         return identity
@@ -676,13 +682,16 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self._send(HTTPStatus.OK, {"sessions": sessions, "count": len(sessions), "durability": "ephemeral-json", "knowledge_persisted": False})
                 return
             if path == "/v1/memory/search":
+                identity = self._resolve_friend_identity(owner_only=False)
+                if identity is None:
+                    return
                 params = parse_qs(parsed.query)
                 query = str(params.get("q", [""])[0]).strip()
                 if not query:
                     raise ValueError("q is required")
                 limit = int(params.get("limit", ["5"])[0])
                 hits = search_memory(ARTIFACT_DIR, query, limit)
-                self._send(HTTPStatus.OK, {"query": query, "count": len(hits), "hits": hits, "source": "research/artifacts"})
+                self._send(HTTPStatus.OK, {"query": query, "count": len(hits), "hits": hits, "source": "research/artifacts", "scope": "shared-owner-artifact-corpus"})
                 return
             if path == "/v1/knowledge/artifacts":
                 self._send(HTTPStatus.OK, {"artifacts": self._artifact_index()})
@@ -977,12 +986,12 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 if not prompt:
                     raise ValueError("prompt is required")
                 route = os.getenv("RESEARCH_OS_AI_ROUTE", "friend").strip().lower()
+                identity = self._resolve_friend_identity(owner_only=route != "direct-provider")
+                if identity is None:
+                    return
                 if route == "direct-provider":
                     result = build_provider(body.get("provider")).generate(prompt, system=str(body.get("system", "")), model=body.get("model"))
-                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "session_id": body.get("session_id"), "route": "direct-provider"})
-                    return
-                identity = self._resolve_friend_identity()
-                if identity is None:
+                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "session_id": identity.session_id, "route": "direct-provider"})
                     return
                 friend = _friend_chat(prompt, identity=identity, complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
                 self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "session_id": identity.session_id, "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers"), "metadata": friend.get("metadata")})
@@ -992,23 +1001,19 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 if not question:
                     raise ValueError("question is required")
                 route = os.getenv("RESEARCH_OS_AI_ROUTE", "friend").strip().lower()
-                limit = int(body.get("limit", 5))
-                if route == "direct-provider":
-                    hits = search_memory(ARTIFACT_DIR, question, limit)
-                    context = build_context(hits)
-                    system = "Answer using the supplied Research OS memory. Distinguish stored facts from inference. When memory is insufficient, say so. Do not invent artifact contents."
-                    prompt = f"Memory:\\n{context or '(no matching memory)'}\\n\\nQuestion:\\n{question}"
-                    result = build_provider(body.get("provider")).generate(prompt, system=system, model=body.get("model"))
-                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "memory_hits": hits, "memory_count": len(hits), "session_id": body.get("session_id"), "route": "direct-provider"})
-                    return
-                identity = self._resolve_friend_identity()
+                identity = self._resolve_friend_identity(owner_only=route != "direct-provider")
                 if identity is None:
                     return
+                limit = int(body.get("limit", 5))
                 hits = search_memory(ARTIFACT_DIR, question, limit)
                 context = build_context(hits)
-                system = "Answer using the supplied Research OS memory. Distinguish stored facts from inference. When memory is insufficient, say so. Do not invent artifact contents."
-                prompt = f"Memory:\\n{context or '(no matching memory)'}\\n\\nQuestion:\\n{question}"
-                friend = _friend_chat(f"{system}\\n\\n{prompt}", identity=identity, complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
+                system = "Answer using the supplied shared Research OS artifact corpus. Distinguish stored facts from inference. When memory is insufficient, say so. Do not invent artifact contents."
+                prompt = f"Memory:\n{context or '(no matching memory)'}\n\nQuestion:\n{question}"
+                if route == "direct-provider":
+                    result = build_provider(body.get("provider")).generate(prompt, system=system, model=body.get("model"))
+                    self._send(HTTPStatus.OK, {"provider": result.provider, "model": result.model, "text": result.text, "memory_hits": hits, "memory_count": len(hits), "session_id": identity.session_id, "route": "direct-provider"})
+                    return
+                friend = _friend_chat(f"{system}\n\n{prompt}", identity=identity, complexity=int(body.get("complexity", 3)), risk=int(body.get("risk", 1)), parallelism=int(body.get("parallelism", 2)), helper_budget=int(body.get("helper_budget", 0)))
                 self._send(HTTPStatus.OK, {"provider": friend.get("provider"), "model": "friend-unified-master", "text": friend.get("text", ""), "memory_hits": hits, "memory_count": len(hits), "session_id": identity.session_id, "route": "friend", "decision": friend.get("decision"), "factory": friend.get("factory"), "helpers": friend.get("helpers")})
                 return
             if path == "/v1/copilot/chat":
@@ -1019,9 +1024,14 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 self._send(HTTPStatus.OK, self._analyze_conversation(body))
                 return
             if path == "/v1/memory/commit":
+                identity = self._resolve_friend_identity()
+                if identity is None:
+                    return
                 if not self._authorize_sync_key():
                     return
-                self._send(HTTPStatus.OK, self._commit_memory(body))
+                result = self._commit_memory(body)
+                result["scope"] = "shared-owner-artifact-corpus"
+                self._send(HTTPStatus.OK, result)
                 return
             self._send(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": path})
         except (TypeError, ValueError, GoogleOAuthError, MultiLoginError, MultiLoginRuntimeError) as exc:
