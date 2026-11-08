@@ -333,13 +333,23 @@ class ResearchOSAPITests(unittest.TestCase):
                 self.request("GET", "/owner/status", headers={"X-Research-OS-Session": token})
         self.assertEqual(403, non_owner.exception.code)
 
-    def test_memory_search(self):
+    def test_memory_search_requires_a_verified_session_and_reports_shared_scope(self):
         query = urllib.parse.quote("conversation knowledge")
-        status, payload = self.request("GET", f"/v1/memory/search?q={query}&limit=3")
+        with self.assertRaises(urllib.error.HTTPError) as missing:
+            self.request("GET", f"/v1/memory/search?q={query}&limit=3")
+        self.assertEqual(401, missing.exception.code)
+        with self.identity_sessions() as issue:
+            token = issue("member-1", role="user")
+            status, payload = self.request(
+                "GET",
+                f"/v1/memory/search?q={query}&limit=3",
+                headers={"X-Research-OS-Session": token},
+            )
         self.assertEqual(200, status)
         self.assertGreaterEqual(payload["count"], 1)
         self.assertIn("artifact_id", payload["hits"][0])
         self.assertIn("score", payload["hits"][0])
+        self.assertEqual("shared-owner-artifact-corpus", payload["scope"])
 
     @patch("server._friend_chat")
     def test_answer_with_memory_uses_mock_provider(self, friend_chat):
@@ -387,8 +397,10 @@ class ResearchOSAPITests(unittest.TestCase):
             os.environ,
             {"RESEARCH_OS_SYNC_KEY": "test-sync-key"},
             clear=False,
-        ):
+        ), self.identity_sessions() as issue:
             server.ARTIFACT_DIR = Path(tmp)
+            token = issue("owner")
+            auth_headers = {"X-Research-OS-Session": token}
             try:
                 status, payload = self.request(
                     "POST",
@@ -409,16 +421,17 @@ class ResearchOSAPITests(unittest.TestCase):
                         "tags": ["memory", "session"],
                         "min_quality": 20,
                     },
-                    headers={"X-Research-OS-Sync-Key": "test-sync-key"},
+                    headers={**auth_headers, "X-Research-OS-Sync-Key": "test-sync-key"},
                 )
                 self.assertEqual(200, status)
                 self.assertTrue(payload["persisted"])
                 self.assertEqual("runtime-ephemeral", payload["durability"])
+                self.assertEqual("shared-owner-artifact-corpus", payload["scope"])
                 artifact_id = payload["artifact"]["artifact_id"]
                 self.assertTrue(any(Path(tmp).glob(f"{artifact_id}*.md")))
 
                 query = urllib.parse.quote("explicit commit")
-                status, memory = self.request("GET", f"/v1/memory/search?q={query}")
+                status, memory = self.request("GET", f"/v1/memory/search?q={query}", headers=auth_headers)
                 self.assertEqual(200, status)
                 self.assertGreaterEqual(memory["count"], 1)
             finally:
