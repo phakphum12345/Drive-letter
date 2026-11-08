@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from api_auth import require_session
 
 _SAFE_SCOPE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
+_SAFE_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,9 @@ def resolve_identity_context(
     user_id = _scope(principal.get("user_id"), "user_id")
     owner_id = _scope(friend_owner_id or user_id, "owner_id")
     role = _scope(principal.get("role") or "user", "role").lower()
-    session_id = _scope(principal.get("session_id"), "session_id")
+    session_id = str(principal.get("session_id") or "").strip()
+    if not _SAFE_SESSION_ID.fullmatch(session_id):
+        raise ValueError("invalid session_id")
     profile_digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:32]
     profile_id = f"user-{profile_digest}"
     return IdentityContext(user_id, owner_id, role, session_id, profile_id)
