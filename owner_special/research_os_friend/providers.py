@@ -4,15 +4,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol
 
-try:
-    from provider_measurement import ProviderMeasurement
-except ModuleNotFoundError:
-    from tools.research_os_api.provider_measurement import ProviderMeasurement
-
-try:
-    from resource_governance import Usage
-except ModuleNotFoundError:
-    from tools.research_os_api.resource_governance import Usage
+# Keep Friend provider measurements on the canonical Research OS
+# contract classes even when the rest of the application uses legacy imports.
+from tools.research_os_api.provider_measurement import ProviderMeasurement
+from tools.research_os_api.resource_governance import Usage
 
 
 @dataclass(frozen=True)
