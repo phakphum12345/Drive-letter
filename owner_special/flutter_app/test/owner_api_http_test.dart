@@ -73,4 +73,32 @@ void main() {
     expect(response['route'], 'friend');
     await handled;
   });
+  test('Owner endpoints send only the signed Research OS session', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+
+    final handled = server.first.then((request) async {
+      expect(request.method, 'GET');
+      expect(request.uri.path, '/owner/status');
+      expect(request.headers.value('X-Research-OS-Session'), 'signed-research-session');
+      expect(request.headers.value('X-Research-OS-Owner'), isNull);
+      expect(request.headers.value('X-Research-OS-Profile'), isNull);
+      request.response.statusCode = HttpStatus.ok;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode(<String, dynamic>{'status': 'ok'}));
+      await request.response.close();
+    });
+
+    final api = HttpOwnerFriendApi(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+      ownerId: 'owner',
+      profileId: 'untrusted-profile',
+      sessionId: 'untrusted-session',
+    );
+    api.setSession('signed-research-session');
+    final response = await api.status();
+    expect(response['status'], 'ok');
+    await handled;
+  });
+
 }
