@@ -19,6 +19,35 @@ class FakeApi extends OwnerFriendApi {
   Future<Map<String, dynamic>> testProvider() async => <String, dynamic>{};
   @override
   Future<Map<String, dynamic>> chat(String text, {int complexity = 4, int risk = 2, int parallelism = 2, int helperBudget = 0, List<String> requestedSkills = const <String>[], List<String> requestedTools = const <String>[]}) async => <String, dynamic>{};
+  test('startup probe does not call protected endpoints before sign-in', () async {
+    final api = _UnauthenticatedApi();
+    final result = await OwnerStartupProbe(api).run();
+    expect((result['health'] as Map)['status'], 'ok');
+    expect((result['identity'] as Map)['connected'], isFalse);
+    expect(result.containsKey('status'), isFalse);
+    expect(result.containsKey('provider'), isFalse);
+    expect(api.protectedCalls, 0);
+  });
+
+}
+
+class _UnauthenticatedApi extends FakeApi {
+  int protectedCalls = 0;
+
+  @override
+  Future<Map<String, dynamic>> authStatus() async => <String, dynamic>{'connected': false};
+
+  @override
+  Future<Map<String, dynamic>> status() async {
+    protectedCalls++;
+    throw StateError('protected status must not be requested before sign-in');
+  }
+
+  @override
+  Future<Map<String, dynamic>> providerStatus() async {
+    protectedCalls++;
+    throw StateError('protected provider must not be requested before sign-in');
+  }
 }
 
 void main() {
