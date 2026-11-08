@@ -288,7 +288,7 @@ jobs:
               exit 0
             fi
 
-            if ! grep -Eqi 'HTTP (5[0-9][0-9]|429)|status code (5[0-9][0-9]|429)|504 Gateway Time-out|502 Bad Gateway|503 Service Unavailable|timed out|Read timed out|Connect timed out|UnknownHostException|Temporary failure in name resolution|Connection reset|Could not (GET|HEAD)' "$log"; then
+            if ! grep -Eqi 'HTTP (5[0-9][0-9]|429)|HTTP response code: (5[0-9][0-9]|429)|status code (5[0-9][0-9]|429)|response code: (5[0-9][0-9]|429)|504 Gateway Time-out|502 Bad Gateway|503 Service Unavailable|timed out|Read timed out|Connect timed out|UnknownHostException|Temporary failure in name resolution|Connection reset|Could not (GET|HEAD)' "$log"; then
               echo "::error::APK build failed with a non-transient or unclassified error (exit $status); not retrying."
               exit "$status"
             fi
