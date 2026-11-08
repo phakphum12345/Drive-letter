@@ -82,6 +82,62 @@ def _decimal_env(name: str, default: str) -> Decimal:
     return value
 
 
+def _estimated_cost_reservation(runtime: Any) -> Decimal:
+    """Reserve a conservative cost ceiling before invoking the configured provider.
+
+    Local Ollama and the explicit mock provider are zero-billing routes. Paid
+    providers use a configured ceiling or a price-derived upper bound based on
+    the reserved token limit. Unknown pricing fails before provider execution.
+    """
+    provider = runtime.orchestrator.providers.primary()
+    provider_name = str(getattr(provider, "name", "") or "").strip().lower()
+    is_free_provider = provider_name in {"mock", "owner-mock", "ollama-local"} or bool(
+        getattr(provider, "local", False)
+    )
+
+    configured = os.getenv("RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD", "").strip()
+    if is_free_provider:
+        return _decimal_env("RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD", configured or "0")
+    if configured:
+        ceiling = _decimal_env("RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD", configured)
+        if ceiling <= 0:
+            raise ValueError(
+                "RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD must be positive for a billed provider"
+            )
+        return ceiling
+
+    token_limit = _int_env("RESEARCH_OS_RESOURCE_TOKENS_PER_REQUEST", 1_000_000, 0)
+
+    def optional_rate(name: str, default: str | None = None) -> Decimal | None:
+        raw = os.getenv(name, "").strip()
+        if raw:
+            return _decimal_env(name, raw)
+        return Decimal(default) if default is not None else None
+
+    if provider_name == "gemini":
+        model = str(getattr(provider, "model", "") or "").strip()
+        default_input = "0.50" if model == "gemini-3-flash-preview" else None
+        default_output = "3.00" if model == "gemini-3-flash-preview" else None
+        input_rate = optional_rate("RESEARCH_OS_GEMINI_INPUT_USD_PER_1M_TOKENS", default_input)
+        output_rate = optional_rate("RESEARCH_OS_GEMINI_OUTPUT_USD_PER_1M_TOKENS", default_output)
+    elif provider_name == "openai-compatible":
+        input_rate = optional_rate("RESEARCH_OS_PROVIDER_INPUT_USD_PER_1M_TOKENS")
+        output_rate = optional_rate("RESEARCH_OS_PROVIDER_OUTPUT_USD_PER_1M_TOKENS")
+    else:
+        input_rate = output_rate = None
+
+    if input_rate is None or output_rate is None:
+        raise ValueError(
+            "a positive RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD ceiling or both "
+            "provider input/output USD-per-1M-token rates are required before "
+            "running a billed provider"
+        )
+
+    # Total reserved tokens cannot exceed token_limit. Multiplying the entire
+    # allowance by the higher rate safely bounds any input/output token mix.
+    return max(input_rate, output_rate) * Decimal(token_limit) / Decimal(1_000_000)
+
+
 def _new_request_id(owner_id: str, session_id: str, text: str) -> str:
     nonce = uuid4().hex
     digest = sha256(f"{owner_id}\x00{session_id}\x00{text}\x00{nonce}".encode("utf-8")).hexdigest()[:24]
@@ -153,7 +209,7 @@ def _governed_ask(runtime: Any, request: Any):
             requests=1,
             tokens=_int_env("RESEARCH_OS_RESOURCE_TOKENS_PER_REQUEST", 1_000_000, 0),
         ),
-        estimated_cost=_decimal_env("RESEARCH_OS_RESOURCE_ESTIMATED_COST_USD", "0"),
+        estimated_cost=_estimated_cost_reservation(runtime),
         currency=_CURRENCY,
         scopes=frozenset({_SCOPE}),
         available_providers=tuple(runtime.orchestrator.providers.names()),
