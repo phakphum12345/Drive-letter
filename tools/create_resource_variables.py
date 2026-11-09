@@ -154,10 +154,10 @@ class ResourceVariableTests(unittest.TestCase):
         value = create_variable(
             "API_PORT",
             "integer",
-            8787,
+            43127,
         )
         self.assertEqual(value.type, "INTEGER")
-        self.assertEqual(value.value, 8787)
+        self.assertEqual(value.value, 43127)
 
     def test_required_missing_fails_closed(self):
         with self.assertRaises(ValueError):
