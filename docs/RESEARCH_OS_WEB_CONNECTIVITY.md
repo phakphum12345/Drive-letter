@@ -44,10 +44,10 @@ Source contract tests can verify the configured URL and browser request policy. 
 
 ## Dynamic local service endpoint contract
 
-- API, Friend, Developer API, and V3 local services request OS-assigned ports (`0`); the operating system chooses the actual socket port atomically during bind.
-- The API publishes `runtime/api.json`, Friend publishes `runtime/friend.json`, and Developer API publishes `runtime/developer.json`. Each service owns a separate atomic JSON file so concurrent writes cannot overwrite another service's record. V3 retains its own atomic `service.json` registry.
+- API, Friend, Developer API, Agent API, and V3 local services request OS-assigned ports (`0`); the operating system chooses the actual socket port atomically during bind.
+- The API publishes `runtime/api.json`, Friend publishes `runtime/friend.json`, Developer API publishes `runtime/developer.json`, and the optional Agent API publishes `runtime/agent.json`. Each service owns a separate atomic JSON file so concurrent writes cannot overwrite another service's record. V3 retains its own atomic `service.json` registry.
 - Records contain schema version, service name, loopback host, actual port, URL, process ID, and update timestamp. They contain no credentials or user data.
 - Consumers validate the schema and loopback address before using a record. Missing, malformed, mismatched, or non-loopback records fail closed.
-- API resolves Friend from the runtime registry at request time. Windows Flutter resolves API and Developer API registries on Windows; Web/iOS use configured stable HTTPS endpoints.
+- API resolves Friend from the runtime registry at request time. Windows Flutter resolves API and Developer API registries on Windows; evaluation tools resolve the Agent API registry when it is started; Web/iOS use configured stable HTTPS endpoints.
 - Ollama remains at `127.0.0.1:11434` with the existing model configuration. It is a provider endpoint, not a Research OS service port.
 - Service shutdown removes only the endpoint record owned by that process ID. It does not terminate listeners by port number.
