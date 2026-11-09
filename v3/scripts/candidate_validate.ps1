@@ -22,7 +22,8 @@ if ([string]::IsNullOrWhiteSpace($tempRoot)) {
 $tempRoot = [System.IO.Path]::GetFullPath($tempRoot)
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 $serviceName = 'ResearchOSV3Service'
-$port = 8788
+$port = 0
+$serviceConfigPath = Join-Path $dataDir 'service.json'
 $appExe = Join-Path $installDir 'app\research_os_v3_flutter.exe'
 $auditPath = Join-Path $dataDir 'logs\http-audit.jsonl'
 $runToken = [guid]::NewGuid().ToString('N')
@@ -40,7 +41,38 @@ function Record-Evidence([string]$Stage, [hashtable]$Data = @{}) {
     }
 }
 
+function Get-V3EndpointRecord {
+    if (-not (Test-Path $serviceConfigPath -PathType Leaf)) { return $null }
+    try {
+        $record = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+        $candidatePort = [int]$record.port
+        if ($record.schema_version -eq 1 -and $record.service -eq 'team_engineering' -and
+            $record.service_name -eq $serviceName -and $record.host -eq '127.0.0.1' -and
+            $candidatePort -ge 1 -and $candidatePort -le 65535 -and
+            $record.url -eq "http://127.0.0.1:$candidatePort" -and
+            $record.health_path -eq '/health' -and [int]$record.process_id -gt 0) {
+            return $record
+        }
+    } catch {}
+    return $null
+}
+
+function Wait-V3Endpoint {
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $record = Get-V3EndpointRecord
+        if ($record) {
+            $script:port = [int]$record.port
+            return $record
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    throw 'Research OS V3 service did not publish a valid generated service.json endpoint'
+}
+
 function Wait-V3Health {
+    if ($port -lt 1 -or $port -gt 65535) {
+        throw 'Research OS V3 generated endpoint is not registered'
+    }
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         try {
             $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 2
@@ -160,10 +192,22 @@ function Remove-StaleInstallation {
         }
     }
 
-    $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
-    if ($listeners.Count -gt 0) {
-        $pids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ','
-        throw "Port $port remains occupied by process(es) $pids after service removal; refusing to terminate unrelated listeners"
+    if ($port -gt 0) {
+        $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+        if ($listeners.Count -gt 0) {
+            $pids = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ','
+            throw "Generated port $port remains occupied by process(es) $pids after service removal; refusing to terminate unrelated listeners"
+        }
+    }
+    if (Test-Path $serviceConfigPath -PathType Leaf) {
+        $staleRecord = Get-V3EndpointRecord
+        if ($staleRecord) {
+            $recordPid = [int]$staleRecord.process_id
+            if (Get-CimInstance Win32_Process -Filter "ProcessId = $recordPid" -ErrorAction SilentlyContinue) {
+                throw "V3 endpoint owner PID $recordPid is still running after service removal; leaving registry untouched"
+            }
+            Remove-Item -LiteralPath $serviceConfigPath -Force -ErrorAction Stop
+        }
     }
     if (Test-Path $installDir) {
         Remove-Item $installDir -Recurse -Force -ErrorAction Stop
@@ -179,26 +223,15 @@ try {
     Assert-Marker $marker 'preserve-v3-candidate-data' 'Existing V3 data was not preserved by stale-install cleanup'
 
     $installLog = Join-Path $tempRoot 'research-os-v3-install.log'
-    $defaultPortReservation = $null
-    $defaultPortWasReserved = $false
-    try {
-        $defaultPortReservation = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 8788)
-        $defaultPortReservation.Start()
-        $defaultPortWasReserved = $true
-    }
-    catch {
-        if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } }
-        $defaultPortReservation = $null
-    }
+    $reservedPortListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $reservedPortListener.Start()
+    $reservedPort = [int]$reservedPortListener.LocalEndpoint.Port
     try { Invoke-Setup $installLog }
-    finally { if ($defaultPortReservation) { try { $defaultPortReservation.Stop() } catch { } } }
-    $serviceConfigPath = Join-Path $dataDir 'service.json'
-    if (-not (Test-Path $serviceConfigPath -PathType Leaf)) { throw 'Installer did not write selected service port configuration' }
-    $serviceConfig = Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
+    finally { $reservedPortListener.Stop() }
+    $serviceConfig = Wait-V3Endpoint
     $port = [int]$serviceConfig.port
-    if ($port -lt 1 -or $port -gt 65535 -or $serviceConfig.host -ne '127.0.0.1') { throw 'Installer wrote invalid/non-loopback service configuration' }
-    if ($defaultPortWasReserved -and $port -eq 8788) { throw 'Installer did not select fallback port while default was reserved' }
-    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean'; selected_port = $port; default_port_fallback = ($port -ne 8788) }
+    if ($port -eq $reservedPort) { throw 'V3 service selected a port that was already reserved by this test' }
+    Record-Evidence 'install' @{ exit_code = 0; mode = 'clean'; selected_port = $port; reserved_port = $reservedPort; generated_port = $true }
 
     if (-not (Test-Path $appExe -PathType Leaf)) {
         throw "Installed V3 Flutter executable is missing: $appExe"
