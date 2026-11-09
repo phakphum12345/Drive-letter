@@ -183,6 +183,7 @@ function Stop-ResearchOsServiceAndApi {
   Stop-ResearchOsApiListener
   Remove-StaleRuntimeEndpoint 'api'
   Remove-StaleRuntimeEndpoint 'developer'
+  Remove-StaleRuntimeEndpoint 'agent'
 }
 
 function Set-ServiceEnvironment([string]$PythonPath) {
