@@ -107,7 +107,10 @@ class ApiEndpointStore {
         return null;
       }
       final port = decoded['port'];
-      if (port is! int || port < 1 || port > 65535) return null;
+      final pid = decoded['pid'];
+      if (port is! int || port < 1 || port > 65535 || pid is! int || pid < 1) {
+        return null;
+      }
       final expected = 'http://127.0.0.1:$port';
       if (decoded['url'] != expected) return null;
       return expected;
