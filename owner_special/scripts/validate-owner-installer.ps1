@@ -10,6 +10,26 @@ $dataRoot = Join-Path $env:ProgramData 'ResearchOSOwnerSpecial'
 $audit = Join-Path $dataRoot 'service\audit.jsonl'
 $statePath = Join-Path $env:RUNNER_TEMP 'owner-special-validation-state.json'
 $headers = @{'X-Research-OS-Owner'='owner'; 'X-Research-OS-Profile'='default'; 'X-Research-OS-Session'='installer-e2e'}
+$runtimeDir = Join-Path $env:ProgramData 'ResearchOS\runtime'
+$script:FriendUrl = ''
+$script:FriendPort = 0
+
+function Get-OwnerEndpoint {
+    $registryPath = Join-Path $runtimeDir 'friend.json'
+    if (-not (Test-Path $registryPath -PathType Leaf)) { return $null }
+    try {
+        $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+        $port = [int]$record.port
+        if ($record.schema_version -eq 1 -and $record.service -eq 'friend' -and
+            $record.host -eq '127.0.0.1' -and $port -ge 1 -and $port -le 65535 -and
+            $record.url -eq "http://127.0.0.1:$port") {
+            $script:FriendUrl = [string]$record.url
+            $script:FriendPort = $port
+            return $record
+        }
+    } catch {}
+    return $null
+}
 
 function Show-OwnerDiagnostics {
     Write-Host '=== Installed Owner Special diagnostics ==='
@@ -33,11 +53,14 @@ function Show-OwnerDiagnostics {
 }
 
 function Wait-OwnerReady {
-    for ($i=0; $i -lt 80; $i++) {
-        try {
-            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2
-            if ($health.status -eq 'ok') { return }
-        } catch {}
+    for ($i=0; $i -lt 100; $i++) {
+        $endpoint = Get-OwnerEndpoint
+        if ($endpoint) {
+            try {
+                $health = Invoke-RestMethod -Uri "$FriendUrl/owner/health" -TimeoutSec 2
+                if ($health.status -eq 'ok') { return }
+            } catch {}
+        }
         Start-Sleep -Milliseconds 500
     }
     Show-OwnerDiagnostics
@@ -99,25 +122,25 @@ function Invoke-CleanValidation {
         if (-not $serviceProcess.CommandLine -or $serviceProcess.CommandLine -notmatch '--resource-cost-ceiling-usd\s+1(?:\.0+)?(?:\s|$)') {
             throw "Running ServiceHost process did not receive the CI cost ceiling argument: $($serviceProcess.CommandLine)"
         }
-        $unsafe = @(Get-NetTCPConnection -LocalPort 8790 -State Listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') })
+        $unsafe = @(Get-NetTCPConnection -LocalPort $FriendPort -State Listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') })
         if ($unsafe) { throw 'Owner Friend Service must be loopback-only' }
 
-        $status = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/status' -Headers $headers -TimeoutSec 5
+        $status = Invoke-RestMethod -Uri '$FriendUrl/owner/status' -Headers $headers -TimeoutSec 5
         if ([long]$status.brain_profiles.'10^10' -ne 10000000000) { throw '10^10 capacity missing after install' }
         if ($status.scale_authority -ne 'v3-unified-master-orchestrator') { throw 'V3 UnifiedMaster is not the scale authority after install' }
         if ([long]$status.helper_scheduler.max_logical_helpers -ne 10000000000) { throw '10^10 helper logical capacity missing after install' }
         if ([int]$status.helper_scheduler.max_active_workers -gt 128) { throw 'active worker cap is unsafe' }
 
         $providerBody = @{base_url='http://127.0.0.1:18991/v1'; model='mock-model'; api_key='ci-owner-provider-key'; enabled=$true} | ConvertTo-Json
-        $provider = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8790/owner/provider/config' -Headers $headers -ContentType 'application/json' -Body $providerBody -TimeoutSec 10
+        $provider = Invoke-RestMethod -Method Post -Uri '$FriendUrl/owner/provider/config' -Headers $headers -ContentType 'application/json' -Body $providerBody -TimeoutSec 10
         if (-not $provider.credential_present -or $provider.secret_exposed) { throw 'Provider secret boundary failed' }
         $serialized = $provider | ConvertTo-Json -Compress
         if ($serialized -match 'ci-owner-provider-key') { throw 'Provider status exposed credential' }
-        $providerTest = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8790/owner/provider/test' -Headers $headers -ContentType 'application/json' -Body '{"test":true}' -TimeoutSec 10
+        $providerTest = Invoke-RestMethod -Method Post -Uri '$FriendUrl/owner/provider/test' -Headers $headers -ContentType 'application/json' -Body '{"test":true}' -TimeoutSec 10
         if (-not $providerTest.connected) { throw 'Installed OpenAI-compatible provider test failed' }
 
         $chatBody = @{text='installer turbo test'; complexity=9; risk=7; parallelism=128; helper_budget=1000000; requested_skills=@('analysis','planning','quality')} | ConvertTo-Json
-        $chat = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8790/owner/chat' -Headers $headers -ContentType 'application/json' -Body $chatBody -TimeoutSec 20
+        $chat = Invoke-RestMethod -Method Post -Uri '$FriendUrl/owner/chat' -Headers $headers -ContentType 'application/json' -Body $chatBody -TimeoutSec 20
         if ($chat.decision.scale -ne '10^10' -or [long]$chat.decision.capacity -ne 10000000000) { throw 'Unified 10^10 decision failed' }
         if ([long]$chat.helpers.logical_capacity -ne 10000000000 -or [int]$chat.helpers.active_workers -gt 128 -or [int]$chat.helpers.planned_helpers -ne 1000000) { throw 'Bounded 10^10 helper scheduler failed' }
         if ($chat.factory.scale -ne '10^10' -or $chat.factory.requested_scale -ne '10^10') { throw 'V3 factory did not preserve requested 10^10 scale' }
@@ -136,35 +159,46 @@ function Invoke-CleanValidation {
         $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $apiScript = Join-Path $repoRoot 'tools\research_os_api\render_server.py'
         if (-not (Test-Path $apiScript -PathType Leaf)) { throw "Research OS API Spine source missing: $apiScript" }
-        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-        try { $listener.Start(); $apiPort = [int]$listener.LocalEndpoint.Port } finally { $listener.Stop() }
-        $apiBase = "http://127.0.0.1:$apiPort"
+        $apiRuntimeDir = Join-Path $env:RUNNER_TEMP 'owner-installer-api-runtime'
+        New-Item -ItemType Directory -Force -Path $apiRuntimeDir | Out-Null
+        $apiBase = ""
         $apiOut = Join-Path $env:RUNNER_TEMP 'owner-installer-api.out.log'
         $apiErr = Join-Path $env:RUNNER_TEMP 'owner-installer-api.err.log'
         $apiProcess = $null
         $app = $null
-        $environmentNames = @('HOST','PORT','RESEARCH_OS_API_PORT','RESEARCH_OS_API_BASE_URL','RESEARCH_OS_FRIEND_URL','RESEARCH_OS_DATA_DIR','RESEARCH_OS_AI_ROUTE','RESEARCH_OS_SESSION_SECRET')
+        $environmentNames = @('HOST','PORT','RESEARCH_OS_API_PORT','RESEARCH_OS_API_BASE_URL','RESEARCH_OS_FRIEND_URL','RESEARCH_OS_RUNTIME_DIR','RESEARCH_OS_DATA_DIR','RESEARCH_OS_AI_ROUTE','RESEARCH_OS_SESSION_SECRET')
         $previousEnvironment = @{}
         foreach ($name in $environmentNames) {
             $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         }
         try {
             $env:HOST = '127.0.0.1'
-            $env:PORT = "$apiPort"
-            $env:RESEARCH_OS_API_PORT = "$apiPort"
-            $env:RESEARCH_OS_API_BASE_URL = $apiBase
-            $env:RESEARCH_OS_FRIEND_URL = 'http://127.0.0.1:8790'
+            $env:PORT = "0"
+            $env:RESEARCH_OS_API_PORT = "0"
+            $env:RESEARCH_OS_API_BASE_URL = ""
+            $env:RESEARCH_OS_FRIEND_URL = $FriendUrl
+            $env:RESEARCH_OS_RUNTIME_DIR = $apiRuntimeDir
             $env:RESEARCH_OS_DATA_DIR = $dataRoot
             $env:RESEARCH_OS_SESSION_SECRET = 'owner-installer-ci-session-secret-only'
             $env:RESEARCH_OS_AI_ROUTE = 'friend'
             $apiProcess = Start-Process -FilePath 'python' -ArgumentList @($apiScript) -WorkingDirectory $repoRoot -RedirectStandardOutput $apiOut -RedirectStandardError $apiErr -PassThru
 
             $ready = $false
-            for ($i=0; $i -lt 60; $i++) {
+            for ($i=0; $i -lt 100; $i++) {
                 try {
-                    $apiHealth = Invoke-RestMethod -Uri "$apiBase/health" -TimeoutSec 2
-                    $ownerHealth = Invoke-RestMethod -Uri "$apiBase/owner/health" -TimeoutSec 2
-                    if ($apiHealth.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
+                    $apiRecordPath = Join-Path $apiRuntimeDir 'api.json'
+                    if (Test-Path $apiRecordPath -PathType Leaf) {
+                        $apiRecord = Get-Content -LiteralPath $apiRecordPath -Raw | ConvertFrom-Json
+                        $apiPort = [int]$apiRecord.port
+                        if ($apiRecord.schema_version -eq 1 -and $apiRecord.service -eq 'api' -and
+                            $apiRecord.host -eq '127.0.0.1' -and $apiPort -ge 1 -and $apiPort -le 65535 -and
+                            $apiRecord.url -eq "http://127.0.0.1:$apiPort") {
+                            $apiBase = [string]$apiRecord.url
+                            $apiHealth = Invoke-RestMethod -Uri "$apiBase/health" -TimeoutSec 2
+                            $ownerHealth = Invoke-RestMethod -Uri "$apiBase/owner/health" -TimeoutSec 2
+                            if ($apiHealth.status -eq 'ok' -and $ownerHealth.status -eq 'ok') { $ready = $true; break }
+                        }
+                    }
                 } catch {}
                 Start-Sleep -Milliseconds 250
             }
