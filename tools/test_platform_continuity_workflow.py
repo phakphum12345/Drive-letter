@@ -137,7 +137,7 @@ class PlatformContinuityWorkflowTests(unittest.TestCase):
             decisions=["platform-first"],
             verified_truths=["chat-is-not-storage"],
             evidence_refs=["ev-1"],
-            open_risks=["runtime-8788"],
+            open_risks=["runtime-generated-endpoint-registry"],
             assumptions=[],
             unknowns=[],
             authority_boundaries=["final_gate"],
