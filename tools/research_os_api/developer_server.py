@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from developer_access import DeveloperAccessStore
 from flutter_code_tool import apply as apply_flutter_code, list_files as list_flutter_files, preview as preview_flutter_code, project_map as flutter_projects, read_file as read_flutter_file
 from developer_identity import IdentityAssertionError, IdentityAssertionVerifier
+from tools.research_os_api.runtime_endpoint_registry import publish_endpoint, remove_endpoint
 
 TRIAL_RESOURCES: tuple[dict[str, Any], ...] = (
     {"resource_id":"demo-api-client","workspace_id":"trial-workspace","kind":"code","name":"api_client.py","language":"python","summary":"Synthetic read-only API client example.","content":"def get_health(client):\n    return client.get('/health')\n"},
@@ -321,15 +322,25 @@ class DeveloperPlatformHandler(BaseHTTPRequestHandler):
 
 def main() -> int:
     host = os.environ.get("RESEARCH_OS_DEVELOPER_HOST", "127.0.0.1")
-    port = int(os.environ.get("RESEARCH_OS_DEVELOPER_PORT", "8790"))
+    configured_port = os.environ.get("RESEARCH_OS_DEVELOPER_PORT") or os.environ.get("PORT") or "0"
+    port = int(configured_port)
     server = ThreadingHTTPServer((host, port), DeveloperPlatformHandler)
-    print(f"Research OS Developer Platform API listening on http://{host}:{port}")
+    actual_port = int(server.server_address[1])
+    endpoint = None
+    if host in {"127.0.0.1", "localhost", "::1"}:
+        endpoint = publish_endpoint("developer", host, actual_port)
+        print(f"Research OS Developer Platform API listening on {endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_DEVELOPER_ENDPOINT={endpoint['url']}", flush=True)
+    else:
+        print(f"Research OS Developer Platform API listening on http://{host}:{actual_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        if endpoint is not None:
+            remove_endpoint("developer", expected_pid=os.getpid())
     return 0
 
 
