@@ -123,7 +123,7 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn('default=0)', friend)
         self.assertIn("server.server_address[1]", api)
         self.assertIn("RESEARCH_OS_DEVELOPER_ENDPOINT", api)
-        self.assertIn("runtime/developer.json", self.read("apps/research_os_flutter/README.md"))
+        self.assertIn("developer.json", self.read("apps/research_os_flutter/README.md"))
 
     def test_native_uses_tailscale_while_public_web_uses_render_api(self):
         native_endpoint = "https://phakphumwir.tail4b06c9.ts.net"
