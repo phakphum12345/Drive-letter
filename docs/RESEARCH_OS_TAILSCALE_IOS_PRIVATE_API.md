@@ -2,37 +2,37 @@
 
 ## Purpose
 
-The Windows Research OS API remains bound to:
+Research OS API, Friend, and Developer API bind to loopback using OS-assigned ports. The actual API endpoint is published atomically to:
 
-`http://127.0.0.1:8787`
+`%ProgramData%\\ResearchOS\\runtime\\api.json`
 
-The iPhone can reach it privately through Tailscale Serve without changing the API process to `0.0.0.0`.
-
-Tailscale Serve terminates HTTPS and reverse-proxies requests from the tailnet to the local loopback service. This keeps the Research OS API itself on loopback while allowing the iPhone to use a stable HTTPS MagicDNS endpoint.
+The iPhone does not connect to a Windows loopback address. It reaches the Windows host through Tailscale Serve over HTTPS.
 
 ## Windows setup
 
 Run an elevated PowerShell session on the Research OS Windows machine:
 
 ```powershell
-& "C:\Program Files\Research OS\scripts\configure-research-os-tailscale.ps1"
+& "<Research OS install root>\\scripts\\configure-research-os-tailscale.ps1"
 ```
 
 The helper:
 
-1. verifies `http://127.0.0.1:8787/health`;
-2. reads the Windows device's Tailscale MagicDNS name;
-3. configures `tailscale serve` for port 8787;
-4. prints the private HTTPS API base URL;
-5. prints the exact Google Identity and Google Workspace callback URLs.
+1. reads and validates the current generated API port from `runtime/api.json`;
+2. verifies `http://127.0.0.1:<GENERATED_API_PORT>/health`;
+3. reads the Windows device's Tailscale MagicDNS name;
+4. configures Tailscale Serve to proxy HTTPS to that generated loopback port;
+5. prints the private HTTPS API base URL and Google OAuth callback URLs.
+
+No API port is hard-coded. If the API service restarts and receives a new OS-assigned port, rerun the helper to refresh the Tailscale Serve target.
 
 To also place the HTTPS callback URLs into the Research OS Windows Service environment:
 
 ```powershell
-& "C:\Program Files\Research OS\scripts\configure-research-os-tailscale.ps1" -ConfigureGoogleRedirects
+& "<Research OS install root>\\scripts\\configure-research-os-tailscale.ps1" -ConfigureGoogleRedirects
 ```
 
-The two callback URLs must also be registered in the Google OAuth client configuration before Google sign-in can complete through the Tailscale endpoint.
+The callback URLs must also be registered in the Google OAuth client configuration before Google sign-in can complete through the Tailscale endpoint.
 
 ## iPhone connectivity
 
@@ -52,11 +52,7 @@ In GitHub Actions, run **Research OS iOS IPA** with:
 
 `api_base_url=https://<windows-device>.<tailnet>.ts.net`
 
-The resulting IPA embeds that endpoint through:
-
-`RESEARCH_OS_API_BASE_URL`
-
-The default remains the public Render endpoint, so existing release behavior is unchanged when no input is supplied.
+The resulting IPA embeds that endpoint through `RESEARCH_OS_API_BASE_URL`.
 
 ## Security model
 
@@ -64,22 +60,17 @@ Do **not** change the Windows Research OS API service to bind directly to `0.0.0
 
 The intended private path is:
 
-`iPhone → Tailscale HTTPS → Tailscale Serve → 127.0.0.1:8787 → Research OS API`
+`iPhone → Tailscale HTTPS → Tailscale Serve → 127.0.0.1:<GENERATED_API_PORT> → Research OS API`
 
-Tailscale documents Serve as a private tailnet service and specifically recommends keeping the backend on localhost when using Serve identity headers.
+Tailscale Serve provides the private HTTPS bridge while the API itself remains loopback-bound.
 
 ## Operational checks
 
-On Windows:
+On Windows, inspect the current generated endpoint:
 
 ```powershell
-Get-NetTCPConnection -LocalPort 8787 -State Listen
+Get-Content "$env:ProgramData\\ResearchOS\\runtime\\api.json" -Raw | ConvertFrom-Json
 tailscale serve status
 ```
 
-The Research OS process should still show:
-
-`127.0.0.1:8787`
-
-On the iPhone, Tailscale must be connected before accessing the private HTTPS URL.
-
+Do not use `Get-NetTCPConnection -LocalPort 8787` or any other remembered port as the source of truth. Read the current port from the registry record.
