@@ -8,7 +8,7 @@ Status: implementation target; live end-to-end verification is not implied by th
 GitHub Pages (https://phakphum12345.github.io)
   → HTTPS API base: https://phakphumwir.tail4b06c9.ts.net
   → Tailscale Serve
-  → Windows Research OS API on 127.0.0.1:8787
+  → Windows Research OS API on its OS-assigned 127.0.0.1 port (runtime/api.json)
 ```
 
 The browser must not use `localhost` or `127.0.0.1` as its API base: on an iPhone, those addresses refer to the iPhone, not the Windows host. The Windows API remains loopback-bound; Tailscale Serve is the access path. Do not expose the API port publicly or disable authentication/owner authorization.
@@ -17,7 +17,8 @@ The browser must not use `localhost` or `127.0.0.1` as its API base: on an iPhon
 
 - The Flutter API default is also `https://phakphumwir.tail4b06c9.ts.net`, so new installs do not target a hosted API.
 - A saved endpoint on an `*.onrender.com` host is migrated to Tailscale Serve on load; saved Local (`127.0.0.1:8787`) and custom endpoints remain explicit user choices.
-- A Windows process can use its configured local endpoint when deliberately selected. An iPhone must not use `127.0.0.1` for the Windows host.
+- A Windows Flutter process discovers the current local API URL from `%ProgramData%\\ResearchOS\\runtime\\api.json` or the configured local data directory. It does not assume a fixed port.
+- An iPhone must not use `127.0.0.1` for the Windows host; it uses the stable HTTPS Tailscale hostname.
 
 ## Browser/API contract
 
@@ -40,3 +41,13 @@ Source contract tests can verify the configured URL and browser request policy. 
 4. From GitHub Pages, verify the browser's `/health` request succeeds without CORS errors.
 5. Verify provider status/login, callback, session status, QR pairing status, and owner-only routes independently.
 6. Record the exact SHA, HTTP status, and response for each check; never infer a successful pairing from health alone.
+
+## Dynamic local service endpoint contract
+
+- API and Friend bind to loopback with port `0`; the operating system chooses the actual socket port atomically during bind.
+- The API publishes `runtime/api.json`; Friend publishes `runtime/friend.json`. Each service owns a separate atomic JSON file so concurrent writes cannot overwrite another service's record.
+- Records contain schema version, service name, loopback host, actual port, URL, process ID, and update timestamp. They contain no credentials or user data.
+- Consumers validate the schema and loopback address before using a record. Missing, malformed, mismatched, or non-loopback records fail closed.
+- API resolves Friend from the runtime registry at request time. Windows Flutter resolves the API registry on Windows; Web/iOS use the stable HTTPS endpoint.
+- Ollama remains at `127.0.0.1:11434` with the existing model configuration. It is a provider endpoint, not a Research OS service port.
+- Service shutdown removes only the endpoint record owned by that process ID. It does not terminate listeners by port number.
