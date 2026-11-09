@@ -16,10 +16,27 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+try:
+    from runtime_endpoint_registry import read_endpoint
+except ModuleNotFoundError:
+    from tools.research_os_api.runtime_endpoint_registry import read_endpoint
 from pathlib import Path
 from typing import Callable
 
-BASE_URL = os.getenv("RESEARCH_OS_EVAL_BASE_URL", "http://127.0.0.1:8787").rstrip("/")
+BASE_URL = os.getenv("RESEARCH_OS_EVAL_BASE_URL", "").rstrip("/")
+
+
+def _resolve_base_url() -> str:
+    if BASE_URL:
+        return BASE_URL
+    endpoint = read_endpoint("agent")
+    if endpoint:
+        return str(endpoint["url"]).rstrip("/")
+    raise RuntimeError(
+        "Agent API endpoint is not registered; start agent_server.py with --port 0 "
+        "or set RESEARCH_OS_EVAL_BASE_URL."
+    )
 REPORT_PATH = Path(os.getenv("RESEARCH_OS_EVAL_REPORT", "ai-capability-report.json"))
 CASE_COOLDOWN_SECONDS = float(os.getenv("RESEARCH_OS_EVAL_CASE_COOLDOWN", "2"))
 # Always allow at least three scenario attempts. The provider adapter already
@@ -108,7 +125,7 @@ def _safe_http_error_class(exc: urllib.error.HTTPError) -> str:
 
 def _request_once(path: str, payload: dict[str, object]) -> dict[str, object]:
     request = urllib.request.Request(
-        f"{BASE_URL}{path}",
+        f"{_resolve_base_url()}{path}",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
