@@ -159,6 +159,13 @@ if ($Action -eq 'uninstall') {
 }
 
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+$runtimeDir = Join-Path $env:ProgramData 'ResearchOS\\runtime'
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+$icacls = Join-Path $env:WINDIR 'System32\\icacls.exe'
+& $icacls $runtimeDir '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-32-545:(OI)(CI)(RX)' '/T' '/C' | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not protect runtime endpoint registry ACLs at $runtimeDir (icacls exit $LASTEXITCODE)."
+}
 $hostExe = Join-Path $Root 'service_host\ResearchOS.Owner.ServiceHost.exe'
 $pythonExe = Join-Path $Root 'runtime\python\python.exe'
 $entrypoint = Join-Path $Root 'owner_special\scripts\run_friend_service.py'
