@@ -8,9 +8,7 @@ class ApiEndpointStore {
   ApiEndpointStore._();
 
   static const _storageKey = 'research_os_api_base_url_v1';
-  // Legacy explicit value retained for migration of saved preferences only.
-  // Windows Local Mode resolves the current endpoint from runtime/api.json.
-  static const localDefault = 'http://127.0.0.1:8787';
+  // Local Mode resolves the current OS-assigned endpoint from runtime/api.json.
   static const developerDefault = 'http://127.0.0.1:8790';
   static const tailscaleDefault = 'https://phakphumwir.tail4b06c9.ts.net';
 
@@ -143,12 +141,18 @@ class ApiEndpointStore {
     final discovered = await discoverLocalEndpoint();
 
     if (discovered != null &&
-        (saved == null || saved.isEmpty || normalize(saved) == localDefault)) {
+        (saved == null || saved.isEmpty || _isLoopbackUrl(saved))) {
       await prefs.setString(_storageKey, discovered);
       return discovered;
     }
 
     if (saved == null || saved.isEmpty) {
+      return normalize(profileUrl(connectionResearchOs));
+    }
+
+    if (_isLoopbackUrl(saved)) {
+      // A stale generated port must never be reused after the service restarts.
+      await prefs.remove(_storageKey);
       return normalize(profileUrl(connectionResearchOs));
     }
 
@@ -174,6 +178,13 @@ class ApiEndpointStore {
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+  }
+
+  static bool _isLoopbackUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    return host == '127.0.0.1' || host == 'localhost' || host == '::1';
   }
 
   static String normalize(String value) {
