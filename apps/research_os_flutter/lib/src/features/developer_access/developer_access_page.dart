@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api_endpoint_store.dart';
 import '../../api/developer_access_api_client.dart';
 import 'flutter_code_tool_page.dart';
 
 class DeveloperAccessPage extends StatefulWidget {
-  DeveloperAccessPage({DeveloperAccessApiClient? client, super.key})
-      : client = client ?? DeveloperAccessApiClient();
+  DeveloperAccessPage({this.client, super.key});
 
-  final DeveloperAccessApiClient client;
+  final DeveloperAccessApiClient? client;
 
   @override
   State<DeveloperAccessPage> createState() => _DeveloperAccessPageState();
@@ -20,23 +20,61 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
   String? _error;
   List<Map<String, dynamic>> _requests = const [];
   List<Map<String, dynamic>> _grants = const [];
+  DeveloperAccessApiClient? _client;
 
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _client = widget.client;
+    if (_client == null) {
+      _resolveEndpoint();
+    } else {
+      _refresh();
+    }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _resolveEndpoint() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final session = await widget.client.getSession();
+      final localEndpoint = await ApiEndpointStore.discoverDeveloperEndpoint();
+      final endpoint = localEndpoint ?? DeveloperAccessApiClient.configuredBaseUrl;
+      if (endpoint.trim().isEmpty) {
+        throw const DeveloperAccessApiException(
+          'ยังไม่พบ Developer API endpoint ใน runtime/developer.json และยังไม่ได้กำหนด RESEARCH_OS_DEVELOPER_API_BASE_URL',
+        );
+      }
+      _client = DeveloperAccessApiClient(baseUrl: endpoint);
+      await _refresh();
+    } on DeveloperAccessApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _signedIn = false;
+        _principal = null;
+        _requests = const [];
+        _grants = const [];
+        _error = error.message;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_client == null) {
+      await _resolveEndpoint();
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final session = await _client!.getSession();
       final results = await Future.wait<Map<String, dynamic>>(<Future<Map<String, dynamic>>>[
-        widget.client.getOwnerRequests(status: 'pending'),
-        widget.client.getOwnerGrants(),
+        _client!.getOwnerRequests(status: 'pending'),
+        _client!.getOwnerGrants(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -76,7 +114,7 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
     if (requestId.isEmpty) return;
     final scopes = readOnly ? const <String>['read'] : _requestedScopes(request);
     try {
-      await widget.client.approveRequest(
+      await _client!.approveRequest(
         requestId,
         scopes: scopes,
         expiresInSeconds: 3600,
@@ -96,7 +134,7 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
     final requestId = request['request_id']?.toString() ?? '';
     if (requestId.isEmpty) return;
     try {
-      await widget.client.rejectRequest(requestId, reason: 'Rejected by resource owner');
+      await _client!.rejectRequest(requestId, reason: 'Rejected by resource owner');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ปฏิเสธคำขอแล้ว')));
       await _refresh();
@@ -110,7 +148,7 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
     final grantId = grant['grant_id']?.toString() ?? '';
     if (grantId.isEmpty) return;
     try {
-      await widget.client.revokeGrant(grantId, reason: 'Revoked by resource owner');
+      await _client!.revokeGrant(grantId, reason: 'Revoked by resource owner');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('เพิกถอนสิทธิ์แล้ว')));
       await _refresh();
@@ -138,7 +176,7 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : !_signedIn
-              ? _SignedOutState(error: _error, baseUrl: widget.client.baseUrl, onRetry: _refresh)
+              ? _SignedOutState(error: _error, baseUrl: _client?.baseUrl ?? 'not configured', onRetry: _refresh)
               : RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView(
