@@ -36,7 +36,7 @@ sealed record ServiceOptions(
 
         var portText = ReadOption(args, "--port")
             ?? Environment.GetEnvironmentVariable("RESEARCH_OS_V3_PORT")
-            ?? "8788";
+            ?? "0";
         if (!int.TryParse(portText, out var port) || port is < 0 or > 65535)
         {
             throw new ArgumentOutOfRangeException(nameof(args), $"Invalid V3 service port: {portText}");
