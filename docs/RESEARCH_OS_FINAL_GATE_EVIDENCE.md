@@ -18,4 +18,4 @@ The evidence identity is:
 
 ## Flutter validation
 
-The previously deferred Developer Access / Flutter Code Tool validation is now part of the normal Flutter quality gate. Windows release builds also bind the Research OS Flutter client to the packaged local API at `http://127.0.0.1:8787`; public iOS/web builds may continue to supply their own `RESEARCH_OS_API_BASE_URL`.
+The previously deferred Developer Access / Flutter Code Tool validation is now part of the normal Flutter quality gate. Windows release builds discover the packaged local API from `%ProgramData%\\ResearchOS\\runtime\\api.json`; no local API port is embedded in the Flutter binary. Public iOS/web builds may continue to supply their own `RESEARCH_OS_API_BASE_URL`.
