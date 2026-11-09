@@ -6,8 +6,9 @@ param(
     [string]$OwnerServiceName = "ResearchOSOwnerFriendService",
     [string]$ApiDataDir = "$env:ProgramData\ResearchOS",
     [string]$OwnerDataDir = "$env:ProgramData\ResearchOSOwnerSpecial",
-    [ValidateRange(1, 65535)][int]$ApiPort = 8787,
-    [ValidateRange(1, 65535)][int]$OwnerPort = 8790,
+    [ValidateRange(0, 65535)][int]$ApiPort = 0,
+    [ValidateRange(0, 65535)][int]$OwnerPort = 0,
+    [ValidateRange(0, 65535)][int]$DeveloperPort = 0,
     [ValidateRange(1, 1440)][int]$EventLookbackMinutes = 30,
     [ValidateRange(1, 1000)][int]$LogTailLines = 100,
     [string]$OutputPath
@@ -127,6 +128,40 @@ function Test-LocalHttpEndpoint {
     }
 }
 
+$runtimeDir = Join-Path $env:ProgramData 'ResearchOS\runtime'
+
+function Resolve-RuntimePort {
+    param([string]$Service, [int]$OverridePort)
+    if ($OverridePort -gt 0) { return $OverridePort }
+    $registryPath = Join-Path $runtimeDir "$Service.json"
+    try {
+        if (-not (Test-Path -LiteralPath $registryPath -PathType Leaf)) { return 0 }
+        $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+        $port = [int]$record.port
+        if ($record.schema_version -eq 1 -and $record.service -eq $Service -and
+            $record.host -eq '127.0.0.1' -and $port -ge 1 -and $port -le 65535 -and
+            $record.url -eq "http://127.0.0.1:$port" -and [int]$record.pid -gt 0) {
+            return $port
+        }
+    } catch {
+        Add-Finding 'WARN' 'RUNTIME_ENDPOINT_INVALID' "Could not validate $Service runtime endpoint record" $_.Exception.Message
+    }
+    return 0
+}
+
+$ApiPort = Resolve-RuntimePort -Service 'api' -OverridePort $ApiPort
+$OwnerPort = Resolve-RuntimePort -Service 'friend' -OverridePort $OwnerPort
+$DeveloperPort = Resolve-RuntimePort -Service 'developer' -OverridePort $DeveloperPort
+foreach ($entry in @(
+    @{ name = 'api'; port = $ApiPort },
+    @{ name = 'friend'; port = $OwnerPort },
+    @{ name = 'developer'; port = $DeveloperPort }
+)) {
+    if ([int]$entry.port -le 0) {
+        Add-Finding 'INFO' 'RUNTIME_ENDPOINT_NOT_REGISTERED' "No current $($entry.name) port was discovered; pass an explicit override only when intentionally testing an unmanaged endpoint."
+    }
+}
+
 Write-Host 'Collecting read-only Research OS Windows service evidence...'
 $services = @(
     Get-ServiceEvidence -Name $ApiServiceName
@@ -166,7 +201,7 @@ try {
 }
 
 $listenerEvidence = @()
-$portsToInspect = @($ApiPort, $OwnerPort) | Select-Object -Unique
+$portsToInspect = @($ApiPort, $OwnerPort, $DeveloperPort) | Where-Object { $_ -gt 0 } | Select-Object -Unique
 foreach ($port in $portsToInspect) {
     try {
         $connections = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction Stop)
@@ -187,10 +222,16 @@ foreach ($port in $portsToInspect) {
     }
 }
 
-$http = @(
-    Test-LocalHttpEndpoint -Name 'research_os_api_health' -Uri "http://127.0.0.1:$ApiPort/health"
-    Test-LocalHttpEndpoint -Name 'owner_friend_health' -Uri "http://127.0.0.1:$OwnerPort/owner/health"
-)
+$http = @()
+if ($ApiPort -gt 0) {
+    $http += Test-LocalHttpEndpoint -Name 'research_os_api_health' -Uri "http://127.0.0.1:$ApiPort/health"
+}
+if ($OwnerPort -gt 0) {
+    $http += Test-LocalHttpEndpoint -Name 'owner_friend_health' -Uri "http://127.0.0.1:$OwnerPort/owner/health"
+}
+if ($DeveloperPort -gt 0) {
+    $http += Test-LocalHttpEndpoint -Name 'developer_api_health' -Uri "http://127.0.0.1:$DeveloperPort/health"
+}
 
 $serviceOwnership = @()
 foreach ($service in $services) {
@@ -273,7 +314,8 @@ $report = [pscustomobject]@{
     parameters = [pscustomobject]@{
         install_root = $InstallRoot; owner_root = $OwnerRoot
         api_service = $ApiServiceName; owner_service = $OwnerServiceName
-        api_port = $ApiPort; owner_port = $OwnerPort
+        api_port = $ApiPort; owner_port = $OwnerPort; developer_port = $DeveloperPort
+        endpoint_registry_dir = $runtimeDir
         event_lookback_minutes = $EventLookbackMinutes
     }
     services = $services
