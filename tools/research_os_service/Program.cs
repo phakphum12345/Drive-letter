@@ -216,6 +216,7 @@ sealed class ResearchOsApiWorker : BackgroundService
             finally
             {
                 RemoveEndpointRecord(_runtimeDir, "api", SafePid(process));
+                RemoveEndpointRecord(_runtimeDir, "developer", SafePid(process));
                 try { process.Dispose(); } catch { }
                 if (ReferenceEquals(_process, process))
                 {
