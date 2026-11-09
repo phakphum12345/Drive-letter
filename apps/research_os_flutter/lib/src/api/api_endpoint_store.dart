@@ -1,9 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiEndpointStore {
   ApiEndpointStore._();
 
   static const _storageKey = 'research_os_api_base_url_v1';
+  // Legacy explicit value retained for migration of saved preferences only.
+  // Windows Local Mode resolves the current endpoint from runtime/api.json.
   static const localDefault = 'http://127.0.0.1:8787';
   static const developerDefault = 'http://127.0.0.1:8790';
   static const tailscaleDefault = 'https://phakphumwir.tail4b06c9.ts.net';
@@ -108,9 +113,63 @@ class ApiEndpointStore {
     return 'custom';
   }
 
+  static String? parseLocalEndpointRecord(String source) {
+    try {
+      final decoded = jsonDecode(source);
+      if (decoded is! Map<String, dynamic> ||
+          decoded['schema_version'] != 1 ||
+          decoded['service'] != 'api' ||
+          decoded['host'] != '127.0.0.1') {
+        return null;
+      }
+      final port = decoded['port'];
+      if (port is! int || port < 1 || port > 65535) return null;
+      final expected = 'http://127.0.0.1:$port';
+      if (decoded['url'] != expected) return null;
+      return expected;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static Future<String?> discoverLocalEndpoint() async {
+    if (!Platform.isWindows) return null;
+    final candidates = <String>[];
+    final configuredData = Platform.environment['RESEARCH_OS_DATA_DIR']?.trim();
+    if (configuredData != null && configuredData.isNotEmpty) {
+      candidates.add('$configuredData\\runtime\\api.json');
+    }
+    final programData = Platform.environment['PROGRAMDATA'] ?? r'C:\\ProgramData';
+    candidates.add('$programData\\ResearchOS\\runtime\\api.json');
+    final userProfile = Platform.environment['USERPROFILE'];
+    if (userProfile != null && userProfile.isNotEmpty) {
+      candidates.add('$userProfile\\ResearchOSData\\runtime\\api.json');
+    }
+
+    for (final candidate in candidates.toSet()) {
+      try {
+        final file = File(candidate);
+        if (!await file.exists()) continue;
+        final endpoint = parseLocalEndpointRecord(await file.readAsString());
+        if (endpoint != null) return endpoint;
+      } on FileSystemException {
+        // A service may be updating its atomic registry file during startup.
+        continue;
+      }
+    }
+    return null;
+  }
+
   static Future<String> load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_storageKey)?.trim();
+    final discovered = await discoverLocalEndpoint();
+
+    if (discovered != null &&
+        (saved == null || saved.isEmpty || normalize(saved) == localDefault)) {
+      await prefs.setString(_storageKey, discovered);
+      return discovered;
+    }
 
     if (saved == null || saved.isEmpty) {
       return normalize(profileUrl(connectionResearchOs));
