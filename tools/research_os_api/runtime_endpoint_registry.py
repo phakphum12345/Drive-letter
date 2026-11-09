@@ -69,12 +69,13 @@ def publish_endpoint(
     normalized_host, normalized_port = _validate_endpoint(host, port)
     path = endpoint_path(name, directory)
     path.parent.mkdir(parents=True, exist_ok=True)
+    url_host = f"[{normalized_host}]" if ":" in normalized_host else normalized_host
     record: dict[str, Any] = {
         "schema_version": 1,
         "service": name,
         "host": normalized_host,
         "port": normalized_port,
-        "url": f"http://{normalized_host}:{normalized_port}",
+        "url": f"http://{url_host}:{normalized_port}",
         "pid": int(pid if pid is not None else os.getpid()),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -115,7 +116,8 @@ def read_endpoint(
         return None
     if pid <= 0:
         return None
-    expected_url = f"http://{host}:{port}"
+    url_host = f"[{host}]" if ":" in host else host
+    expected_url = f"http://{url_host}:{port}"
     if raw.get("url") != expected_url:
         return None
     result = dict(raw)
