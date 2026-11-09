@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../api/api_endpoint_store.dart';
 import '../../platform/local_api_manager.dart';
 import '../../ui/enterprise_components.dart';
 
@@ -17,10 +18,17 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
   LocalApiManager get _manager => widget.manager ?? const LocalApiManager();
   bool _busy = false;
   LocalApiCommandResult? _lastResult;
+  String? _localEndpoint;
+
+  Future<void> _refreshEndpoint() async {
+    final endpoint = await ApiEndpointStore.discoverLocalEndpoint();
+    if (mounted) setState(() => _localEndpoint = endpoint);
+  }
 
   @override
   void initState() {
     super.initState();
+    _refreshEndpoint();
     if (_manager.supported) _run(_manager.serviceStatus, silent: true);
   }
 
@@ -33,6 +41,7 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
       _busy = false;
       _lastResult = result;
     });
+    await _refreshEndpoint();
     if (!silent) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.ok ? 'สำเร็จ: ${result.message}' : 'ไม่สำเร็จ: ${result.message}')),
@@ -150,7 +159,10 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
           actions: <Widget>[
             IconButton(
               tooltip: 'ตรวจสถานะ Service',
-              onPressed: _busy || !_manager.supported ? null : () => _run(_manager.serviceStatus),
+              onPressed: _busy || !_manager.supported ? null : () async {
+                await _run(_manager.serviceStatus);
+                await _refreshEndpoint();
+              },
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -161,7 +173,12 @@ class _LocalApiControlPageState extends State<LocalApiControlPage> {
           runSpacing: 12,
           children: <Widget>[
             SizedBox(width: 260, child: EnterpriseStatusTile(icon: Icons.miscellaneous_services_outlined, title: 'Windows Service', value: _manager.supported ? 'Available' : 'Unsupported', caption: 'ResearchOSService')),
-            const SizedBox(width: 260, child: EnterpriseStatusTile(icon: Icons.link_outlined, title: 'Local endpoint', value: '127.0.0.1:8787', caption: 'Research OS API')),
+            SizedBox(width: 260, child: EnterpriseStatusTile(
+              icon: Icons.link_outlined,
+              title: 'Local endpoint',
+              value: _localEndpoint ?? 'Not registered',
+              caption: 'OS-assigned loopback port',
+            )),
             SizedBox(width: 260, child: EnterpriseStatusTile(icon: Icons.pending_actions_outlined, title: 'Manager', value: _busy ? 'Working…' : 'Ready', caption: 'GUI controlled')),
           ],
         ),
