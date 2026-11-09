@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ sealed class ResearchOsApiWorker : BackgroundService
     private readonly ILogger<ResearchOsApiWorker> _logger;
     private readonly SemaphoreSlim _processStopLock = new(1, 1);
     private Process? _process;
+    private string? _runtimeDir;
 
     public ResearchOsApiWorker(ILogger<ResearchOsApiWorker> logger)
     {
@@ -70,6 +72,7 @@ sealed class ResearchOsApiWorker : BackgroundService
         startInfo.Environment["RESEARCH_OS_RUNTIME_DIR"] =
             Environment.GetEnvironmentVariable("RESEARCH_OS_RUNTIME_DIR") ?? Path.Combine(dataDir, "runtime");
         Directory.CreateDirectory(startInfo.Environment["RESEARCH_OS_RUNTIME_DIR"]!);
+        _runtimeDir = startInfo.Environment["RESEARCH_OS_RUNTIME_DIR"];
         startInfo.Environment["RESEARCH_OS_API_HOST"] = Environment.GetEnvironmentVariable("RESEARCH_OS_API_HOST") ?? "127.0.0.1";
         // Port zero delegates allocation to the OS socket bind; the Python API
         // publishes the actual endpoint in runtime/api.json after binding.
@@ -212,6 +215,7 @@ sealed class ResearchOsApiWorker : BackgroundService
             }
             finally
             {
+                RemoveEndpointRecord(_runtimeDir, "api", SafePid(process));
                 try { process.Dispose(); } catch { }
                 if (ReferenceEquals(_process, process))
                 {
@@ -223,6 +227,27 @@ sealed class ResearchOsApiWorker : BackgroundService
         {
             _processStopLock.Release();
         }
+    }
+
+    private void RemoveEndpointRecord(string? runtimeDir, string service, int processId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeDir) || processId <= 0) return;
+        var path = Path.Combine(runtimeDir, $"{service}.json");
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            if (document.RootElement.TryGetProperty("pid", out var pid) &&
+                pid.TryGetInt32(out var registeredPid) && registeredPid == processId)
+            {
+                File.Delete(path);
+                _logger.LogInformation("Removed stale {Service} runtime endpoint owned by PID {Pid}", service, processId);
+            }
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (JsonException ex) { _logger.LogWarning(ex, "Could not parse {Service} runtime endpoint during cleanup", service); }
+        catch (IOException ex) { _logger.LogWarning(ex, "Could not remove {Service} runtime endpoint during cleanup", service); }
+        catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "Permission denied removing {Service} runtime endpoint", service); }
     }
 
     private static void RunRuntimeRecovery(string repoRoot, string dataDir, ILogger logger)
