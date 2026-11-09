@@ -22,8 +22,8 @@ sealed record ServiceOptions(string Root, string PythonExecutable, int Port, str
         var root = Path.GetFullPath(ReadOption(args, "--root") ?? ResolvePackagedRoot());
         var python = ReadOption(args, "--python") ?? Path.Combine(root, "runtime", "python", "python.exe");
         if (!File.Exists(python)) throw new FileNotFoundException("Bundled Python runtime not found", python);
-        var portText = ReadOption(args, "--port") ?? "8790";
-        if (!int.TryParse(portText, out var port) || port is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(args), "Invalid Owner Friend port");
+        var portText = ReadOption(args, "--port") ?? "0";
+        if (!int.TryParse(portText, out var port) || port is < 0 or > 65535) throw new ArgumentOutOfRangeException(nameof(args), "Invalid Owner Friend port");
         var dataDir = Path.GetFullPath(ReadOption(args, "--data-dir") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ResearchOSOwnerSpecial"));
         var serviceName = ReadOption(args, "--service-name") ?? "ResearchOSOwnerFriendService";
         var ownerId = ReadOption(args, "--owner-id") ?? "owner";
@@ -100,6 +100,11 @@ sealed class OwnerFriendWorker : BackgroundService
         start.Environment["PYTHONPATH"] = Path.Combine(_options.Root, "owner_special");
         start.Environment["PYTHONUNBUFFERED"] = "1";
         start.Environment["RESEARCH_OS_OWNER_DATA_ROOT"] = _options.DataDir;
+        var runtimeDir = Environment.GetEnvironmentVariable("RESEARCH_OS_RUNTIME_DIR");
+        if (string.IsNullOrWhiteSpace(runtimeDir))
+            runtimeDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ResearchOS", "runtime");
+        Directory.CreateDirectory(runtimeDir);
+        start.Environment["RESEARCH_OS_RUNTIME_DIR"] = runtimeDir;
         // The installed Windows edition is Local Mode: use the loopback Ollama
         // endpoint unless an administrator has explicitly selected another provider.
         var configuredProvider = Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER");
@@ -123,7 +128,7 @@ sealed class OwnerFriendWorker : BackgroundService
 
         _process = new Process { StartInfo = start, EnableRaisingEvents = true };
         if (!_process.Start()) throw new InvalidOperationException("Failed to start Owner Friend process");
-        _logger.LogInformation("Owner Friend service child started on 127.0.0.1:{Port} PID {Pid}", _options.Port, _process.Id);
+        _logger.LogInformation("Owner Friend service child requested OS-assigned loopback port (requested {Port}) PID {Pid}", _options.Port, _process.Id);
         var stdoutTask = PumpAsync(_process.StandardOutput, stdout, stoppingToken);
         var stderrTask = PumpAsync(_process.StandardError, stderr, stoppingToken);
         try { await _process.WaitForExitAsync(stoppingToken); }
