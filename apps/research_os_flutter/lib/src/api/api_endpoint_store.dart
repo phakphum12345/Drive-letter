@@ -15,8 +15,8 @@ class ApiEndpointStore {
   static const connectionResearchOs = 'research_os';
   static const connectionOwnerSpecial = 'owner_special';
 
-  static const port1Label = 'PORT 1';
-  static const port2Label = 'PORT 2';
+  static const port1Label = 'Research OS';
+  static const port2Label = 'Owner Special';
 
   static const loginWindows = 'windows';
   static const loginGitHub = 'github';
