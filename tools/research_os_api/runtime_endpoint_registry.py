@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_SERVICES = frozenset({"api", "friend", "developer"})
+_SERVICES = frozenset({"api", "friend", "developer", "agent"})
 
 
 def runtime_directory() -> Path:
