@@ -64,7 +64,7 @@ stages:
   - stage: 15
     file: generated-owner-evidence.yml
     dispatchable: true
-    role: generated-8790-evidence-gate
+    role: generated-runtime-endpoint-evidence-gate
 
   - stage: 20
     file: research-os-build-ready-source.yml
