@@ -17,7 +17,7 @@ from research_os_v3.models import SCALE_PROFILES
 
 def main() -> int:
     host = os.environ.get("RESEARCH_OS_V3_HOST", "127.0.0.1")
-    port = int(os.environ.get("RESEARCH_OS_V3_PORT", "8788"))
+    port = int(os.environ.get("RESEARCH_OS_V3_PORT", "0"))
     layout = DataLayout.from_environment().ensure()
     audit_path = layout.logs / "http-audit.jsonl"
     maximum = SCALE_PROFILES[-1]
@@ -30,7 +30,8 @@ def main() -> int:
     registry = {
         "schema_version": 1,
         "service_name": service_name,
-        "host": "127.0.0.1",
+        "host": host,
+        "url": f"http://{host}:{port}",
         "port": port,
         "health_path": "/health",
         "process_id": os.getpid(),
@@ -76,6 +77,13 @@ def main() -> int:
         pass
     finally:
         service.shutdown()
+        server.server_close()
+        try:
+            current = json.loads(registry_path.read_text(encoding="utf-8"))
+            if int(current.get("process_id", 0)) == os.getpid():
+                registry_path.unlink()
+        except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+            pass
     return 0
 
 
