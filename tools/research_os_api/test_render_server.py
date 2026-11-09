@@ -26,8 +26,8 @@ class RenderServerEntrypointTests(unittest.TestCase):
                     server.server_close.assert_called_once_with()
                     self.assertEqual(os.environ["RESEARCH_OS_API_PORT"], str(expected_port))
 
-    def test_defaults_bind_public_interface_and_render_port(self):
-        self._run_main_with_env({}, "0.0.0.0", 10000)
+    def test_defaults_bind_public_interface_and_request_os_assigned_port(self):
+        self._run_main_with_env({}, "0.0.0.0", 0)
 
     def test_uses_platform_injected_port(self):
         self._run_main_with_env({"PORT": "10037"}, "0.0.0.0", 10037)
