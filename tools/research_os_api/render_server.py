@@ -13,10 +13,14 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from v2_server import V2ResearchOSHandler
+from tools.research_os_api.runtime_endpoint_registry import publish_endpoint, read_endpoint, remove_endpoint
 
 
 
-FRIEND_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip("/")
+FRIEND_URL = (
+    os.getenv("RESEARCH_OS_FRIEND_URL", "").strip().rstrip("/")
+    or str((read_endpoint("friend") or {}).get("url") or "")
+)
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner").strip() or "owner"
 
 
@@ -87,12 +91,15 @@ def _assert_friend_provider_ready() -> dict[str, object]:
 
 def _ensure_friend_service():
     """Reuse a local Friend service or start one inside this Render container."""
-    parsed = urlsplit(FRIEND_URL)
-    if parsed.scheme != "http" or (parsed.hostname or "").lower() not in {
-        "127.0.0.1", "localhost", "::1"
-    }:
+    global FRIEND_URL
+    parsed = urlsplit(FRIEND_URL) if FRIEND_URL else None
+    if parsed is not None and (
+        parsed.scheme != "http" or (parsed.hostname or "").lower() not in {
+            "127.0.0.1", "localhost", "::1"
+        }
+    ):
         raise RuntimeError("Friend service must remain on an internal loopback HTTP address")
-    port = parsed.port or 8790
+    port = parsed.port if parsed is not None and parsed.port is not None else 0
 
     try:
         _friend_service_health()
@@ -123,6 +130,8 @@ def _ensure_friend_service():
         repository_root=repository_root,
     )
     service.start()
+    FRIEND_URL = f"http://127.0.0.1:{service.port}"
+    publish_endpoint("friend", "127.0.0.1", service.port)
     try:
         last_error: Exception | None = None
         for _ in range(40):
@@ -196,7 +205,9 @@ def main() -> int:
         server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
         actual_port = int(server.server_address[1])
         os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
-        print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
+        endpoint = publish_endpoint("api", host, actual_port)
+        print(f"Research OS primary API listening on {endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
@@ -205,6 +216,9 @@ def main() -> int:
             server.server_close()
         if friend_service is not None:
             friend_service.close()
+        remove_endpoint("api", expected_pid=os.getpid())
+        if friend_service is not None:
+            remove_endpoint("friend")
     return 0
 
 
