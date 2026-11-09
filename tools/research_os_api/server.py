@@ -10,6 +10,7 @@ import json
 import mimetypes
 import os
 import sys
+import threading
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -1127,15 +1128,40 @@ def main() -> int:
     actual_port = int(server.server_address[1])
     os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
     endpoint = publish_endpoint("api", args.host, actual_port)
-    print(f"Research OS listening on {endpoint['url']}", flush=True)
-    print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
+    developer_server = None
     try:
+        # Developer Access is a separate loopback listener with its own
+        # OS-assigned port and registry record, owned by this API process.
+        # It is never exposed on the API's external bind address.
+        from tools.research_os_api.developer_server import DeveloperPlatformHandler
+
+        developer_server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), DeveloperPlatformHandler
+        )
+        developer_port = int(developer_server.server_address[1])
+        developer_endpoint = publish_endpoint(
+            "developer", "127.0.0.1", developer_port, pid=os.getpid()
+        )
+        developer_thread = threading.Thread(
+            target=developer_server.serve_forever,
+            name="research-os-developer-api",
+            daemon=True,
+        )
+        developer_thread.start()
+        print(f"Research OS listening on {endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
+        print(f"Research OS Developer API listening on {developer_endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_DEVELOPER_ENDPOINT={developer_endpoint['url']}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         return 0
     finally:
         server.server_close()
+        if developer_server is not None:
+            developer_server.shutdown()
+            developer_server.server_close()
         remove_endpoint("api", expected_pid=os.getpid())
+        remove_endpoint("developer", expected_pid=os.getpid())
 
 
 if __name__ == "__main__":
