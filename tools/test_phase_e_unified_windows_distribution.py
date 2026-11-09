@@ -109,6 +109,7 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("$consecutiveHealthFailures -ge 3", workflow)
         self.assertIn("api.json", workflow)
         self.assertIn("friend.json", workflow)
+        self.assertIn("developer.json", workflow)
         self.assertIn("Get-RuntimeEndpoint", workflow)
         self.assertIn("RESEARCH_OS_API_ENDPOINT", workflow)
         self.assertNotIn("127.0.0.1:8787", workflow)
