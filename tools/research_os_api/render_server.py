@@ -198,7 +198,7 @@ class CloudResearchOSHandler(V2ResearchOSHandler):
 
 def main() -> int:
     host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "10000"))
+    port = int(os.getenv("PORT", "0"))
     friend_service = _ensure_friend_service()
     server = None
     try:
