@@ -137,7 +137,7 @@ function Stop-ResearchOsApiListener([int]$Seconds = 15) {
     Start-Sleep -Milliseconds 500
   } while ((Get-Date) -lt $deadline)
 
-  $remaining = Get-PortListeners
+  $remaining = Get-PortListeners $ApiPort
   foreach ($listener in $remaining) {
     $pidRemaining = [int]$listener.OwningProcess
     $process = Get-CimInstance Win32_Process -Filter "ProcessId=$pidRemaining" -ErrorAction SilentlyContinue
