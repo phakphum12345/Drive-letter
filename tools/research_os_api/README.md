@@ -65,7 +65,7 @@ python tools/research_os_api/server.py --host 127.0.0.1 --port 0
 วิเคราะห์บทสนทนา:
 
 ```bash
-curl -X POST http://127.0.0.1:8787/v1/conversations/analyze \
+curl -X POST http://127.0.0.1:<API_PORT>/v1/conversations/analyze \
   -H 'Content-Type: application/json' \
   -d '{
     "title": "Provider-independent architecture",
@@ -77,7 +77,7 @@ curl -X POST http://127.0.0.1:8787/v1/conversations/analyze \
 ทดลอง AI Adapter โดยไม่ใช้ API Key:
 
 ```bash
-curl -X POST http://127.0.0.1:8787/v1/ai/generate \
+curl -X POST http://127.0.0.1:<API_PORT>/v1/ai/generate \
   -H 'Content-Type: application/json' \
   -d '{"provider":"mock","prompt":"วิเคราะห์แนวคิดนี้"}'
 ```
