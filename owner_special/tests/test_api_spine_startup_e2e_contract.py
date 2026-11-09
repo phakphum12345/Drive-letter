@@ -32,7 +32,7 @@ class OwnerApiSpineStartupContractTests(unittest.TestCase):
 
         self.assertIn("tools\\research_os_api\\render_server.py", validator)
         self.assertIn("$env:RESEARCH_OS_API_BASE_URL = $apiBase", validator)
-        self.assertIn("$env:RESEARCH_OS_FRIEND_URL = 'http://127.0.0.1:8790'", validator)
+        self.assertIn("Get-RuntimeEndpoint 'friend'", validator)
         self.assertIn('"$apiBase/owner/status"', validator)
         self.assertIn('"$apiBase/owner/provider"', validator)
         self.assertIn("through the API Spine", validator)
