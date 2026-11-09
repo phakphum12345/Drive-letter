@@ -124,8 +124,8 @@ jobs:
 
           flutter pub get
           flutter analyze
-          flutter test --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
-          flutter build windows --release --dart-define=RESEARCH_OS_API_BASE_URL=http://127.0.0.1:8787
+          flutter test
+          flutter build windows --release
           if ($LASTEXITCODE -ne 0) { throw 'Research OS Windows build failed.' }
           $exe = "$w\build\windows\x64\runner\Release\research_os_flutter.exe"
           if (-not (Test-Path $exe)) { throw 'Research OS executable missing.' }
@@ -334,6 +334,31 @@ jobs:
           $installRoot = Join-Path $env:ProgramFiles 'Research OS'
           $dataRoot = Join-Path $env:ProgramData 'ResearchOS'
           $ownerDataRoot = Join-Path $env:ProgramData 'ResearchOSOwnerSpecial'
+          $runtimeDir = Join-Path $dataRoot 'runtime'
+
+          function Get-RuntimeEndpoint([string]$Service) {
+            $registryPath = Join-Path $runtimeDir "$Service.json"
+            if (-not (Test-Path $registryPath -PathType Leaf)) { return $null }
+            try {
+              $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+              $port = [int]$record.port
+              if ($record.schema_version -eq 1 -and $record.service -eq $Service -and
+                  $record.host -eq '127.0.0.1' -and $port -ge 1 -and $port -le 65535 -and
+                  $record.url -eq "http://127.0.0.1:$port" -and [int]$record.pid -gt 0) {
+                return $record
+              }
+            } catch {}
+            return $null
+          }
+
+          function Wait-RuntimeEndpoint([string]$Service, [int]$Attempts = 40) {
+            for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+              $endpoint = Get-RuntimeEndpoint $Service
+              if ($endpoint) { return $endpoint }
+              Start-Sleep -Milliseconds 500
+            }
+            return $null
+          }
           $manifest = Join-Path $package 'DISTRIBUTION_MANIFEST.json'
           $manifestHash = Join-Path $package 'DISTRIBUTION_MANIFEST.sha256'
           $manifestHashValue = (Get-FileHash $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -429,18 +454,24 @@ jobs:
           # Production installer calls omit -TestProvider and keep Local/Ollama.
           $friendLifecycleScript = Join-Path $installRoot 'owner_special\scripts\install-owner-service.ps1'
           if (-not (Test-Path $friendLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend service installer missing.' }
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $friendLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -ServiceName 'ResearchOSOwnerFriendService' -OwnerId 'owner' -Port 8790 -TestProvider mock
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $friendLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -ServiceName 'ResearchOSOwnerFriendService' -OwnerId 'owner' -Port 0 -TestProvider mock
           if ($LASTEXITCODE -ne 0) { throw "Owner Friend CI provider installation failed with exit code $LASTEXITCODE." }
           $friendServiceConfig = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction Stop
           if (-not $friendServiceConfig -or $friendServiceConfig.State -ne 'Running') { throw 'Owner Friend CI provider service is not running after installation.' }
           if ($friendServiceConfig.PathName -notmatch '(?i)--provider\s+mock') { throw "Owner Friend ServiceHost did not receive the explicit CI provider argument: $($friendServiceConfig.PathName)" }
           Write-Host "FRIEND_SERVICE_HOST_PATH=$($friendServiceConfig.PathName)"
+          $friendEndpoint = Wait-RuntimeEndpoint 'friend'
+          if (-not $friendEndpoint) { throw 'Owner Friend did not publish a valid generated runtime/friend.json endpoint.' }
+          $friendUrl = [string]$friendEndpoint.url
+          $friendPort = [int]$friendEndpoint.port
+          Write-Host "FRIEND_ENDPOINT=$friendUrl"
+
           $friendHeaders = @{
             'X-Research-OS-Owner' = 'owner'
             'X-Research-OS-Profile' = 'default'
             'X-Research-OS-Session' = 'installer-e2e'
           }
-          $friendProviderHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
+          $friendProviderHealth = Invoke-RestMethod -Uri "$friendUrl/owner/provider/health" -Headers $friendHeaders -TimeoutSec 10
           if ($friendProviderHealth.connected -ne $true -or $friendProviderHealth.provider -ne 'owner-mock') { throw "Owner Friend CI provider mismatch: $($friendProviderHealth | ConvertTo-Json -Compress)" }
           $checks['friend_provider_ready'] = $true
           Write-Host 'WINDOWS_INSTALLER_E2E_PROVIDER=mock (canonical installer ServiceHost argument; CI runner only)'
@@ -517,14 +548,22 @@ jobs:
 
           $ownerReady = $false
           for ($i = 0; $i -lt 30; $i++) {
+            $friendEndpoint = Get-RuntimeEndpoint 'friend'
+            if ($friendEndpoint) { $friendUrl = [string]$friendEndpoint.url; $friendPort = [int]$friendEndpoint.port }
             try {
-              $ownerHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2
+              $ownerHealth = Invoke-RestMethod -Uri "$friendUrl/owner/health" -TimeoutSec 2
               if ($ownerHealth.status -eq 'ok') { $ownerReady = $true; break }
             } catch {}
             Start-Sleep -Milliseconds 500
           }
           if (-not $ownerReady) { throw 'Owner Friend HTTP health check failed.' }
           $checks['owner_http_ready'] = $true
+
+          $apiEndpoint = Wait-RuntimeEndpoint 'api'
+          if (-not $apiEndpoint) { throw 'Research OS API did not publish a valid generated runtime/api.json endpoint.' }
+          $apiUrl = [string]$apiEndpoint.url
+          $apiPort = [int]$apiEndpoint.port
+          Write-Host "RESEARCH_OS_API_ENDPOINT=$apiUrl"
 
           $apiReady = $false
           $apiHealth = $null
@@ -537,7 +576,7 @@ jobs:
             for ($i = 0; $i -lt 30; $i++) {
               $healthResponse = $null
               try {
-                $healthResponse = $healthClient.GetAsync('http://127.0.0.1:8787/health').GetAwaiter().GetResult()
+                $healthResponse = $healthClient.GetAsync("$apiUrl/health").GetAwaiter().GetResult()
                 $healthBody = $healthResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
                 try { $apiHealth = $healthBody | ConvertFrom-Json -ErrorAction Stop }
                 catch {
@@ -579,9 +618,9 @@ jobs:
             parallelism = 1
             helper_budget = 0
           } | ConvertTo-Json -Compress
-          $friendChatResult = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/chat' -Method Post -Headers $friendHeaders -ContentType 'application/json' -Body $friendChatBody -TimeoutSec 30
+          $friendChatResult = Invoke-RestMethod -Uri "$friendUrl/owner/chat" -Method Post -Headers $friendHeaders -ContentType 'application/json' -Body $friendChatBody -TimeoutSec 30
           if ($friendChatResult.provider -ne 'owner-mock') { throw "Friend chat did not use the isolated CI provider: $($friendChatResult.provider)" }
-          $memoryBeforeRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+          $memoryBeforeRestart = Invoke-RestMethod -Uri "$friendUrl/owner/memory" -Headers $friendHeaders -TimeoutSec 10
           if (-not @($memoryBeforeRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory marker was not persisted before service restart.' }
           $checks['friend_memory_written'] = $true
 
@@ -593,8 +632,8 @@ jobs:
             throw 'Cannot establish authoritative ResearchOSService PID before Owner Friend lifecycle test.'
           }
           $apiPidBefore = [int]$apiServiceBefore.ProcessId
-          $monitor = Start-Job -ArgumentList $apiPidBefore -ScriptBlock {
-            param([int]$ExpectedApiPid)
+          $monitor = Start-Job -ArgumentList $apiPidBefore, $apiUrl -ScriptBlock {
+            param([int]$ExpectedApiPid, [string]$ApiUrl)
             # A single slow health response during Windows service/installer I/O
             # is transient evidence, not proof that the main API was stopped.
             # Require sustained failures and always perform a final authoritative
@@ -611,7 +650,7 @@ jobs:
                 Write-Output "API_SERVICE_STATE_PROBE_FAILED $($_.Exception.Message)"
               }
               try {
-                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 5
+                $health = Invoke-RestMethod -Uri "$ApiUrl/health" -TimeoutSec 5
                 if ($health.status -ne 'ok' -or $health.ui -ne $true) {
                   $consecutiveHealthFailures++
                   if ($consecutiveHealthFailures -ge 3) {
@@ -634,13 +673,15 @@ jobs:
             if (-not (Test-Path $ownerLifecycleScript -PathType Leaf)) { throw 'Installed Owner Friend lifecycle script missing.' }
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action uninstall -Root $installRoot -DataDir $ownerDataRoot
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only uninstall failed with exit code $LASTEXITCODE." }
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -TestProvider mock
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ownerLifecycleScript -Action install -Root $installRoot -DataDir $ownerDataRoot -Port 0 -TestProvider mock
             if ($LASTEXITCODE -ne 0) { throw "Owner Friend-only reinstall failed with exit code $LASTEXITCODE." }
             $ownerLifecycleReady = $false
             for ($i = 0; $i -lt 30; $i++) {
               $ownerLifecycleService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
+              $friendEndpoint = Get-RuntimeEndpoint 'friend'
+              if ($friendEndpoint) { $friendUrl = [string]$friendEndpoint.url; $friendPort = [int]$friendEndpoint.port }
               try {
-                $ownerLifecycleHealth = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/health' -TimeoutSec 2
+                $ownerLifecycleHealth = Invoke-RestMethod -Uri "$friendUrl/owner/health" -TimeoutSec 2
                 if ($ownerLifecycleService -and $ownerLifecycleService.State -eq 'Running' -and $ownerLifecycleHealth.status -eq 'ok') {
                   $ownerLifecycleReady = $true
                   break
@@ -649,9 +690,9 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ownerLifecycleReady) { throw 'Owner Friend did not recover after owner-only uninstall/reinstall.' }
-            $providerAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/provider/health' -Headers $friendHeaders -TimeoutSec 10
+            $providerAfterRestart = Invoke-RestMethod -Uri "$friendUrl/owner/provider/health" -Headers $friendHeaders -TimeoutSec 10
             if ($providerAfterRestart.connected -ne $true -or $providerAfterRestart.provider -ne 'owner-mock') { throw 'Owner Friend provider changed after service-only reinstall.' }
-            $memoryAfterRestart = Invoke-RestMethod -Uri 'http://127.0.0.1:8790/owner/memory' -Headers $friendHeaders -TimeoutSec 10
+            $memoryAfterRestart = Invoke-RestMethod -Uri "$friendUrl/owner/memory" -Headers $friendHeaders -TimeoutSec 10
             if (-not @($memoryAfterRestart.items | Where-Object { $_.text -like "*$memoryMarker*" }).Count) { throw 'Friend memory did not survive service-only uninstall/reinstall.' }
             $checks['friend_memory_survives_service_restart'] = $true
             $checks['friend_provider_survives_service_restart'] = $true
@@ -669,7 +710,7 @@ jobs:
           if (-not $apiServiceAfter -or $apiServiceAfter.State -ne 'Running' -or [int]$apiServiceAfter.ProcessId -ne $apiPidBefore) {
             throw "ResearchOSService PID changed across Owner Friend lifecycle. before=$apiPidBefore after=$($apiServiceAfter.ProcessId) state=$($apiServiceAfter.State)"
           }
-          $apiHealthAfter = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 10
+          $apiHealthAfter = Invoke-RestMethod -Uri "$apiUrl/health" -TimeoutSec 10
           if ($apiHealthAfter.status -ne 'ok' -or $apiHealthAfter.ui -ne $true) {
             throw "ResearchOSService final health check failed after Owner Friend lifecycle: $($apiHealthAfter | ConvertTo-Json -Compress)"
           }
@@ -686,6 +727,13 @@ jobs:
           $checks['desktop_app_launch'] = $true
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
           Wait-Process -Id $app.Id -Timeout 10 -ErrorAction SilentlyContinue
+
+          $apiEndpointBeforeUninstall = Get-RuntimeEndpoint 'api'
+          $friendEndpointBeforeUninstall = Get-RuntimeEndpoint 'friend'
+          if (-not $apiEndpointBeforeUninstall -or -not $friendEndpointBeforeUninstall) {
+            throw 'Cannot establish generated API/Friend ports before uninstall verification.'
+          }
+          $portsBeforeUninstall = @([int]$apiEndpointBeforeUninstall.port, [int]$friendEndpointBeforeUninstall.port) | Select-Object -Unique
 
           $uninstaller = Join-Path $installRoot 'unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Inno Setup uninstaller missing.' }
@@ -727,8 +775,15 @@ jobs:
           if ($remainingMainService) { throw 'Research OS service remained after uninstall.' }
           $remainingOwnerService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
           if ($remainingOwnerService) { throw 'Owner Friend service remained after uninstall.' }
-          if (Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue) { throw 'Research OS API port remained bound after uninstall.' }
-          if (Get-NetTCPConnection -LocalPort 8790 -State Listen -ErrorAction SilentlyContinue) { throw 'Owner Friend port remained bound after uninstall.' }
+          foreach ($serviceName in @('api', 'friend')) {
+            $registryPath = Join-Path $runtimeDir "$serviceName.json"
+            if (Test-Path $registryPath -PathType Leaf) { throw "Runtime endpoint record remained after uninstall: $registryPath" }
+          }
+          foreach ($port in $portsBeforeUninstall) {
+            if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
+              throw "Generated local service port $port remained bound after uninstall."
+            }
+          }
           $checks['uninstall_clean'] = $true
 
           [ordered]@{
