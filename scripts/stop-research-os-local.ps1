@@ -36,7 +36,10 @@ function Stop-ManagedProcess([string]$Path, [string]$ExpectedEntrypoint, [string
       Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
       Wait-Process -Id $pidValue -Timeout 10 -ErrorAction SilentlyContinue
       Remove-OwnedEndpoint $Service $pidValue
-      if ($Service -eq "api") { Remove-OwnedEndpoint "developer" $pidValue }
+      if ($Service -eq "api") {
+        Remove-OwnedEndpoint "developer" $pidValue
+        Remove-OwnedEndpoint "agent" $pidValue
+      }
       Write-Host "Stopped managed Research OS process $ExpectedEntrypoint (PID $pidValue)."
     } elseif ($process) {
       Write-Warning "PID $pidValue no longer identifies the expected Research OS entrypoint; it was not terminated."
