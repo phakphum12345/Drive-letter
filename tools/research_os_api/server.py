@@ -148,10 +148,11 @@ def _friend_chat(
         "Content-Type": "application/json; charset=utf-8",
         **identity.friend_headers(),
     }
-    if not FRIEND_BASE_URL:
+    friend_url = _resolve_friend_base_url()
+    if not friend_url:
         raise RuntimeError("Friend endpoint is not registered; the local Friend service is not ready")
     request = urllib.request.Request(
-        f"{FRIEND_BASE_URL}/owner/chat",
+        f"{friend_url}/owner/chat",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers=headers,
         method="POST",
@@ -163,17 +164,18 @@ def _friend_chat(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"Friend service HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
-        raise RuntimeError(f"Friend service unavailable at {FRIEND_BASE_URL}: {exc.reason}") from exc
+        raise RuntimeError(f"Friend service unavailable at {friend_url}: {exc.reason}") from exc
     if not isinstance(value, dict):
         raise RuntimeError("Friend service returned an invalid response")
     return value
 
 def _friend_provider_health() -> dict[str, Any]:
     """Check the actual loopback Friend provider without exposing credentials."""
-    if not FRIEND_BASE_URL:
+    friend_url = _resolve_friend_base_url()
+    if not friend_url:
         raise RuntimeError("Friend endpoint is not registered; the local Friend service is not ready")
     request = urllib.request.Request(
-        f"{FRIEND_BASE_URL}/owner/provider/health",
+        f"{friend_url}/owner/provider/health",
         headers={
             "Accept": "application/json",
             "X-Research-OS-Owner": FRIEND_OWNER_ID,
@@ -327,8 +329,12 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
             headers["Content-Type"] = "application/json"
         else:
             payload = None
+        friend_url = _resolve_friend_base_url()
+        if not friend_url:
+            self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "friend_runtime_unavailable"})
+            return
         request = urllib.request.Request(
-            f"{FRIEND_BASE_URL}{path}",
+            f"{friend_url}{path}",
             data=payload,
             headers=headers,
             method=method,
