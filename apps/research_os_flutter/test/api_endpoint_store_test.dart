@@ -11,6 +11,40 @@ void main() {
     expect(ApiEndpointStore.buildDefault, expected);
   });
 
+
+  test('runtime endpoint registry resolves a generated loopback API URL', () {
+    const record = '''
+{
+  "schema_version": 1,
+  "service": "api",
+  "host": "127.0.0.1",
+  "port": 43127,
+  "url": "http://127.0.0.1:43127",
+  "pid": 42
+}
+''';
+    expect(
+      ApiEndpointStore.parseLocalEndpointRecord(record),
+      'http://127.0.0.1:43127',
+    );
+  });
+
+  test('runtime endpoint registry rejects non-loopback and malformed records', () {
+    const nonLoopback = '''
+{"schema_version":1,"service":"api","host":"0.0.0.0","port":43127,"url":"http://0.0.0.0:43127","pid":42}
+''';
+    const wrongService = '''
+{"schema_version":1,"service":"friend","host":"127.0.0.1","port":43127,"url":"http://127.0.0.1:43127","pid":42}
+''';
+    const invalidPort = '''
+{"schema_version":1,"service":"api","host":"127.0.0.1","port":0,"url":"http://127.0.0.1:0","pid":42}
+''';
+    expect(ApiEndpointStore.parseLocalEndpointRecord(nonLoopback), isNull);
+    expect(ApiEndpointStore.parseLocalEndpointRecord(wrongService), isNull);
+    expect(ApiEndpointStore.parseLocalEndpointRecord(invalidPort), isNull);
+    expect(ApiEndpointStore.parseLocalEndpointRecord('{broken'), isNull);
+  });
+
   test('local endpoint remains a valid explicit profile value', () {
     expect(
       ApiEndpointStore.normalize(ApiEndpointStore.localDefault),
