@@ -19,7 +19,7 @@ The signed session contains `user_id`, `email`, `role`, `session_id`, `iat`, and
 
 The Owner Friend Service already validates `X-Research-OS-Owner`, `X-Research-OS-Profile`, and `X-Research-OS-Session` before protected operations and passes those scopes into Friend requests and memory recall.
 
-## Implementation added — exact-head verification pending
+## Implementation and exact-main CI evidence — 2026-11-09
 
 The canonical API-to-Friend handoff now resolves a trusted `IdentityContext` from `require_session(headers)`:
 
@@ -34,7 +34,15 @@ The Owner Friend Service validates owner/profile/session independently. Its sess
 
 Regression coverage includes missing/non-owner session rejection, client identity override resistance, same-user session continuity, cross-user separation, URL-safe leading session characters, and owner/profile/session-scoped preview authorization.
 
-**Verification status:** implementation and regression tests are committed on the PR branch. Do not mark this gate complete until all exact-head API, Friend, Windows installer, and final-gate checks pass. CI evidence does not replace a separate read-only check of the user's actual Windows service host.
+**Verification status (main SHA `5189522b1c86e953fa5a8739e8244adbd27415c5`):** identity implementation and regression coverage are present on canonical main and passed the exact-main CI runs below. This verifies the repository implementation and CI contracts; it does not certify the user's actual Windows service host.
+
+- CI Lite API and source regression: [run 42543943699](https://github.com/phakphum12345/Drive-letter/actions/runs/42543943699), exact-main job `CI Lite API and source regression`: 443 tests passed, including verified-session enforcement, client identity override resistance, cross-user/profile/session scope checks, URL-safe session IDs, and Owner proxy identity replacement.
+- Research OS Gate: [run 42543943706](https://github.com/phakphum12345/Drive-letter/actions/runs/42543943706): Python/V3 tests, Research E2E, Flutter analyze/tests, Linux desktop build, and Final Gate passed. Apple/Xcode validation was skipped by the successful platform-scope detector.
+- Owner Special Build Identity Gate: [run 42543943655](https://github.com/phakphum12345/Drive-letter/actions/runs/42543943655): passed.
+- Unified Windows Distribution: [run 42543952604](https://github.com/phakphum12345/Drive-letter/actions/runs/42543952604): passed exact-SHA validation, build, package validation, and installer install/upgrade/uninstall E2E.
+- Exact-main check inventory: 49 checks; 40 success, 9 skipped, 0 failed, 0 pending at audit time. Skips remain subject to their workflow-specific evidence rules.
+
+**Remaining host-side requirement:** run the read-only `tools/diagnose_windows_service_runtime.ps1` collector on the user's actual Windows host and inspect its redacted report before any service recovery or data mutation.
 
 ## Required invariant
 
