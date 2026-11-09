@@ -72,6 +72,32 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _selectLocalEndpoint() async {
+    final callback = widget.onApiBaseUrlChanged;
+    if (callback == null || _savingEndpoint) return;
+    setState(() {
+      _savingEndpoint = true;
+      _error = null;
+    });
+    try {
+      final endpoint = await ApiEndpointStore.discoverLocalEndpoint();
+      if (endpoint == null) {
+        throw StateError('ยังไม่พบ Local API endpoint ใน runtime/api.json กรุณาเริ่ม Research OS Service ก่อน');
+      }
+      _apiController.text = endpoint;
+      await callback(endpoint);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('เชื่อมต่อ Local API ที่ Port ซึ่งระบบจัดสรรให้อัตโนมัติแล้ว')),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _savingEndpoint = false);
+    }
+  }
+
   Future<void> _saveEndpoint([String? preset]) async {
     final callback = widget.onApiBaseUrlChanged;
     if (callback == null || _savingEndpoint) return;
@@ -150,8 +176,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
                       labelText: 'API Base URL',
-                      hintText: 'http://192.168.x.x:8787',
-                      helperText: 'ใส่ URL ของ API บนเครื่อง Windows ได้ภายหลัง โดยไม่ต้อง Build แอปใหม่',
+                      hintText: 'ตรวจจับ Local Port อัตโนมัติ หรือใส่ Cloud HTTPS URL',
+                      helperText: 'Local Mode อ่าน Port จาก runtime/api.json โดยอัตโนมัติ ไม่ต้องกำหนด Port คงที่',
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -167,9 +193,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         label: const Text('บันทึก'),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _savingEndpoint ? null : () => _saveEndpoint(ApiEndpointStore.localDefault),
+                        onPressed: _savingEndpoint ? null : _selectLocalEndpoint,
                         icon: const Icon(Icons.computer_outlined),
-                        label: const Text('Local 127.0.0.1'),
+                        label: const Text('Local (Auto Port)'),
                       ),
                       OutlinedButton.icon(
                         onPressed: _savingEndpoint ? null : () => _saveEndpoint(ApiEndpointStore.tailscaleDefault),
