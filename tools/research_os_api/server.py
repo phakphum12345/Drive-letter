@@ -60,6 +60,7 @@ from tools.platform_work_checkpoint import (
 
 from tools.project_registry import ProjectRegistry
 from tools.project_scale_readiness import PROJECT_COUNT, build_project_definitions
+from tools.research_os_api.runtime_endpoint_registry import publish_endpoint, read_endpoint, remove_endpoint
 import copilot_service
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -115,7 +116,15 @@ def _load_module(name: str, path: Path):
     return module
 
 
-FRIEND_BASE_URL = os.getenv("RESEARCH_OS_FRIEND_URL", "http://127.0.0.1:8790").rstrip("/")
+def _resolve_friend_base_url() -> str:
+    configured = os.getenv("RESEARCH_OS_FRIEND_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    endpoint = read_endpoint("friend")
+    return str(endpoint["url"]) if endpoint else ""
+
+
+FRIEND_BASE_URL = _resolve_friend_base_url()
 FRIEND_OWNER_ID = os.getenv("RESEARCH_OS_FRIEND_OWNER", "owner")
 
 
@@ -139,6 +148,8 @@ def _friend_chat(
         "Content-Type": "application/json; charset=utf-8",
         **identity.friend_headers(),
     }
+    if not FRIEND_BASE_URL:
+        raise RuntimeError("Friend endpoint is not registered; the local Friend service is not ready")
     request = urllib.request.Request(
         f"{FRIEND_BASE_URL}/owner/chat",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -159,6 +170,8 @@ def _friend_chat(
 
 def _friend_provider_health() -> dict[str, Any]:
     """Check the actual loopback Friend provider without exposing credentials."""
+    if not FRIEND_BASE_URL:
+        raise RuntimeError("Friend endpoint is not registered; the local Friend service is not ready")
     request = urllib.request.Request(
         f"{FRIEND_BASE_URL}/owner/provider/health",
         headers={
@@ -405,7 +418,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
         explicit = (os.getenv("RESEARCH_OS_LOGIN_REDIRECT_URI") or "").strip()
         if explicit:
             return explicit.rstrip("/") + f"/v1/auth/{provider}/callback"
-        port = int(os.getenv("RESEARCH_OS_API_PORT", "0"))
+        port = int(self.server.server_address[1])
         return f"http://127.0.0.1:{port}/v1/auth/{provider}/callback"
 
     def _pairing_base_url(self) -> str:
@@ -435,7 +448,7 @@ class ResearchOSHandler(BaseHTTPRequestHandler):
                 "Configure RESEARCH_OS_API_BASE_URL or RESEARCH_OS_PUBLIC_BASE_URL "
                 "to an HTTPS URL before creating a public QR pairing code"
             )
-        port = int(os.getenv("RESEARCH_OS_API_PORT", "8787"))
+        port = int(self.server.server_address[1])
         return f"http://127.0.0.1:{port}"
 
     def _auth_status(self) -> dict[str, Any]:
@@ -1107,13 +1120,16 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), ResearchOSHandler)
     actual_port = int(server.server_address[1])
     os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
-    print(f"Research OS listening on http://{args.host}:{actual_port}", flush=True)
+    endpoint = publish_endpoint("api", args.host, actual_port)
+    print(f"Research OS listening on {endpoint['url']}", flush=True)
+    print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         return 0
     finally:
         server.server_close()
+        remove_endpoint("api", expected_pid=os.getpid())
 
 
 if __name__ == "__main__":
