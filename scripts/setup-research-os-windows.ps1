@@ -24,7 +24,8 @@ $directories = @(
   (Join-Path $DataDir "embeddings"),
   (Join-Path $DataDir "cache"),
   (Join-Path $DataDir "backups"),
-  (Join-Path $DataDir "logs")
+  (Join-Path $DataDir "logs"),
+  (Join-Path $DataDir "runtime")
 )
 
 foreach ($directory in $directories) {
@@ -40,7 +41,8 @@ foreach ($directory in $directories) {
 # Local desktop API is loopback-only by default. Users who explicitly need
 # network exposure must opt in by setting RESEARCH_OS_API_HOST themselves.
 [Environment]::SetEnvironmentVariable("RESEARCH_OS_API_HOST", "127.0.0.1", "User")
-[Environment]::SetEnvironmentVariable("RESEARCH_OS_API_PORT", "8787", "User")
+[Environment]::SetEnvironmentVariable("RESEARCH_OS_API_PORT", "0", "User")
+[Environment]::SetEnvironmentVariable("RESEARCH_OS_RUNTIME_DIR", (Join-Path $DataDir "runtime"), "User")
 
 Write-Host ""
 Write-Host "Local-first folders are ready."
@@ -50,4 +52,4 @@ Write-Host ""
 Write-Host "Next:"
 Write-Host "  .\scripts\start-research-os-local.ps1 -DataDir `"$DataDir`""
 Write-Host ""
-Write-Host "Health: http://127.0.0.1:8787/health"
+Write-Host "Health: use the generated endpoint in $DataDir\runtime\api.json"
