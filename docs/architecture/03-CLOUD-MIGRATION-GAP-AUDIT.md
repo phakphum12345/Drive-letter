@@ -1,3 +1,5 @@
+> **Superseding runtime update (2026-11-09):** The historical PR #65 reference below records the endpoint design at the time of that audit. The current local-runtime implementation now requests OS-assigned ports and publishes the Friend endpoint through `%ProgramData%\\ResearchOS\\runtime\\friend.json`; do not treat `127.0.0.1:8790` as a current configuration value.
+
 # Research OS Cloud Migration — Current-State Gap Audit
 
 **Document ID:** ROS-CL-03  
