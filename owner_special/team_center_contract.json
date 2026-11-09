@@ -7,7 +7,8 @@
       "research_os_api",
       "team_engineering",
       "friend_internal",
-      "developer_api"
+      "developer_api",
+      "agent_api"
     ],
     "friend_service": "internal-only"
   },
@@ -15,13 +16,15 @@
     "research_os_api": "workspace",
     "team_engineering": "team-engineering",
     "friend_internal": "friend-internal",
-    "developer_api": "developer-access"
+    "developer_api": "developer-access",
+    "agent_api": "agent-orchestration"
   },
   "runtime_endpoint_registry": {
     "research_os_api": "%ProgramData%\\ResearchOS\\runtime\\api.json",
     "friend_internal": "%ProgramData%\\ResearchOS\\runtime\\friend.json",
     "team_engineering": "RESEARCH_OS_V3_DATA_DIR\\service.json",
-    "developer_api": "%ProgramData%\\\\ResearchOS\\\\runtime\\\\developer.json"
+    "developer_api": "%ProgramData%\\\\ResearchOS\\\\runtime\\\\developer.json",
+    "agent_api": "%ProgramData%\\\\ResearchOS\\\\runtime\\\\agent.json"
   },
   "port_policy": "OS-assigned ephemeral loopback ports; consumers must discover the current endpoint from the owning service registry",
   "team_context": [
