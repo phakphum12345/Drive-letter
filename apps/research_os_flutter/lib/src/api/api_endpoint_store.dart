@@ -38,6 +38,11 @@ class ApiEndpointStore {
     defaultValue: buildDefault,
   );
 
+  static const port2BuildDefault = String.fromEnvironment(
+    'RESEARCH_OS_PORT_2_BASE_URL',
+    defaultValue: buildDefault,
+  );
+
   static String profileUrl(String profile) {
     switch (profile) {
       case connectionOwnerSpecial:
