@@ -81,7 +81,7 @@ class RenderServerEntrypointTests(unittest.TestCase):
                 self.assertEqual(render_server._assert_friend_provider_ready()["providers"], ["owner-mock"])
 
     def test_starts_internal_friend_when_loopback_endpoint_is_unavailable(self):
-        with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
+        with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:43129"):
             with patch.dict(
                 os.environ,
                 {
@@ -105,7 +105,7 @@ class RenderServerEntrypointTests(unittest.TestCase):
                 render_server._ensure_friend_service()
 
     def test_existing_friend_with_wrong_provider_fails_closed(self):
-        with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:8790"):
+        with patch.object(render_server, "FRIEND_URL", "http://127.0.0.1:43129"):
             with patch.dict(os.environ, {"RESEARCH_OS_PROVIDER": "gemini"}, clear=True):
                 with patch.object(render_server, "_friend_service_health", return_value={"status": "ok"}):
                     with patch.object(render_server, "_friend_provider_health", return_value={"connected": True, "provider": "owner-mock"}):
