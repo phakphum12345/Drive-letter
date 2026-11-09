@@ -67,12 +67,18 @@ sealed class ResearchOsApiWorker : BackgroundService
 
         startInfo.Environment["RESEARCH_OS_DATA_DIR"] = dataDir;
         startInfo.Environment["RESEARCH_OS_CONVERSATION_STORE"] = Path.Combine(dataDir, "sessions", "conversations.json");
+        startInfo.Environment["RESEARCH_OS_RUNTIME_DIR"] =
+            Environment.GetEnvironmentVariable("RESEARCH_OS_RUNTIME_DIR") ?? Path.Combine(dataDir, "runtime");
+        Directory.CreateDirectory(startInfo.Environment["RESEARCH_OS_RUNTIME_DIR"]!);
         startInfo.Environment["RESEARCH_OS_API_HOST"] = Environment.GetEnvironmentVariable("RESEARCH_OS_API_HOST") ?? "127.0.0.1";
-        startInfo.Environment["RESEARCH_OS_API_PORT"] = Environment.GetEnvironmentVariable("RESEARCH_OS_API_PORT") ?? "8787";
-        // The installed Owner Friend Windows Service binds loopback port 8790.
-        // Pass its URL explicitly; never let the API fall back to port zero.
-        startInfo.Environment["RESEARCH_OS_FRIEND_URL"] =
-            Environment.GetEnvironmentVariable("RESEARCH_OS_FRIEND_URL") ?? "http://127.0.0.1:8790";
+        // Port zero delegates allocation to the OS socket bind; the Python API
+        // publishes the actual endpoint in runtime/api.json after binding.
+        startInfo.Environment["RESEARCH_OS_API_PORT"] = Environment.GetEnvironmentVariable("RESEARCH_OS_API_PORT") ?? "0";
+        var configuredFriendUrl = Environment.GetEnvironmentVariable("RESEARCH_OS_FRIEND_URL");
+        if (!string.IsNullOrWhiteSpace(configuredFriendUrl))
+        {
+            startInfo.Environment["RESEARCH_OS_FRIEND_URL"] = configuredFriendUrl;
+        }
         startInfo.Environment["RESEARCH_OS_REQUIRE_FRIEND_HEALTH"] = "true";
         var configuredProvider = Environment.GetEnvironmentVariable("RESEARCH_OS_PROVIDER");
         var configuredOllamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL");
