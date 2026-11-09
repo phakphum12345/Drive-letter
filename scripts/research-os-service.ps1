@@ -45,6 +45,15 @@ function Require-Admin {
   }
 }
 
+function Protect-RuntimeDirectory([string]$Path) {
+  New-Item -ItemType Directory -Force -Path $Path | Out-Null
+  $icacls = Join-Path $env:WINDIR 'System32\\icacls.exe'
+  & $icacls $Path '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-32-545:(OI)(CI)(RX)' '/T' '/C' | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Could not protect runtime endpoint registry ACLs at $Path (icacls exit $LASTEXITCODE)."
+  }
+}
+
 function Get-ServiceSafe {
   return Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 }
@@ -237,7 +246,7 @@ switch ($Action) {
     New-Item -ItemType Directory -Force -Path (Join-Path $DataDir 'database') | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DataDir 'artifacts') | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DataDir 'backups') | Out-Null
-    New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
+    Protect-RuntimeDirectory $RuntimeDir
 
     [Environment]::SetEnvironmentVariable('RESEARCH_OS_REPO_ROOT', $RepoRoot, 'Machine')
     [Environment]::SetEnvironmentVariable('RESEARCH_OS_DATA_DIR', $DataDir, 'Machine')
