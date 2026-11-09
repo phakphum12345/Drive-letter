@@ -59,22 +59,21 @@ $FriendOutLog = Join-Path $LogDir "research-os-friend.out.log"
 $FriendErrLog = Join-Path $LogDir "research-os-friend.err.log"
 $FriendDataDir = Join-Path $DataDir "owner-friend"
 $FriendAuditPath = Join-Path $LogDir "research-os-friend.audit.jsonl"
-function Get-FreeLoopbackPort {
-  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-  try {
-    $listener.Start()
-    return [int]$listener.LocalEndpoint.Port
-  } finally {
-    $listener.Stop()
-  }
-}
+$RuntimeDir = Join-Path $DataDir "runtime"
+$FriendUrl = ""
 
-# Zero means choose an available loopback port for this run. Explicit values
-# remain supported for diagnostics and externally managed Tailscale Serve.
-if ($Port -le 0) { $Port = Get-FreeLoopbackPort }
-if ($FriendPort -le 0) { $FriendPort = Get-FreeLoopbackPort }
-if ($Port -eq $FriendPort) { throw "API and Friend Service must use different ports." }
-$FriendUrl = "http://127.0.0.1:$FriendPort"
+function Get-RuntimeEndpoint([string]$Service) {
+  $path = Join-Path $RuntimeDir "$Service.json"
+  if (-not (Test-Path $path -PathType Leaf)) { return $null }
+  try {
+    $record = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    $port = [int]$record.port
+    if ($record.schema_version -ne 1 -or $record.service -ne $Service -or
+        $record.host -ne "127.0.0.1" -or $port -lt 1 -or $port -gt 65535 -or
+        $record.url -ne "http://127.0.0.1:$port") { return $null }
+    return $record
+  } catch { return $null }
+}
 
 if (-not (Test-Path $ApiDir)) {
   throw "Research OS API directory not found: $ApiDir"
@@ -91,7 +90,8 @@ if (-not (Test-Path $FriendScript)) {
   (Join-Path $DataDir "backups"),
   $FriendDataDir,
   $RunDir,
-  $LogDir
+  $LogDir,
+  $RuntimeDir
 ) | ForEach-Object { New-Item -ItemType Directory -Force -Path $_ | Out-Null }
 
 $env:RESEARCH_OS_DATA_DIR = $DataDir
@@ -103,17 +103,19 @@ if ([string]::IsNullOrWhiteSpace($env:OLLAMA_BASE_URL)) {
 if ([string]::IsNullOrWhiteSpace($env:OLLAMA_MODEL)) {
   $env:OLLAMA_MODEL = "llama3.2:3b"
 }
+$env:RESEARCH_OS_RUNTIME_DIR = $RuntimeDir
 $env:RESEARCH_OS_API_HOST = $HostAddress
 $env:RESEARCH_OS_API_PORT = "$Port"
-$env:RESEARCH_OS_FRIEND_URL = $FriendUrl
+$env:RESEARCH_OS_FRIEND_URL = ""
 $env:RESEARCH_OS_FRIEND_OWNER = "owner"
 $env:RESEARCH_OS_AI_ROUTE = "friend"
 $env:HOST = $HostAddress
 $env:PORT = "$Port"
 
 function Test-FriendHealth {
+  if ([string]::IsNullOrWhiteSpace($script:FriendUrl)) { return $false }
   try {
-    $health = Invoke-RestMethod "$FriendUrl/owner/health" -TimeoutSec 2
+    $health = Invoke-RestMethod "$script:FriendUrl/owner/health" -TimeoutSec 2
     return ($health.status -eq "ok")
   } catch {
     return $false
@@ -121,10 +123,15 @@ function Test-FriendHealth {
 }
 
 function Start-FriendService {
-  if (Test-FriendHealth) {
-    Write-Host "Friend Service already running at $FriendUrl."
-    return $null
+  $existingEndpoint = Get-RuntimeEndpoint "friend"
+  if ($existingEndpoint) {
+    $script:FriendUrl = [string]$existingEndpoint.url
+    if (Test-FriendHealth) {
+      Write-Host "Friend Service already running at $script:FriendUrl."
+      return $null
+    }
   }
+  Remove-Item (Join-Path $RuntimeDir "friend.json") -Force -ErrorAction SilentlyContinue
 
   $startArgs = @{
     FilePath = "python"
@@ -132,7 +139,7 @@ function Start-FriendService {
       $FriendScript,
       "--owner-id", "owner",
       "--host", "127.0.0.1",
-      "--port", "$FriendPort",
+      "--port", "0",
       "--data-root", $FriendDataDir,
       "--audit-path", $FriendAuditPath,
       "--repository-root", $RepoRoot
@@ -146,9 +153,12 @@ function Start-FriendService {
   $process = Start-Process @startArgs
   Set-Content -Path $FriendPidFile -Value $process.Id -NoNewline
 
-  for ($i = 0; $i -lt 40; $i++) {
+  for ($i = 0; $i -lt 60; $i++) {
+    $endpoint = Get-RuntimeEndpoint "friend"
+    if ($endpoint) { $script:FriendUrl = [string]$endpoint.url }
     if (Test-FriendHealth) {
-      Write-Host "Friend Service ready at $FriendUrl (PID $($process.Id))."
+      $env:RESEARCH_OS_FRIEND_URL = $script:FriendUrl
+      Write-Host "Friend Service ready at $script:FriendUrl (PID $($process.Id))."
       return $process
     }
     if ($process.HasExited) {
@@ -161,7 +171,7 @@ function Start-FriendService {
   if (-not $process.HasExited) {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
   }
-  throw "Friend Service did not become ready at $FriendUrl. See $FriendErrLog"
+  throw "Friend Service did not publish a valid dynamic endpoint and become ready. See $FriendErrLog"
 }
 
 function Stop-ProcessFromPidFile([string]$Path) {
@@ -178,8 +188,8 @@ Write-Host ""
 Write-Host "Research OS Local API + Friend Service"
 Write-Host "Data directory : $DataDir"
 Write-Host "Provider       : $Provider"
-Write-Host "Friend URL     : $FriendUrl"
-Write-Host "Local API URL  : http://127.0.0.1:$Port"
+Write-Host "Friend URL     : generated at startup"
+Write-Host "Local API URL  : generated at startup"
 Write-Host "Bind address   : $HostAddress (loopback-only by default)"
 Write-Host "Tailscale Serve : configured automatically after API startup"
 Write-Host "Public API      : https://$ExpectedServeHostname"
@@ -219,6 +229,8 @@ if ($Background) {
   Set-Content -Path $PidFile -Value $process.Id -NoNewline
 
   $apiReady = $false
+  $apiUrl = ""
+  $apiPort = 0
   for ($i = 0; $i -lt 60; $i++) {
     if ($process.HasExited) {
       $detail = if (Test-Path $ErrLog) { Get-Content $ErrLog -Tail 40 | Out-String } else { "no stderr log" }
@@ -227,10 +239,15 @@ if ($Background) {
       Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
       throw "Research OS API exited before becoming ready. $detail"
     }
-    try {
-      $health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
-      if ($health.status -eq "ok") { $apiReady = $true; break }
-    } catch {}
+    $endpoint = Get-RuntimeEndpoint "api"
+    if ($endpoint) {
+      $apiUrl = [string]$endpoint.url
+      $apiPort = [int]$endpoint.port
+      try {
+        $health = Invoke-RestMethod "$apiUrl/health" -TimeoutSec 2
+        if ($health.status -eq "ok") { $apiReady = $true; break }
+      } catch {}
+    }
     Start-Sleep -Milliseconds 500
   }
   if (-not $apiReady) {
@@ -238,11 +255,11 @@ if ($Background) {
     if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     Remove-Item $FriendPidFile -Force -ErrorAction SilentlyContinue
-    throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog"
+    throw "Research OS API did not publish a valid dynamic endpoint and become ready. See $ErrLog"
   }
 
   try {
-    & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
+    & $ServeScript -ApiPort $apiPort -ExpectedHostname $ExpectedServeHostname
   } catch {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     if ($friendProcess -and -not $friendProcess.HasExited) { Stop-Process -Id $friendProcess.Id -Force -ErrorAction SilentlyContinue }
@@ -251,7 +268,7 @@ if ($Background) {
     throw
   }
 
-  Write-Host "Research OS Local API started in background (PID $($process.Id))."
+  Write-Host "Research OS Local API started at $apiUrl (PID $($process.Id))."
   Write-Host "Friend Service PID : $($friendProcess.Id)"
   Write-Host "API PID file       : $PidFile"
   Write-Host "Logs               : $LogDir"
@@ -274,21 +291,28 @@ try {
   Set-Content -Path $PidFile -Value $foregroundApi.Id -NoNewline
 
   $apiReady = $false
+  $apiUrl = ""
+  $apiPort = 0
   for ($i = 0; $i -lt 60; $i++) {
     if ($foregroundApi.HasExited) {
       $detail = if (Test-Path $ErrLog) { Get-Content $ErrLog -Tail 40 | Out-String } else { "no stderr log" }
       throw "Research OS API exited before becoming ready. $detail"
     }
-    try {
-      $health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
-      if ($health.status -eq "ok") { $apiReady = $true; break }
-    } catch {}
+    $endpoint = Get-RuntimeEndpoint "api"
+    if ($endpoint) {
+      $apiUrl = [string]$endpoint.url
+      $apiPort = [int]$endpoint.port
+      try {
+        $health = Invoke-RestMethod "$apiUrl/health" -TimeoutSec 2
+        if ($health.status -eq "ok") { $apiReady = $true; break }
+      } catch {}
+    }
     Start-Sleep -Milliseconds 500
   }
-  if (-not $apiReady) { throw "Research OS API did not become ready at http://127.0.0.1:$Port. See $ErrLog" }
+  if (-not $apiReady) { throw "Research OS API did not publish a valid dynamic endpoint and become ready. See $ErrLog" }
 
-  & $ServeScript -ApiPort $Port -ExpectedHostname $ExpectedServeHostname
-  Write-Host "Research OS API is ready at https://$ExpectedServeHostname"
+  & $ServeScript -ApiPort $apiPort -ExpectedHostname $ExpectedServeHostname
+  Write-Host "Research OS API is ready at $apiUrl and https://$ExpectedServeHostname"
   Write-Host "Press Ctrl+C to stop the local API and Friend Service."
   Wait-Process -Id $foregroundApi.Id
 }
