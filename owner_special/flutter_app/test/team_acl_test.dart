@@ -14,9 +14,10 @@ void main() {
     "viewer": {"switch_team": false, "create_team": false, "admin": false}
   },
   "services": {
-    "8787": "workspace",
-    "8788": "team",
-    "8790": "friend-internal"
+    "research_os_api": "workspace",
+    "team_engineering": "team",
+    "friend_internal": "friend-internal",
+    "developer_api": "developer-access"
   }
 }
 ''') as Map<String, dynamic>;
@@ -43,12 +44,17 @@ void main() {
     expect(viewer['admin'], isFalse);
   });
 
-  test('owner service topology contains only implemented contracts', () {
+  test('service topology uses stable identities, not port numbers', () {
     final services = Map<String, dynamic>.from(contract['services'] as Map);
-    expect(services.keys.toSet(), {'8787', '8788', '8790'});
-    expect(services['8787'], 'workspace');
-    expect(services['8788'], 'team');
-    expect(services['8790'], 'friend-internal');
-    expect(services.containsKey('8789'), isFalse);
+    expect(services.keys.toSet(), {
+      'research_os_api',
+      'team_engineering',
+      'friend_internal',
+      'developer_api',
+    });
+    expect(services['research_os_api'], 'workspace');
+    expect(services['team_engineering'], 'team');
+    expect(services['friend_internal'], 'friend-internal');
+    expect(services['developer_api'], 'developer-access');
   });
 }
