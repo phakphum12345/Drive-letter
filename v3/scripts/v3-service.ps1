@@ -217,9 +217,11 @@ try {
                 $registry = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
                 $registryPort = [int]$registry.port
                 $serviceRecord = Get-V3ServiceRecord
-                if ($registry.schema_version -eq 1 -and $registry.service_name -eq $ServiceName -and
-                    $registry.host -eq '127.0.0.1' -and $registry.health_path -eq '/health' -and
+                if ($registry.schema_version -eq 1 -and $registry.service -eq 'team_engineering' -and
+                    $registry.service_name -eq $ServiceName -and $registry.host -eq '127.0.0.1' -and
+                    $registry.health_path -eq '/health' -and
                     $registryPort -ge 1 -and $registryPort -le 65535 -and
+                    $registry.url -eq "http://127.0.0.1:$registryPort" -and
                     [int]$registry.process_id -gt 0 -and $serviceRecord -and
                     (Test-V3ProcessDescendant -ProcessId ([int]$registry.process_id) -AncestorProcessId ([int]$serviceRecord.ProcessId))) {
                     $Port = $registryPort
