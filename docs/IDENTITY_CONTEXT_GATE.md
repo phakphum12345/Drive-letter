@@ -11,7 +11,7 @@ Google / Research OS login
         -> signed Research OS session
         -> /v1/ai/generate
         -> Friend proxy
-        -> Owner Friend Service :8790
+        -> Owner Friend Service (runtime/friend.json, OS-assigned loopback port)
         -> owner/profile/session scoped memory
 ```
 
