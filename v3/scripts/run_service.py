@@ -29,6 +29,7 @@ def main() -> int:
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry = {
         "schema_version": 1,
+        "service": "team_engineering",
         "service_name": service_name,
         "host": host,
         "url": f"http://{host}:{port}",
