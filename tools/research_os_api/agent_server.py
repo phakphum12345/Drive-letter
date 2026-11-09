@@ -15,6 +15,10 @@ from api_auth import require_session
 from file_acl import ACLAuthorizationError, FileACLStore
 from google_identity import GoogleIdentityBroker
 from server import ResearchOSHandler
+try:
+    from runtime_endpoint_registry import publish_endpoint, remove_endpoint
+except ModuleNotFoundError:
+    from tools.research_os_api.runtime_endpoint_registry import publish_endpoint, remove_endpoint
 
 
 class AgentResearchOSHandler(ResearchOSHandler):
@@ -292,16 +296,29 @@ class AgentResearchOSHandler(ResearchOSHandler):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Research OS API with Multi-Agent Orchestrator")
     parser.add_argument("--host", default=os.getenv("RESEARCH_OS_API_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("RESEARCH_OS_API_PORT", "8787")))
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("RESEARCH_OS_AGENT_PORT") or os.getenv("PORT") or "0"),
+    )
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), AgentResearchOSHandler)
-    print(f"Research OS Agent API listening on http://{args.host}:{args.port}")
+    actual_port = int(server.server_address[1])
+    endpoint = None
+    if args.host in {"127.0.0.1", "localhost", "::1"}:
+        endpoint = publish_endpoint("agent", args.host, actual_port)
+        print(f"Research OS Agent API listening on {endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_AGENT_ENDPOINT={endpoint['url']}", flush=True)
+    else:
+        print(f"Research OS Agent API listening on http://{args.host}:{actual_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        if endpoint is not None:
+            remove_endpoint("agent", expected_pid=os.getpid())
     return 0
 
 
