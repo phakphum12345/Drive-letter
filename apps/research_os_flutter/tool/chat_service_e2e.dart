@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:research_os_flutter/src/api/api_endpoint_store.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 
 Future<void> main() async {
-  final baseUrl = Platform.environment['RESEARCH_OS_API_BASE_URL'] ??
-      'http://127.0.0.1:8787';
+  final configuredUrl = Platform.environment['RESEARCH_OS_API_BASE_URL']?.trim();
+  final baseUrl = configuredUrl != null && configuredUrl.isNotEmpty
+      ? ApiEndpointStore.normalize(configuredUrl)
+      : await ApiEndpointStore.load();
   final expectedProvider =
       Platform.environment['RESEARCH_OS_EXPECTED_PROVIDER']?.trim();
   final api = ResearchOSApiClient(baseUrl: baseUrl);
