@@ -45,18 +45,24 @@ void main() {
     expect(ApiEndpointStore.parseLocalEndpointRecord('{broken'), isNull);
   });
 
-  test('local endpoint remains a valid explicit profile value', () {
+  test('generated loopback endpoint is accepted as a valid API URL', () {
     expect(
-      ApiEndpointStore.normalize(ApiEndpointStore.localDefault),
-      ApiEndpointStore.localDefault,
+      ApiEndpointStore.normalize('http://127.0.0.1:43127'),
+      'http://127.0.0.1:43127',
     );
   });
-  test('saved Local endpoint is not silently migrated to the build default', () async {
+
+  test('stale saved loopback endpoint is discarded when no runtime registry exists', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
-      'research_os_api_base_url_v1': ApiEndpointStore.localDefault,
+      'research_os_api_base_url_v1': 'http://127.0.0.1:8787',
     });
 
-    expect(await ApiEndpointStore.load(), ApiEndpointStore.localDefault);
+    expect(
+      await ApiEndpointStore.load(),
+      ApiEndpointStore.profileUrl(ApiEndpointStore.connectionResearchOs),
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('research_os_api_base_url_v1'), isNull);
   });
 
   test('new installs default to the configured Research OS API endpoint', () async {
