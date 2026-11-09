@@ -42,7 +42,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         with (
             patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
                 ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
-                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                  "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
                 ({"run_id":456,"name":"Flutter macOS and iOS Xcode Recon Build",
                   "status":"completed","conclusion":"skipped"}, {}),
                 ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -73,7 +73,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         with (
             patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
                 ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
-                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                  "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
                 ({"run_id":456,"name":"Flutter macOS and iOS Xcode Recon Build",
                   "status":"completed","conclusion":"skipped"}, {}),
                 ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -101,7 +101,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         with (
             patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
                 ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
-                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                  "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
                 ({"run_id":456,"name":"Flutter macOS and iOS Xcode Recon Build",
                   "status":"completed","conclusion":"skipped"}, {}),
                 ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -129,7 +129,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         with (
             patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
                 ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
-                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                  "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
                 ({"run_id":456,"name":"Flutter macOS and iOS Xcode Recon Build",
                   "status":"completed","conclusion":"skipped"}, {}),
                 ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -158,7 +158,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         with (
             patch.object(VERIFY_PR_CHECKS, "request_json", side_effect=[
                 ({"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
-                  "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+                  "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
                 ({"run_id":456,"name":"Flutter macOS and iOS Xcode Recon Build",
                   "status":"completed","conclusion":"skipped"}, {}),
                 ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -171,6 +171,65 @@ class VerifyPrChecksTests(unittest.TestCase):
                 {"filename":"owner_special/research_os_friend/providers.py"},
             ]),
         ):
+            result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
+        self.assertEqual(result["bucket"], "unproven")
+
+    def test_scoped_skips_wait_for_parent_workflow_to_finish(self):
+        cases = [
+            (
+                {"name":"Flutter macOS and iOS Xcode Recon Build","status":"completed","conclusion":"skipped",
+                 "details_url":"https://github.com/o/r/actions/runs/456/job/789"},
+                {"name":"Research OS Gate","path":".github/workflows/research-os-gate.yml",
+                 "event":"pull_request","head_sha":"abc123","status":"in_progress","conclusion":None},
+                VERIFY_PR_CHECKS.prove_apple_scope_skip,
+            ),
+            (
+                {"name":"Flutter Windows build analyze test","status":"completed","conclusion":"skipped",
+                 "details_url":"https://github.com/o/r/actions/runs/456/job/789"},
+                {"name":"Research OS Final Gate","path":".github/workflows/research-os-final-gate.yml",
+                 "event":"pull_request","head_sha":"abc123","status":"in_progress","conclusion":None},
+                VERIFY_PR_CHECKS.prove_flutter_scope_skip,
+            ),
+            (
+                {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",
+                 "head_sha":"abc123","details_url":"https://github.com/o/r/actions/runs/456/job/789"},
+                {"name":"Research OS GitHub Pages","path":".github/workflows/research-os-github-pages.yml",
+                 "event":"pull_request","head_sha":"abc123","status":"in_progress","conclusion":None},
+                prove_pages_deploy_skip,
+            ),
+        ]
+        for check, run, prove in cases:
+            with self.subTest(name=check["name"]), patch.object(
+                VERIFY_PR_CHECKS, "request_json", return_value=(run, {})
+            ):
+                normalized = normalize_check_run(check, "999")
+                result = prove(check, normalized, "o/r", "36", "abc123")
+                self.assertEqual(result["bucket"], "pending")
+                self.assertEqual(result["state"], "PARENT_WORKFLOW_IN_PROGRESS")
+                self.assertEqual(result["reason_code"], "WAITING_FOR_PARENT_WORKFLOW_TERMINAL")
+                pending, failed, unproven = classify([result])
+                self.assertEqual(len(pending), 1)
+                self.assertFalse(failed)
+                self.assertFalse(unproven)
+
+    def test_failed_parent_workflow_does_not_authorize_a_scoped_skip(self):
+        check = {
+            "name": "Flutter macOS and iOS Xcode Recon Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "head_sha": "abc123",
+            "details_url": "https://github.com/o/r/actions/runs/456/job/789",
+        }
+        normalized = normalize_check_run(check, "999")
+        failed_run = {
+            "name": "Research OS Gate",
+            "path": ".github/workflows/research-os-gate.yml",
+            "event": "pull_request",
+            "head_sha": "abc123",
+            "status": "completed",
+            "conclusion": "failure",
+        }
+        with patch.object(VERIFY_PR_CHECKS, "request_json", return_value=(failed_run, {})):
             result = VERIFY_PR_CHECKS.prove_apple_scope_skip(check, normalized, "o/r", "36", "abc123")
         self.assertEqual(result["bucket"], "unproven")
 
@@ -193,7 +252,7 @@ class VerifyPrChecksTests(unittest.TestCase):
     def test_flutter_skip_is_not_applicable_only_with_exact_scope_evidence(self, request, _jobs, _files):
         request.side_effect = [
             ({"name":"Research OS Final Gate","path":".github/workflows/research-os-final-gate.yml",
-              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+              "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
             ({"run_id":456,"name":"Flutter Windows build analyze test",
               "status":"completed","conclusion":"skipped"}, {}),
             ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -215,7 +274,7 @@ class VerifyPrChecksTests(unittest.TestCase):
     def test_flutter_skip_with_relevant_changed_file_remains_unproven(self, request, _jobs, _files):
         request.side_effect = [
             ({"name":"Research OS Final Gate","path":".github/workflows/research-os-final-gate.yml",
-              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+              "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
             ({"run_id":456,"name":"Flutter Windows build analyze test",
               "status":"completed","conclusion":"skipped"}, {}),
             ({"head":{"sha":"abc123"},"base":{"sha":"base456"}}, {}),
@@ -242,7 +301,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         request.side_effect = [
             ({"name":"Research OS GitHub Pages",
               "path":".github/workflows/research-os-github-pages.yml",
-              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+              "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
             ({"run_id":456,"head_sha":"abc123","name":"Deploy Research OS GitHub Pages",
               "status":"completed","conclusion":"skipped"}, {}),
         ]
@@ -263,7 +322,7 @@ class VerifyPrChecksTests(unittest.TestCase):
         request.side_effect = [
             ({"name":"Research OS GitHub Pages",
               "path":".github/workflows/research-os-github-pages.yml",
-              "event":"pull_request","head_sha":"abc123","conclusion":"success"}, {}),
+              "event":"pull_request","head_sha":"abc123","status":"completed","conclusion":"success"}, {}),
             ({"run_id":456,"head_sha":"abc123","name":"Deploy Research OS GitHub Pages",
               "status":"completed","conclusion":"skipped"}, {}),
         ]
@@ -276,7 +335,7 @@ class VerifyPrChecksTests(unittest.TestCase):
     @patch.object(VERIFY_PR_CHECKS, "request_json", return_value=({
         "name":"Research OS GitHub Pages",
         "path":".github/workflows/research-os-github-pages.yml",
-        "event":"push","head_sha":"abc123","conclusion":"success",
+        "event":"push","head_sha":"abc123","status":"completed","conclusion":"success",
     }, {}))
     def test_pages_deploy_skip_from_non_pr_event_remains_unproven(self, request):
         check = {"name":"Deploy Research OS GitHub Pages","status":"completed","conclusion":"skipped",

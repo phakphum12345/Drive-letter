@@ -28,6 +28,7 @@ def scope_run(*, sha: str = HEAD, conclusion: str = "success", path: str = ".git
         "path": path,
         "event": "pull_request",
         "head_sha": sha,
+        "status": "completed",
         "conclusion": conclusion,
     }
 

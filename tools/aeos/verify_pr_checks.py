@@ -175,6 +175,23 @@ def classify(checks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[d
         [c for c in checks if c.get("bucket") == "unproven"],
     )
 
+def mark_parent_workflow_pending(
+    normalized: dict[str, Any],
+    run: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Wait for a parent workflow to become terminal before judging its skip."""
+    status = str(run.get("status") or "").lower()
+    if status not in PENDING_STATUSES:
+        return None
+    result = dict(normalized)
+    result.update({
+        "bucket": "pending",
+        "state": f"PARENT_WORKFLOW_{status.upper()}",
+        "reason_code": "WAITING_FOR_PARENT_WORKFLOW_TERMINAL",
+        "source": "check_run+parent_workflow_pending",
+    })
+    return result
+
 
 def reconcile_pending_job_check(
     check: dict[str, Any],
@@ -273,15 +290,16 @@ def prove_flutter_scope_skip(
     run_id, job_id = match.groups()
     repo_path = urllib.parse.quote(repository, safe="/")
     run, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/runs/{run_id}")
-    if not isinstance(run, dict):
-        return normalized
-    if (
+    if not isinstance(run, dict) or (
         run.get("name") != "Research OS Final Gate"
         or run.get("path") != ".github/workflows/research-os-final-gate.yml"
         or run.get("event") != "pull_request"
         or run.get("head_sha") != expected_head_sha
-        or run.get("conclusion") != "success"
     ):
+        return normalized
+    if run.get("status") != "completed":
+        return mark_parent_workflow_pending(normalized, run) or normalized
+    if run.get("conclusion") != "success":
         return normalized
 
     skipped_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
@@ -381,8 +399,11 @@ def prove_apple_scope_skip(
         or run.get("path") != ".github/workflows/research-os-gate.yml"
         or run.get("event") != "pull_request"
         or run.get("head_sha") != expected_head_sha
-        or run.get("conclusion") != "success"
     ):
+        return normalized
+    if run.get("status") != "completed":
+        return mark_parent_workflow_pending(normalized, run) or normalized
+    if run.get("conclusion") != "success":
         return normalized
 
     skipped_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")
@@ -500,8 +521,11 @@ def prove_pages_deploy_skip(
         or run.get("path") != ".github/workflows/research-os-github-pages.yml"
         or run.get("event") != "pull_request"
         or run.get("head_sha") != expected_head_sha
-        or run.get("conclusion") != "success"
     ):
+        return normalized
+    if run.get("status") != "completed":
+        return mark_parent_workflow_pending(normalized, run) or normalized
+    if run.get("conclusion") != "success":
         return normalized
 
     deploy_job, _ = request_json(f"https://api.github.com/repos/{repo_path}/actions/jobs/{job_id}")

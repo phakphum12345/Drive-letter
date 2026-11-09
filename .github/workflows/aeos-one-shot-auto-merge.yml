@@ -12,11 +12,11 @@ on:
         required: true
         type: string
   workflow_run:
-    # One trusted PR-gate completion is enough to start a review. The verifier
-    # waits for all checks on the exact current PR HEAD; listening to every
-    # upstream workflow multiplied long-running reviews for the same SHA.
+    # Start after Research OS Gate is terminal so its conditional Apple/Flutter
+    # skip jobs can be reconciled against the completed parent run. The verifier
+    # still waits for every other check on the exact current PR HEAD.
     workflows:
-      - AEOS Master Assurance Gate
+      - Research OS Gate
     branches-ignore:
       - main
     types: [completed]
