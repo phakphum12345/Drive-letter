@@ -102,7 +102,7 @@ class ResearchOSAPITests(unittest.TestCase):
             "error": "provider_health_not_supported",
         }).encode("utf-8")
         error = urllib.error.HTTPError(
-            "http://127.0.0.1:8790/owner/provider/health",
+            "http://127.0.0.1:43129/owner/provider/health",
             503,
             "Service Unavailable",
             hdrs=None,
