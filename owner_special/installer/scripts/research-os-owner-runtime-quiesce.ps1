@@ -2,11 +2,26 @@
     [Parameter(Mandatory=$true)][string]$PythonTarget,
     [Parameter(Mandatory=$true)][string]$AppTarget,
     [Parameter(Mandatory=$true)][string]$ServiceHostTarget,
-    [int]$Port = 8790,
+    [int]$Port = 0,
     [string]$LogPath = (Join-Path $env:TEMP 'ResearchOS-Owner-Quiesce.log')
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Port -le 0) {
+    $registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\friend.json'
+    try {
+        if (Test-Path $registryPath -PathType Leaf) {
+            $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+            $candidate = [int]$record.port
+            if ($record.schema_version -eq 1 -and $record.service -eq 'friend' -and
+                $record.host -eq '127.0.0.1' -and $candidate -ge 1 -and $candidate -le 65535 -and
+                $record.url -eq "http://127.0.0.1:$candidate") {
+                $Port = $candidate
+            }
+        }
+    } catch {}
+}
 
 function Write-Diagnostic([string]$Message) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') $Message"
@@ -119,6 +134,7 @@ function Get-OwnerProcesses {
 }
 
 function Get-OwnerListeners {
+    if ($Port -lt 1 -or $Port -gt 65535) { return @() }
     return @(
         Get-NetTCPConnection -ErrorAction Stop |
         Where-Object {
