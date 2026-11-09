@@ -5,7 +5,7 @@ param(
 
     [string]$ServiceName = 'ResearchOSV3Service',
     [ValidateRange(0, 65535)]
-    [int]$Port = 8788,
+    [int]$Port = 0,
     [ValidateRange(0, 1000)]
     [int]$PortScanCount = 100
 )
@@ -175,7 +175,7 @@ if (Test-Path $configPath -PathType Leaf) {
     }
     catch {
         # If a service exists, an unreadable port means its listener cannot be
-        # safely identified. Fail closed instead of cleaning up against 8788.
+        # safely identified. Fail closed instead of cleaning up against an assumed port.
         if ($Action -eq 'uninstall' -or (Get-V3ServiceRecord)) {
             throw "Cannot safely determine the configured V3 service port from $configPath"
         }
