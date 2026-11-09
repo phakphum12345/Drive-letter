@@ -19,7 +19,7 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
-สำหรับตัวติดตั้ง Windows แบบ Service: API Service จะได้รับ `RESEARCH_OS_FRIEND_URL=http://127.0.0.1:8790` จาก ServiceHost และ registry environment ซึ่งตรงกับพอร์ตที่ติดตั้ง `ResearchOSOwnerFriendService`; อย่าใช้ `127.0.0.1:0` เป็น Friend endpoint. ตรวจสุขภาพได้ด้วย `http://127.0.0.1:8787/owner/health` หลังทั้งสอง Service ทำงานแล้ว.
+สำหรับตัวติดตั้ง Windows แบบ Service: API และ Friend จะ bind ด้วย port `0` เพื่อให้ OS จัดสรรพอร์ตจริงในขั้นตอนเปิด socket. แต่ละบริการเผยแพร่ endpoint ลง `%ProgramData%\\ResearchOS\\runtime\\api.json` และ `friend.json` ตามลำดับ; API อ่าน Friend endpoint จาก registry โดยไม่ต้องฝังหมายเลขพอร์ต. Flutter บน Windows อ่าน API endpoint จาก registry นี้อัตโนมัติ ส่วน Web/iPhone ใช้ HTTPS Tailscale hostname ที่คงที่ ไม่ต้องทราบพอร์ตภายใน.
 
 ```powershell
 .\scripts\start-research-os-local.ps1
@@ -32,7 +32,7 @@ Launcher จะ:
 3. start `owner_special/scripts/run_friend_service.py` ที่พอร์ตภายใน
 4. รอจน Friend health เป็น `ok`
 5. ตั้ง `RESEARCH_OS_FRIEND_URL` และ `RESEARCH_OS_AI_ROUTE=friend`
-6. start Research OS API ที่พอร์ต loopback อีกพอร์ตหนึ่ง
+6. start Research OS API ที่พอร์ต loopback ซึ่ง OS จัดสรรแยกจาก Friend
 7. เมื่อรันแบบ foreground จะ cleanup Friend Service ตอนจบ
 
 Background mode:
@@ -156,7 +156,7 @@ Render starts the Friend service inside the existing API container on loopback. 
 
 Google Sign-in เป็นช่องทางลงชื่อเข้าใช้ที่เปิดใช้งานอยู่ในขณะนี้และใช้ Research OS session กลาง; Email OTP ถูกพักการใช้งานชั่วคราวทั้งใน UI และ API จึงไม่ต้องตั้งค่า Resend หรือ DNS สำหรับการเข้าใช้งานในช่วงนี้. QR pairing ยังคงใช้ one-time pairing secret และ TTL 180 วินาที. กำหนด `RESEARCH_OS_API_BASE_URL` เป็น HTTPS origin กลางเดียวสำหรับ Flutter, Web, Google callbacks และ QR URLs (รองรับ `RESEARCH_OS_PUBLIC_BASE_URL` เป็น alias เดิม). ลงทะเบียน Google callback URI ใน Google Cloud Console ให้ตรงกับ path ที่ API ส่งกลับ.
 
-API local bind ที่ `127.0.0.1` โดยค่าเริ่มต้น; อย่าเปิด internal API/Friend ports สู่ public internet. ใช้ Tailscale Serve เป็นทางเข้า.
+API local bind ที่ `127.0.0.1` โดยค่าเริ่มต้น; อย่าเปิด internal API/Friend ports สู่ public internet. Runtime registry เป็นข้อมูลภายในเครื่องเท่านั้นและไม่เก็บ Secret. ใช้ Tailscale Serve เป็นทางเข้า.
 
 ก่อนใช้ในเครือข่ายหรือ Production ต้องมีอย่างน้อย:
 
