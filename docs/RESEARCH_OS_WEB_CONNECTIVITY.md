@@ -16,7 +16,7 @@ The browser must not use `localhost` or `127.0.0.1` as its API base: on an iPhon
 ## Native Flutter endpoint contract
 
 - The Flutter API default is also `https://phakphumwir.tail4b06c9.ts.net`, so new installs do not target a hosted API.
-- A saved endpoint on an `*.onrender.com` host is migrated to Tailscale Serve on load; saved Local (`127.0.0.1:8787`) and custom endpoints remain explicit user choices.
+- A saved endpoint on an `*.onrender.com` host is migrated to Tailscale Serve on load. On Windows, saved loopback URLs are refreshed from the current generated `runtime/api.json`; stale loopback URLs are discarded if no runtime record exists. Custom non-loopback endpoints remain explicit user choices.
 - A Windows Flutter process discovers the current local API URL from `%ProgramData%\\ResearchOS\\runtime\\api.json` or the configured local data directory. It does not assume a fixed port.
 - An iPhone must not use `127.0.0.1` for the Windows host; it uses the stable HTTPS Tailscale hostname.
 
@@ -44,10 +44,10 @@ Source contract tests can verify the configured URL and browser request policy. 
 
 ## Dynamic local service endpoint contract
 
-- API and Friend bind to loopback with port `0`; the operating system chooses the actual socket port atomically during bind.
-- The API publishes `runtime/api.json`; Friend publishes `runtime/friend.json`. Each service owns a separate atomic JSON file so concurrent writes cannot overwrite another service's record.
+- API, Friend, Developer API, and V3 local services request OS-assigned ports (`0`); the operating system chooses the actual socket port atomically during bind.
+- The API publishes `runtime/api.json`, Friend publishes `runtime/friend.json`, and Developer API publishes `runtime/developer.json`. Each service owns a separate atomic JSON file so concurrent writes cannot overwrite another service's record. V3 retains its own atomic `service.json` registry.
 - Records contain schema version, service name, loopback host, actual port, URL, process ID, and update timestamp. They contain no credentials or user data.
 - Consumers validate the schema and loopback address before using a record. Missing, malformed, mismatched, or non-loopback records fail closed.
-- API resolves Friend from the runtime registry at request time. Windows Flutter resolves the API registry on Windows; Web/iOS use the stable HTTPS endpoint.
+- API resolves Friend from the runtime registry at request time. Windows Flutter resolves API and Developer API registries on Windows; Web/iOS use configured stable HTTPS endpoints.
 - Ollama remains at `127.0.0.1:11434` with the existing model configuration. It is a provider endpoint, not a Research OS service port.
 - Service shutdown removes only the endpoint record owned by that process ID. It does not terminate listeners by port number.
