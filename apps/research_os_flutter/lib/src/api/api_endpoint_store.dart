@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'local_endpoint_discovery_stub.dart'
+    if (dart.library.io) 'local_endpoint_discovery_io.dart' as endpoint_discovery;
 
 class ApiEndpointStore {
   ApiEndpointStore._();
@@ -132,32 +133,8 @@ class ApiEndpointStore {
     }
   }
 
-  static Future<String?> discoverLocalEndpoint() async {
-    if (!Platform.isWindows) return null;
-    final candidates = <String>[];
-    final configuredData = Platform.environment['RESEARCH_OS_DATA_DIR']?.trim();
-    if (configuredData != null && configuredData.isNotEmpty) {
-      candidates.add('$configuredData\\runtime\\api.json');
-    }
-    final programData = Platform.environment['PROGRAMDATA'] ?? r'C:\\ProgramData';
-    candidates.add('$programData\\ResearchOS\\runtime\\api.json');
-    final userProfile = Platform.environment['USERPROFILE'];
-    if (userProfile != null && userProfile.isNotEmpty) {
-      candidates.add('$userProfile\\ResearchOSData\\runtime\\api.json');
-    }
-
-    for (final candidate in candidates.toSet()) {
-      try {
-        final file = File(candidate);
-        if (!await file.exists()) continue;
-        final endpoint = parseLocalEndpointRecord(await file.readAsString());
-        if (endpoint != null) return endpoint;
-      } on FileSystemException {
-        // A service may be updating its atomic registry file during startup.
-        continue;
-      }
-    }
-    return null;
+  static Future<String?> discoverLocalEndpoint() {
+    return endpoint_discovery.discoverLocalEndpoint();
   }
 
   static Future<String> load() async {
