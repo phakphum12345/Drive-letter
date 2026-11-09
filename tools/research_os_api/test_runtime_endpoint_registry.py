@@ -47,6 +47,31 @@ class RuntimeEndpointRegistryTests(unittest.TestCase):
             }), encoding="utf-8")
             self.assertIsNone(read_endpoint("api", directory=temporary))
 
+
+    def test_developer_endpoint_is_atomic_and_pid_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            record = publish_endpoint(
+                "developer", "127.0.0.1", 43127, directory=temporary, pid=4242
+            )
+            self.assertEqual("developer", record["service"])
+            self.assertEqual("http://127.0.0.1:43127", record["url"])
+            self.assertEqual(4242, read_endpoint("developer", directory=temporary)["pid"])
+            self.assertFalse(
+                remove_endpoint("developer", directory=temporary, expected_pid=99)
+            )
+            self.assertTrue(
+                remove_endpoint("developer", directory=temporary, expected_pid=4242)
+            )
+            self.assertIsNone(read_endpoint("developer", directory=temporary))
+
+    def test_ipv6_loopback_url_is_bracketed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            record = publish_endpoint(
+                "api", "::1", 43128, directory=temporary, pid=4243
+            )
+            self.assertEqual("http://[::1]:43128", record["url"])
+            self.assertEqual(record, read_endpoint("api", directory=temporary))
+
     def test_cleanup_is_pid_scoped_and_does_not_remove_new_owner_record(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             publish_endpoint("friend", "127.0.0.1", 43122, directory=temporary, pid=202)
