@@ -53,6 +53,21 @@ function Get-OwnerBundledPythonProcesses {
     })
 }
 
+function Remove-StaleOwnerEndpoint {
+    $registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\friend.json'
+    if (-not (Test-Path $registryPath -PathType Leaf)) { return }
+    try {
+        $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+        if ($record.schema_version -ne 1 -or $record.service -ne 'friend') { return }
+        $recordPid = [int]$record.pid
+        if ($recordPid -gt 0 -and -not (Get-CimInstance Win32_Process -Filter "ProcessId=$recordPid" -ErrorAction SilentlyContinue)) {
+            Remove-Item -LiteralPath $registryPath -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Warning 'Could not validate stale Friend runtime endpoint record; leaving it untouched.'
+    }
+}
+
 function Get-OwnerRuntimePort {
     $registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\friend.json'
     if (-not (Test-Path $registryPath -PathType Leaf)) { return 0 }
@@ -134,6 +149,7 @@ function Remove-OwnerService {
     }
 
     Stop-OwnerBundledPythonFallback
+    Remove-StaleOwnerEndpoint
     if (@(Get-OwnerBundledPythonProcesses).Count -ne 0) {
         Show-OwnerServiceDiagnostics
         throw 'Bundled Python verification failed after service removal'
