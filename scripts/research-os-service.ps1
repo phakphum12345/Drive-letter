@@ -245,6 +245,7 @@ switch ($Action) {
     [Environment]::SetEnvironmentVariable('RESEARCH_OS_API_HOST', '127.0.0.1', 'Machine')
     [Environment]::SetEnvironmentVariable('RESEARCH_OS_API_PORT', '0', 'Machine')
     [Environment]::SetEnvironmentVariable('RESEARCH_OS_RUNTIME_DIR', $RuntimeDir, 'Machine')
+    [Environment]::SetEnvironmentVariable('RESEARCH_OS_RUNTIME_DIR', $RuntimeDir, 'Machine')
 
     $existing = Get-ServiceSafe
     if ($existing) {
