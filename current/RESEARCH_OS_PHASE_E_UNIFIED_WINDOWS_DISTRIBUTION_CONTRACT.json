@@ -90,10 +90,11 @@
     "uninstall_required": true,
     "uninstall_root_must_be_absent": true,
     "services_must_be_absent_after_uninstall": true,
-    "ports_must_be_released_after_uninstall": [
-      8787,
-      8790
-    ],
-    "release_authority": "FINAL_GATE"
+    "release_authority": "FINAL_GATE",
+    "runtime_endpoint_records_must_be_removed_after_uninstall": true,
+    "runtime_endpoint_records": [
+      "%ProgramData%/ResearchOS/runtime/api.json",
+      "%ProgramData%/ResearchOS/runtime/friend.json"
+    ]
   }
 }
