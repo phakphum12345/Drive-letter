@@ -186,7 +186,7 @@ class _DeveloperAccessPageState extends State<DeveloperAccessPage> {
                       _HeaderCard(principal: _principal ?? 'Authenticated owner'),
                       const SizedBox(height: 18),
                       FlutterCodeToolPage(
-                        client: widget.client,
+                        client: _client!,
                         principal: _principal ?? 'Authenticated owner',
                       ),
                       const SizedBox(height: 22),
