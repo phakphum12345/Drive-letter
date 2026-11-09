@@ -22,7 +22,19 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-BASE_URL = os.getenv("RESEARCH_OS_EVAL_BASE_URL", "http://127.0.0.1:8787").rstrip("/")
+BASE_URL = os.getenv("RESEARCH_OS_EVAL_BASE_URL", "").rstrip("/")
+
+
+def _resolve_base_url() -> str:
+    if BASE_URL:
+        return BASE_URL
+    endpoint = read_endpoint("agent")
+    if endpoint:
+        return str(endpoint["url"]).rstrip("/")
+    raise RuntimeError(
+        "Agent API endpoint is not registered; start agent_server.py with --port 0 "
+        "or set RESEARCH_OS_EVAL_BASE_URL."
+    )
 REPORT_PATH = Path(os.getenv("RESEARCH_OS_EVAL_REPORT", "ai-capability-report.json"))
 
 
@@ -35,7 +47,7 @@ def _clean(text: str) -> str:
 
 def _post(path: str, payload: dict[str, object]) -> tuple[dict[str, Any], int]:
     request = urllib.request.Request(
-        f"{BASE_URL}{path}",
+        f"{_resolve_base_url()}{path}",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
