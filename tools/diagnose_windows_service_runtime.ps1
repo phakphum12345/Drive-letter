@@ -9,6 +9,7 @@ param(
     [ValidateRange(0, 65535)][int]$ApiPort = 0,
     [ValidateRange(0, 65535)][int]$OwnerPort = 0,
     [ValidateRange(0, 65535)][int]$DeveloperPort = 0,
+    [ValidateRange(0, 65535)][int]$AgentPort = 0,
     [ValidateRange(1, 1440)][int]$EventLookbackMinutes = 30,
     [ValidateRange(1, 1000)][int]$LogTailLines = 100,
     [string]$OutputPath
@@ -152,10 +153,12 @@ function Resolve-RuntimePort {
 $ApiPort = Resolve-RuntimePort -Service 'api' -OverridePort $ApiPort
 $OwnerPort = Resolve-RuntimePort -Service 'friend' -OverridePort $OwnerPort
 $DeveloperPort = Resolve-RuntimePort -Service 'developer' -OverridePort $DeveloperPort
+$AgentPort = Resolve-RuntimePort -Service 'agent' -OverridePort $AgentPort
 foreach ($entry in @(
     @{ name = 'api'; port = $ApiPort },
     @{ name = 'friend'; port = $OwnerPort },
-    @{ name = 'developer'; port = $DeveloperPort }
+    @{ name = 'developer'; port = $DeveloperPort },
+    @{ name = 'agent'; port = $AgentPort }
 )) {
     if ([int]$entry.port -le 0) {
         Add-Finding 'INFO' 'RUNTIME_ENDPOINT_NOT_REGISTERED' "No current $($entry.name) port was discovered; pass an explicit override only when intentionally testing an unmanaged endpoint."
@@ -231,6 +234,9 @@ if ($OwnerPort -gt 0) {
 }
 if ($DeveloperPort -gt 0) {
     $http += Test-LocalHttpEndpoint -Name 'developer_api_health' -Uri "http://127.0.0.1:$DeveloperPort/health"
+}
+if ($AgentPort -gt 0) {
+    $http += Test-LocalHttpEndpoint -Name 'agent_api_health' -Uri "http://127.0.0.1:$AgentPort/health"
 }
 
 $serviceOwnership = @()
@@ -314,7 +320,7 @@ $report = [pscustomobject]@{
     parameters = [pscustomobject]@{
         install_root = $InstallRoot; owner_root = $OwnerRoot
         api_service = $ApiServiceName; owner_service = $OwnerServiceName
-        api_port = $ApiPort; owner_port = $OwnerPort; developer_port = $DeveloperPort
+        api_port = $ApiPort; owner_port = $OwnerPort; developer_port = $DeveloperPort; agent_port = $AgentPort
         endpoint_registry_dir = $runtimeDir
         event_lookback_minutes = $EventLookbackMinutes
     }
