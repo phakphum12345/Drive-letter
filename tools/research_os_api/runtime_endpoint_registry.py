@@ -1,6 +1,6 @@
 """Atomic, loopback-only runtime endpoint registry for Research OS services.
 
-Each service owns one JSON record (api.json / friend.json), avoiding lost updates
+Each service owns one JSON record (api.json / friend.json / developer.json), avoiding lost updates
 when independent Windows services publish endpoints concurrently.
 """
 from __future__ import annotations
