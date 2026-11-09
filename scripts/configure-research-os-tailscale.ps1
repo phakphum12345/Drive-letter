@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$ServiceName = 'ResearchOSService',
-  [int]$ApiPort = 8787,
+  [ValidateRange(0, 65535)][int]$ApiPort = 0,
   [switch]$ConfigureGoogleRedirects
 )
 
@@ -20,11 +20,30 @@ if (-not $tailscale) {
   throw 'tailscale.exe was not found in PATH. Install/sign in to Tailscale first.'
 }
 
+if ($ApiPort -eq 0) {
+  $registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\api.json'
+  if (-not (Test-Path -LiteralPath $registryPath -PathType Leaf)) {
+    throw "Research OS API endpoint registry was not found: $registryPath. Start ResearchOSService first."
+  }
+  try {
+    $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+    $registeredPort = [int]$record.port
+    if ($record.schema_version -ne 1 -or $record.service -ne 'api' -or
+        $record.host -ne '127.0.0.1' -or $registeredPort -lt 1 -or $registeredPort -gt 65535 -or
+        $record.url -ne "http://127.0.0.1:$registeredPort") {
+      throw 'The API runtime endpoint record failed validation.'
+    }
+    $ApiPort = $registeredPort
+  } catch {
+    throw "Research OS API endpoint registry is invalid: $($_.Exception.Message)"
+  }
+}
+
 try {
   Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$ApiPort/health" -TimeoutSec 5 | Out-Null
 }
 catch {
-  throw "Research OS local API is not healthy at http://127.0.0.1:$ApiPort/health. Start ResearchOSService first."
+  throw "Research OS local API is not healthy at the discovered endpoint http://127.0.0.1:$ApiPort/health. Start ResearchOSService first."
 }
 
 $statusJson = & $tailscale.Source status --json
