@@ -4,7 +4,7 @@ param(
     [string]$DataDir = "$env:ProgramData\ResearchOSOwnerSpecial",
     [string]$ServiceName = 'ResearchOSOwnerFriendService',
     [string]$OwnerId = 'owner',
-    [int]$Port = 8790,
+    [int]$Port = 0,
     # CI-only deterministic provider override. Production installs omit this argument
     # and retain the existing Local/Ollama default selected by ServiceHost.
     [ValidateSet('mock')][string]$TestProvider
@@ -53,9 +53,23 @@ function Get-OwnerBundledPythonProcesses {
     })
 }
 
-function Get-OwnerListeners {
+function Get-OwnerRuntimePort {
+    $registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\friend.json'
+    if (-not (Test-Path $registryPath -PathType Leaf)) { return 0 }
+    try {
+        $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+        $value = [int]$record.port
+        if ($record.schema_version -eq 1 -and $record.service -eq 'friend' -and
+            $record.host -eq '127.0.0.1' -and $value -ge 1 -and $value -le 65535 -and
+            $record.url -eq "http://127.0.0.1:$value") { return $value }
+    } catch {}
+    return 0
+}
+
+function Get-OwnerListeners([int]$ListenPort) {
+    if ($ListenPort -lt 1 -or $ListenPort -gt 65535) { return @() }
     return @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {
-        $_.LocalPort -eq $Port -and $_.State -eq 'Listen'
+        $_.LocalPort -eq $ListenPort -and $_.State -eq 'Listen'
     })
 }
 
@@ -88,6 +102,7 @@ function Stop-OwnerBundledPythonFallback {
 }
 
 function Remove-OwnerService {
+    $previousPort = Get-OwnerRuntimePort
     $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($existing) {
         if ($existing.Status -ne 'Stopped') {
@@ -126,7 +141,7 @@ function Remove-OwnerService {
 
     $listeners = @()
     for ($i = 0; $i -lt 40; $i++) {
-        $listeners = @(Get-OwnerListeners)
+        $listeners = @(Get-OwnerListeners $previousPort)
         if ($listeners.Count -eq 0) { break }
         Start-Sleep -Milliseconds 250
     }
@@ -175,19 +190,29 @@ New-Service -Name $ServiceName -BinaryPathName $binary -DisplayName 'Research OS
 Start-Service -Name $ServiceName
 
 $ready = $false
-for ($i = 0; $i -lt 80; $i++) {
+$actualPort = 0
+$registryPath = Join-Path $env:ProgramData 'ResearchOS\runtime\friend.json'
+for ($i = 0; $i -lt 100; $i++) {
     try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/owner/health" -TimeoutSec 2
-        if ($health.status -eq 'ok') { $ready = $true; break }
+        if (Test-Path $registryPath -PathType Leaf) {
+            $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+            $candidate = [int]$record.port
+            if ($record.schema_version -eq 1 -and $record.service -eq 'friend' -and
+                $record.host -eq '127.0.0.1' -and $candidate -ge 1 -and $candidate -le 65535 -and
+                $record.url -eq "http://127.0.0.1:$candidate") {
+                $health = Invoke-RestMethod -Uri "$($record.url)/owner/health" -TimeoutSec 2
+                if ($health.status -eq 'ok') { $actualPort = $candidate; $ready = $true; break }
+            }
+        }
     } catch {}
     Start-Sleep -Milliseconds 500
 }
 if (-not $ready) {
     Show-OwnerServiceDiagnostics
-    throw 'Owner Friend Windows Service did not become HTTP-ready after installation'
+    throw 'Owner Friend Windows Service did not publish a valid dynamic endpoint and become HTTP-ready after installation'
 }
 
-$listeners = @(Get-OwnerListeners)
+$listeners = @(Get-OwnerListeners $actualPort)
 if ($listeners.Count -lt 1) { throw 'Owner Friend service has no listening socket after installation' }
 if ($listeners | Where-Object { $_.LocalAddress -notin @('127.0.0.1','::1') }) { throw 'Owner Friend service is not loopback-only' }
-Write-Host "Owner Friend service installed and ready on 127.0.0.1:$Port"
+Write-Host "Owner Friend service installed and ready on 127.0.0.1:$actualPort"
