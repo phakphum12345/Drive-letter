@@ -63,7 +63,7 @@ begin
   if CurStep = ssInstall then
   begin
     Log('Research OS upgrade/install is preserving ProgramData\ResearchOS as the local data boundary.');
-    Log('Research OS installation also installs the local Owner Friend Service on loopback port 8790.');
+    Log('Research OS installation also installs the local Owner Friend Service on a generated loopback port.');
   end;
   if CurStep = ssPostInstall then
   begin
