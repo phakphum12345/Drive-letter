@@ -119,8 +119,13 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "ResearchOSOwnerFriendService",
     ]:
         errors.append("installer E2E service set drifted")
-    if install_e2e.get("ports_must_be_released_after_uninstall") != [8787, 8790]:
-        errors.append("installer E2E port set drifted")
+    if install_e2e.get("runtime_endpoint_records_must_be_removed_after_uninstall") is not True:
+        errors.append("installer E2E runtime endpoint cleanup invariant missing")
+    if set(install_e2e.get("runtime_endpoint_records", [])) != {
+        "%ProgramData%/ResearchOS/runtime/api.json",
+        "%ProgramData%/ResearchOS/runtime/friend.json",
+    }:
+        errors.append("installer E2E runtime endpoint registry set drifted")
     if install_e2e.get("release_authority") != "FINAL_GATE":
         errors.append("installer E2E release authority drifted")
 
