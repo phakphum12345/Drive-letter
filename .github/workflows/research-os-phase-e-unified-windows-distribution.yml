@@ -730,10 +730,15 @@ jobs:
 
           $apiEndpointBeforeUninstall = Get-RuntimeEndpoint 'api'
           $friendEndpointBeforeUninstall = Get-RuntimeEndpoint 'friend'
-          if (-not $apiEndpointBeforeUninstall -or -not $friendEndpointBeforeUninstall) {
-            throw 'Cannot establish generated API/Friend ports before uninstall verification.'
+          $developerEndpointBeforeUninstall = Get-RuntimeEndpoint 'developer'
+          if (-not $apiEndpointBeforeUninstall -or -not $friendEndpointBeforeUninstall -or -not $developerEndpointBeforeUninstall) {
+            throw 'Cannot establish generated API/Friend/Developer ports before uninstall verification.'
           }
-          $portsBeforeUninstall = @([int]$apiEndpointBeforeUninstall.port, [int]$friendEndpointBeforeUninstall.port) | Select-Object -Unique
+          $portsBeforeUninstall = @(
+            [int]$apiEndpointBeforeUninstall.port,
+            [int]$friendEndpointBeforeUninstall.port,
+            [int]$developerEndpointBeforeUninstall.port
+          ) | Select-Object -Unique
 
           $uninstaller = Join-Path $installRoot 'unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Inno Setup uninstaller missing.' }
@@ -775,7 +780,7 @@ jobs:
           if ($remainingMainService) { throw 'Research OS service remained after uninstall.' }
           $remainingOwnerService = Get-CimInstance Win32_Service -Filter "Name='ResearchOSOwnerFriendService'" -ErrorAction SilentlyContinue
           if ($remainingOwnerService) { throw 'Owner Friend service remained after uninstall.' }
-          foreach ($serviceName in @('api', 'friend')) {
+          foreach ($serviceName in @('api', 'friend', 'developer')) {
             $registryPath = Join-Path $runtimeDir "$serviceName.json"
             if (Test-Path $registryPath -PathType Leaf) { throw "Runtime endpoint record remained after uninstall: $registryPath" }
           }
