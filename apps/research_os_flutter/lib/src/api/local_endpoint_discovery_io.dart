@@ -36,7 +36,10 @@ Future<String?> _discoverLoopbackEndpoint(String service) async {
         continue;
       }
       final port = decoded['port'];
-      if (port is! int || port < 1 || port > 65535) continue;
+      final pid = decoded['pid'];
+      if (port is! int || port < 1 || port > 65535 || pid is! int || pid < 1) {
+        continue;
+      }
       final expected = 'http://127.0.0.1:$port';
       if (decoded['url'] == expected) return expected;
     } on FileSystemException {
