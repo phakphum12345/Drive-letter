@@ -19,7 +19,7 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
-สำหรับตัวติดตั้ง Windows แบบ Service: API, Friend และ Developer API จะ bind ด้วย port `0` เพื่อให้ OS จัดสรรพอร์ตจริงในขั้นตอนเปิด socket. แต่ละบริการเผยแพร่ endpoint ลง `%ProgramData%\\ResearchOS\\runtime\\api.json` และ `friend.json` และ `developer.json`; API อ่าน Friend endpoint จาก registry โดยไม่ต้องฝังหมายเลขพอร์ต. Flutter บน Windows อ่าน API และ Developer API endpoint จาก registry เหล่านี้อัตโนมัติ ส่วน Web/iPhone ใช้ HTTPS Tailscale hostname ที่คงที่ ไม่ต้องทราบพอร์ตภายใน.
+สำหรับตัวติดตั้ง Windows แบบ Service: API, Friend, Developer API และ Agent API จะ bind ด้วย port `0` เพื่อให้ OS จัดสรรพอร์ตจริงในขั้นตอนเปิด socket. แต่ละบริการเผยแพร่ endpoint ลง `%ProgramData%\\ResearchOS\\runtime\\api.json` และ `friend.json`, `developer.json` และ `agent.json`; API อ่าน Friend endpoint จาก registry โดยไม่ต้องฝังหมายเลขพอร์ต. Flutter บน Windows อ่าน API และ Developer API endpoint จาก registry เหล่านี้อัตโนมัติ; evaluation tools อ่าน Agent API จาก `agent.json` ส่วน Web/iPhone ใช้ HTTPS Tailscale hostname ที่คงที่ ไม่ต้องทราบพอร์ตภายใน.
 
 ```powershell
 .\scripts\start-research-os-local.ps1
