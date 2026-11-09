@@ -205,9 +205,12 @@ def main() -> int:
         server = ThreadingHTTPServer((host, port), CloudResearchOSHandler)
         actual_port = int(server.server_address[1])
         os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
-        endpoint = publish_endpoint("api", host, actual_port)
-        print(f"Research OS primary API listening on {endpoint['url']}", flush=True)
-        print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
+        if host in {"127.0.0.1", "localhost", "::1"}:
+            endpoint = publish_endpoint("api", host, actual_port)
+            print(f"Research OS primary API listening on {endpoint['url']}", flush=True)
+            print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
+        else:
+            print(f"Research OS primary API listening on http://{host}:{actual_port}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
