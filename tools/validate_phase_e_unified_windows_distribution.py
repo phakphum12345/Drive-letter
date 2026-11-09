@@ -124,6 +124,7 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
     if set(install_e2e.get("runtime_endpoint_records", [])) != {
         "%ProgramData%/ResearchOS/runtime/api.json",
         "%ProgramData%/ResearchOS/runtime/friend.json",
+        "%ProgramData%/ResearchOS/runtime/developer.json",
     }:
         errors.append("installer E2E runtime endpoint registry set drifted")
     if install_e2e.get("release_authority") != "FINAL_GATE":
