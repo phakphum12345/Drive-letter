@@ -30,7 +30,7 @@ class APISpineContractTests(unittest.TestCase):
         self.assertIn('RESEARCH_OS_API_PORT"] = Environment.GetEnvironmentVariable("RESEARCH_OS_API_PORT") ?? "0"', service_host)
         self.assertIn('RESEARCH_OS_RUNTIME_DIR', service_host)
         self.assertIn('RESEARCH_OS_API_PORT=0', service_installer)
-        self.assertIn('api.json', service_host)
+        self.assertIn('publish_endpoint("api"', api)
         self.assertIn('read_endpoint("friend")', api)
         self.assertIn('[int]$Port = 0', owner_installer)
         self.assertIn("friend.json", owner_installer)
