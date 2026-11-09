@@ -163,8 +163,14 @@ function Assert-V3OwnedLoopbackListener {
 }
 
 function Remove-StaleInstallation {
-    # Validate the named service before invoking an uninstaller that may stop or remove it.
+    # Validate the named service and resolve its actual listener from service.json.
     Assert-ExistingV3ServiceOwnership
+    $existingEndpoint = Get-V3EndpointRecord
+    if ($existingEndpoint) { $script:port = [int]$existingEndpoint.port }
+    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($existingService -and $port -lt 1) {
+        throw 'Cannot safely remove an existing V3 service without its generated service.json endpoint.'
+    }
     $uninstaller = Get-ChildItem $installDir -Filter 'unins*.exe' -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
