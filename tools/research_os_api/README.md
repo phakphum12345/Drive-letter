@@ -19,7 +19,7 @@ API กลางแบบ **Provider-agnostic** สำหรับเชื่�
 
 สำหรับ Research OS Web ที่ใช้ `RESEARCH_OS_AI_ROUTE=friend` ให้ใช้ launcher นี้แทนการเปิด API อย่างเดียว เพราะ Friend Service เป็น dependency ภายในที่ launcher จะเลือกพอร์ต loopback ให้เอง:
 
-สำหรับตัวติดตั้ง Windows แบบ Service: API และ Friend จะ bind ด้วย port `0` เพื่อให้ OS จัดสรรพอร์ตจริงในขั้นตอนเปิด socket. แต่ละบริการเผยแพร่ endpoint ลง `%ProgramData%\\ResearchOS\\runtime\\api.json` และ `friend.json` ตามลำดับ; API อ่าน Friend endpoint จาก registry โดยไม่ต้องฝังหมายเลขพอร์ต. Flutter บน Windows อ่าน API endpoint จาก registry นี้อัตโนมัติ ส่วน Web/iPhone ใช้ HTTPS Tailscale hostname ที่คงที่ ไม่ต้องทราบพอร์ตภายใน.
+สำหรับตัวติดตั้ง Windows แบบ Service: API, Friend และ Developer API จะ bind ด้วย port `0` เพื่อให้ OS จัดสรรพอร์ตจริงในขั้นตอนเปิด socket. แต่ละบริการเผยแพร่ endpoint ลง `%ProgramData%\\ResearchOS\\runtime\\api.json` และ `friend.json` และ `developer.json`; API อ่าน Friend endpoint จาก registry โดยไม่ต้องฝังหมายเลขพอร์ต. Flutter บน Windows อ่าน API และ Developer API endpoint จาก registry เหล่านี้อัตโนมัติ ส่วน Web/iPhone ใช้ HTTPS Tailscale hostname ที่คงที่ ไม่ต้องทราบพอร์ตภายใน.
 
 ```powershell
 .\scripts\start-research-os-local.ps1
@@ -48,7 +48,7 @@ curl http://127.0.0.1:<API_PORT>/health
 curl http://127.0.0.1:<API_PORT>/owner/health
 ```
 
-`/owner/*` ถูก proxy ผ่าน API Spine ไปยัง Friend Service ภายในเครื่อง การเชื่อมต่อจาก iPhone/Web/Flutter ใช้ `RESEARCH_OS_API_BASE_URL` เดียวกัน (ค่าเริ่มต้นคือ `https://phakphumwir.tail4b06c9.ts.net`) และไม่เชื่อมต่อ `127.0.0.1` ของเครื่อง client โดยตรง. พอร์ต API และ Friend ภายในถูกเลือกแบบ dynamic; launcher จะตรวจสอบ Tailscale host และตั้งค่า Tailscale Serve ให้ proxy ไปยัง API port ที่เลือกโดยอัตโนมัติ จึงไม่ต้องกรอกหรือแก้ Port เอง. เครื่อง Host ต้องติดตั้งและ sign in Tailscale พร้อมเปิดใช้ HTTPS certificates/Serve ใน tailnet ก่อน; อุปกรณ์ client ต้องเชื่อมต่อและได้รับอนุญาตใน tailnet เดียวกัน.
+`/owner/*` ถูก proxy ผ่าน API Spine ไปยัง Friend Service ภายในเครื่อง การเชื่อมต่อจาก iPhone/Web/Flutter ใช้ `RESEARCH_OS_API_BASE_URL` เดียวกัน (ค่าเริ่มต้นคือ `https://phakphumwir.tail4b06c9.ts.net`) และไม่เชื่อมต่อ `127.0.0.1` ของเครื่อง client โดยตรง. พอร์ต API, Friend และ Developer API ภายในถูกเลือกแบบ dynamic; launcher จะตรวจสอบ Tailscale host และตั้งค่า Tailscale Serve ให้ proxy ไปยัง API port ที่เลือกโดยอัตโนมัติ จึงไม่ต้องกรอกหรือแก้ Port เอง. เครื่อง Host ต้องติดตั้งและ sign in Tailscale พร้อมเปิดใช้ HTTPS certificates/Serve ใน tailnet ก่อน; อุปกรณ์ client ต้องเชื่อมต่อและได้รับอนุญาตใน tailnet เดียวกัน.
 
 > ไม่ควรแก้ปัญหา `Connection refused` ด้วยการ fallback ไป `mock` เพราะจะทำให้ research response อาจกลายเป็น mock/echo ที่ไม่ใช่ผลจาก Friend runtime จริง
 
