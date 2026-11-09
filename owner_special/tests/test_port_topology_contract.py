@@ -11,12 +11,13 @@ def test_owner_service_contract_uses_service_identity_not_fixed_ports():
     services = contract["owner"]["services"]
     boundaries = contract["service_boundaries"]
 
-    assert services == ["research_os_api", "team_engineering", "friend_internal"]
+    assert services == ["research_os_api", "team_engineering", "friend_internal", "developer_api"]
     assert set(boundaries) == set(services)
     assert contract["port_policy"].startswith("OS-assigned ephemeral loopback ports")
     assert "port is not identity" in contract["authorization_rule"]
     assert contract["runtime_endpoint_registry"]["research_os_api"].endswith("api.json")
     assert contract["runtime_endpoint_registry"]["friend_internal"].endswith("friend.json")
+    assert contract["runtime_endpoint_registry"]["developer_api"].endswith("developer.json")
     assert contract["runtime_endpoint_registry"]["team_engineering"].endswith("service.json")
 
 
