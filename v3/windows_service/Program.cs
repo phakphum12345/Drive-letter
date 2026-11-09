@@ -171,6 +171,10 @@ sealed class V3ServiceWorker : BackgroundService
             {
                 await StopChildProcessAsync(CancellationToken.None);
             }
+            else if (_process is { } exitedProcess && exitedProcess.HasExited)
+            {
+                RemoveRuntimeRegistry(SafePid(exitedProcess));
+            }
 
             await Task.WhenAll(IgnoreCancellation(stdoutTask), IgnoreCancellation(stderrTask));
         }
