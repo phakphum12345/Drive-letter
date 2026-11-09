@@ -47,7 +47,7 @@ function Require-Admin {
 
 function Protect-RuntimeDirectory([string]$Path) {
   New-Item -ItemType Directory -Force -Path $Path | Out-Null
-  $icacls = Join-Path $env:WINDIR 'System32\\icacls.exe'
+  $icacls = Join-Path $env:WINDIR 'System32\icacls.exe'
   & $icacls $Path '/inheritance:r' '/grant:r' '*S-1-5-18:(OI)(CI)(F)' '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-32-545:(OI)(CI)(RX)' '/T' '/C' | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Could not protect runtime endpoint registry ACLs at $Path (icacls exit $LASTEXITCODE)."
