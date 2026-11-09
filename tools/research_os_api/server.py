@@ -1129,6 +1129,7 @@ def main() -> int:
     os.environ["RESEARCH_OS_API_PORT"] = str(actual_port)
     endpoint = publish_endpoint("api", args.host, actual_port)
     developer_server = None
+    agent_server = None
     try:
         # Developer Access is a separate loopback listener with its own
         # OS-assigned port and registry record, owned by this API process.
@@ -1148,10 +1149,31 @@ def main() -> int:
             daemon=True,
         )
         developer_thread.start()
+
+        # Agent orchestration runs on its own loopback listener as well. The
+        # service shares this process lifetime but receives a separate
+        # OS-assigned port and endpoint record.
+        from tools.research_os_api.agent_server import AgentResearchOSHandler
+
+        agent_server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), AgentResearchOSHandler
+        )
+        agent_port = int(agent_server.server_address[1])
+        agent_endpoint = publish_endpoint(
+            "agent", "127.0.0.1", agent_port, pid=os.getpid()
+        )
+        agent_thread = threading.Thread(
+            target=agent_server.serve_forever,
+            name="research-os-agent-api",
+            daemon=True,
+        )
+        agent_thread.start()
         print(f"Research OS listening on {endpoint['url']}", flush=True)
         print(f"RESEARCH_OS_API_ENDPOINT={endpoint['url']}", flush=True)
         print(f"Research OS Developer API listening on {developer_endpoint['url']}", flush=True)
         print(f"RESEARCH_OS_DEVELOPER_ENDPOINT={developer_endpoint['url']}", flush=True)
+        print(f"Research OS Agent API listening on {agent_endpoint['url']}", flush=True)
+        print(f"RESEARCH_OS_AGENT_ENDPOINT={agent_endpoint['url']}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         return 0
@@ -1160,8 +1182,12 @@ def main() -> int:
         if developer_server is not None:
             developer_server.shutdown()
             developer_server.server_close()
+        if agent_server is not None:
+            agent_server.shutdown()
+            agent_server.server_close()
         remove_endpoint("api", expected_pid=os.getpid())
         remove_endpoint("developer", expected_pid=os.getpid())
+        remove_endpoint("agent", expected_pid=os.getpid())
 
 
 if __name__ == "__main__":
