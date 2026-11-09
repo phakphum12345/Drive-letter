@@ -135,6 +135,10 @@ class ApiEndpointStore {
     return endpoint_discovery.discoverLocalEndpoint();
   }
 
+  static Future<String?> discoverDeveloperEndpoint() {
+    return endpoint_discovery.discoverDeveloperEndpoint();
+  }
+
   static Future<String> load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_storageKey)?.trim();
