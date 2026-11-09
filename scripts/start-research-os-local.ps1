@@ -127,6 +127,7 @@ function Start-FriendService {
   if ($existingEndpoint) {
     $script:FriendUrl = [string]$existingEndpoint.url
     if (Test-FriendHealth) {
+      $env:RESEARCH_OS_FRIEND_URL = $script:FriendUrl
       Write-Host "Friend Service already running at $script:FriendUrl."
       return $null
     }
