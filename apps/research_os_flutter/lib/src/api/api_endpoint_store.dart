@@ -9,13 +9,11 @@ class ApiEndpointStore {
 
   static const _storageKey = 'research_os_api_base_url_v1';
   // Local Mode resolves the current OS-assigned endpoint from runtime/api.json.
-  static const developerDefault = 'http://127.0.0.1:8790';
   static const tailscaleDefault = 'https://phakphumwir.tail4b06c9.ts.net';
 
   // Connection names remain internal; PORT labels are user-facing.
   static const connectionResearchOs = 'research_os';
   static const connectionOwnerSpecial = 'owner_special';
-  static const connectionDeveloperRuntime = 'developer_runtime';
 
   static const port1Label = 'PORT 1';
   static const port2Label = 'PORT 2';
@@ -30,11 +28,6 @@ class ApiEndpointStore {
   static const userLevelDeveloper = 'developer';
   static const userLevelGeneral = 'general';
 
-  static const developerBuildDefault = String.fromEnvironment(
-    'RESEARCH_OS_DEVELOPER_BASE_URL',
-    defaultValue: developerDefault,
-  );
-
   static const buildDefault = String.fromEnvironment(
     'RESEARCH_OS_API_BASE_URL',
     defaultValue: tailscaleDefault,
@@ -45,17 +38,10 @@ class ApiEndpointStore {
     defaultValue: buildDefault,
   );
 
-  static const port2BuildDefault = String.fromEnvironment(
-    'RESEARCH_OS_PORT_2_BASE_URL',
-    defaultValue: developerDefault,
-  );
-
   static String profileUrl(String profile) {
     switch (profile) {
       case connectionOwnerSpecial:
         return normalize(port2BuildDefault);
-      case connectionDeveloperRuntime:
-        return normalize(developerBuildDefault);
       case connectionResearchOs:
       default:
         return normalize(port1BuildDefault);
@@ -86,8 +72,6 @@ class ApiEndpointStore {
     switch (profile) {
       case connectionOwnerSpecial:
         return port2Label;
-      case connectionDeveloperRuntime:
-        return 'Developer Runtime';
       case connectionResearchOs:
       default:
         return port1Label;
@@ -99,10 +83,6 @@ class ApiEndpointStore {
 
     if (normalized == profileUrl(connectionOwnerSpecial)) {
       return connectionOwnerSpecial;
-    }
-
-    if (normalized == profileUrl(connectionDeveloperRuntime)) {
-      return connectionDeveloperRuntime;
     }
 
     if (normalized == profileUrl(connectionResearchOs)) {
