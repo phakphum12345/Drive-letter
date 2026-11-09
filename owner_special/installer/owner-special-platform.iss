@@ -68,7 +68,7 @@ Name: "startapp"; Description: "Launch Research OS after setup"; GroupDescriptio
 Filename: "{app}\app\{#MyAppExeName}"; Description: "Launch Research OS"; WorkingDir: "{app}\app"; Flags: nowait postinstall skipifsilent; Tasks: startapp
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\owner_special\scripts\install-owner-service.ps1"" -Action uninstall -Root ""{app}"" -DataDir ""{commonappdata}\ResearchOSOwnerSpecial"" -ServiceName ""ResearchOSOwnerFriendService"" -Port 8790"; Flags: 64bit runhidden waituntilterminated; RunOnceId: "ResearchOSOwnerFriendServiceUninstall"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\owner_special\scripts\install-owner-service.ps1"" -Action uninstall -Root ""{app}"" -DataDir ""{commonappdata}\ResearchOSOwnerSpecial"" -ServiceName ""ResearchOSOwnerFriendService"" -Port 0"; Flags: 64bit runhidden waituntilterminated; RunOnceId: "ResearchOSOwnerFriendServiceUninstall"
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\scripts\research-os-service.ps1"" -Action uninstall -DataDir ""{commonappdata}\ResearchOS"""; Flags: 64bit runhidden waituntilterminated; RunOnceId: "ResearchOSServiceUninstall"
 
 [UninstallDelete]
@@ -176,7 +176,7 @@ begin
     ExpandConstant('{app}\owner_special\scripts\install-owner-service.ps1') +
     '" -Action install -Root "' + ExpandConstant('{app}') +
     '" -DataDir "' + ExpandConstant('{commonappdata}\ResearchOSOwnerSpecial') +
-    '" -ServiceName "ResearchOSOwnerFriendService" -OwnerId "owner" -Port 8790';
+    '" -ServiceName "ResearchOSOwnerFriendService" -OwnerId "owner" -Port 0';
   Result := RunPowerShellChecked('Installing Research OS Owner Friend Service', Parameters);
 end;
 
