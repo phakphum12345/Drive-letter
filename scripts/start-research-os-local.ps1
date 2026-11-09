@@ -63,8 +63,12 @@ $RuntimeDir = Join-Path $DataDir "runtime"
 $FriendUrl = ""
 
 function Get-RuntimeEndpoint([string]$Service) {
-  $path = Join-Path $RuntimeDir "$Service.json"
-  if (-not (Test-Path $path -PathType Leaf)) { return $null }
+  $paths = @(
+    (Join-Path $RuntimeDir "$Service.json"),
+    (Join-Path $env:ProgramData "ResearchOS\runtime\$Service.json")
+  ) | Select-Object -Unique
+  $path = $paths | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
+  if (-not $path) { return $null }
   try {
     $record = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
     $port = [int]$record.port
