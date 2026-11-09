@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -246,6 +247,11 @@ sealed class V3ServiceWorker : BackgroundService
             }
             finally
             {
+                try
+                {
+                    if (process.HasExited) RemoveRuntimeRegistry(SafePid(process));
+                }
+                catch (InvalidOperationException) { }
                 try { process.Dispose(); } catch { }
                 if (ReferenceEquals(_process, process))
                 {
@@ -257,6 +263,32 @@ sealed class V3ServiceWorker : BackgroundService
         {
             _processStopLock.Release();
         }
+    }
+
+    private void RemoveRuntimeRegistry(int processId)
+    {
+        if (processId <= 0) return;
+        var path = Path.Combine(_options.DataDir, "service.json");
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            if (root.TryGetProperty("service", out var service) &&
+                service.GetString() == "team_engineering" &&
+                root.TryGetProperty("service_name", out var serviceName) &&
+                serviceName.GetString() == _options.ServiceName &&
+                root.TryGetProperty("process_id", out var pid) &&
+                pid.TryGetInt32(out var registeredPid) && registeredPid == processId)
+            {
+                File.Delete(path);
+                _logger.LogInformation("Removed stale V3 endpoint registry owned by PID {Pid}", processId);
+            }
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (JsonException ex) { _logger.LogWarning(ex, "Could not parse V3 endpoint registry during cleanup"); }
+        catch (IOException ex) { _logger.LogWarning(ex, "Could not remove V3 endpoint registry during cleanup"); }
+        catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "Permission denied removing V3 endpoint registry"); }
     }
 
     private static int SafePid(Process process)
