@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -63,6 +64,7 @@ sealed class OwnerFriendWorker : BackgroundService
     private readonly ILogger<OwnerFriendWorker> _logger;
     private readonly SemaphoreSlim _stopLock = new(1, 1);
     private Process? _process;
+    private string? _runtimeDir;
 
     public OwnerFriendWorker(ServiceOptions options, ILogger<OwnerFriendWorker> logger)
     {
@@ -104,6 +106,7 @@ sealed class OwnerFriendWorker : BackgroundService
         if (string.IsNullOrWhiteSpace(runtimeDir))
             runtimeDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "ResearchOS", "runtime");
         Directory.CreateDirectory(runtimeDir);
+        _runtimeDir = runtimeDir;
         start.Environment["RESEARCH_OS_RUNTIME_DIR"] = runtimeDir;
         // The installed Windows edition is Local Mode: use the loopback Ollama
         // endpoint unless an administrator has explicitly selected another provider.
@@ -203,6 +206,7 @@ sealed class OwnerFriendWorker : BackgroundService
             if (!process.HasExited)
                 throw new InvalidOperationException($"Owner Friend child PID {process.Id} remained alive during service shutdown");
 
+            RemoveEndpointRecord(_runtimeDir, "friend", process.Id);
             _logger.LogInformation("Owner Friend child PID {Pid} exited; packaged Python is released", process.Id);
             process.Dispose();
             _process = null;
@@ -211,6 +215,27 @@ sealed class OwnerFriendWorker : BackgroundService
         {
             _stopLock.Release();
         }
+    }
+
+    private void RemoveEndpointRecord(string? runtimeDir, string service, int processId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeDir)) return;
+        var path = Path.Combine(runtimeDir, $"{service}.json");
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            if (document.RootElement.TryGetProperty("pid", out var pid) &&
+                pid.TryGetInt32(out var registeredPid) && registeredPid == processId)
+            {
+                File.Delete(path);
+                _logger.LogInformation("Removed stale {Service} runtime endpoint owned by PID {Pid}", service, processId);
+            }
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (JsonException ex) { _logger.LogWarning(ex, "Could not parse {Service} runtime endpoint during cleanup", service); }
+        catch (IOException ex) { _logger.LogWarning(ex, "Could not remove {Service} runtime endpoint during cleanup", service); }
+        catch (UnauthorizedAccessException ex) { _logger.LogWarning(ex, "Permission denied removing {Service} runtime endpoint", service); }
     }
 
     private static async Task PumpAsync(StreamReader reader, string path, CancellationToken token)
