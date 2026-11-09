@@ -94,7 +94,8 @@
     "runtime_endpoint_records_must_be_removed_after_uninstall": true,
     "runtime_endpoint_records": [
       "%ProgramData%/ResearchOS/runtime/api.json",
-      "%ProgramData%/ResearchOS/runtime/friend.json"
+      "%ProgramData%/ResearchOS/runtime/friend.json",
+      "%ProgramData%/ResearchOS/runtime/developer.json"
     ]
   }
 }
