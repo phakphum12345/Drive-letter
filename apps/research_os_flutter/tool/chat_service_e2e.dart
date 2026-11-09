@@ -5,9 +5,10 @@ import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 
 Future<void> main() async {
   final configuredUrl = Platform.environment['RESEARCH_OS_API_BASE_URL']?.trim();
+  final localEndpoint = await ApiEndpointStore.discoverLocalEndpoint();
   final baseUrl = configuredUrl != null && configuredUrl.isNotEmpty
       ? ApiEndpointStore.normalize(configuredUrl)
-      : await ApiEndpointStore.load();
+      : localEndpoint ?? ApiEndpointStore.buildDefault;
   final expectedProvider =
       Platform.environment['RESEARCH_OS_EXPECTED_PROVIDER']?.trim();
   final api = ResearchOSApiClient(baseUrl: baseUrl);
