@@ -34,7 +34,7 @@
   "owner_special": {
     "runtime": "owner_special",
     "desktop_surface": "runtime_boundary_only",
-    "friend_service": "127.0.0.1:8790",
+    "friend_service": "OS-assigned loopback endpoint from %ProgramData%/ResearchOS/runtime/friend.json",
     "integration_mode": "existing_runtime_boundary_observation_only",
     "canonical_product_ui": false,
     "ios_source": null
