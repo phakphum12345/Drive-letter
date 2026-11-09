@@ -13,18 +13,26 @@ class DeveloperAccessApiException implements Exception {
 }
 
 class DeveloperAccessApiClient {
+  static const configuredBaseUrl = String.fromEnvironment(
+    'RESEARCH_OS_DEVELOPER_API_BASE_URL',
+    defaultValue: '',
+  );
+
   DeveloperAccessApiClient({String? baseUrl, http.Client? client})
-      : baseUrl = baseUrl ??
-            const String.fromEnvironment(
-              'RESEARCH_OS_DEVELOPER_API_BASE_URL',
-              defaultValue: 'http://127.0.0.1:8790',
-            ),
+      : baseUrl = baseUrl ?? configuredBaseUrl,
         _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
 
-  Uri _uri(String path) => Uri.parse('$baseUrl$path');
+  Uri _uri(String path) {
+    if (baseUrl.trim().isEmpty) {
+      throw const DeveloperAccessApiException(
+        'Developer API endpoint is not configured or registered.',
+      );
+    }
+    return Uri.parse('$baseUrl$path');
+  }
 
   Future<Map<String, dynamic>> getSession() => _get('/v2/developer/session');
 
