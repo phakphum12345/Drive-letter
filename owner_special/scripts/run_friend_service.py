@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -14,6 +15,7 @@ for source_root in (OWNER_SPECIAL_ROOT, REPOSITORY_ROOT):
         sys.path.insert(0, str(source_root))
 
 from research_os_friend import OwnerFriendService
+from tools.research_os_api.runtime_endpoint_registry import publish_endpoint, remove_endpoint
 
 
 def main() -> None:
@@ -34,13 +36,16 @@ def main() -> None:
         audit_path=args.audit_path,
         repository_root=args.repository_root,
     )
-    print(f"Owner Friend Service listening on http://{service.host}:{service.port}", flush=True)
+    endpoint = publish_endpoint("friend", service.host, service.port)
+    print(f"Owner Friend Service listening on {endpoint['url']}", flush=True)
+    print(f"RESEARCH_OS_FRIEND_ENDPOINT={endpoint['url']}", flush=True)
     try:
         service.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         service.close()
+        remove_endpoint("friend", expected_pid=os.getpid())
 
 
 if __name__ == "__main__":
