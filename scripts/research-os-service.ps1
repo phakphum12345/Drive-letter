@@ -54,6 +54,21 @@ function Protect-RuntimeDirectory([string]$Path) {
   }
 }
 
+function Remove-StaleRuntimeEndpoint([string]$Service) {
+  $registryPath = Join-Path $RuntimeDir "$Service.json"
+  if (-not (Test-Path $registryPath -PathType Leaf)) { return }
+  try {
+    $record = Get-Content -LiteralPath $registryPath -Raw | ConvertFrom-Json
+    if ($record.schema_version -ne 1 -or $record.service -ne $Service) { return }
+    $recordPid = [int]$record.pid
+    if ($recordPid -gt 0 -and -not (Get-CimInstance Win32_Process -Filter "ProcessId=$recordPid" -ErrorAction SilentlyContinue)) {
+      Remove-Item -LiteralPath $registryPath -Force -ErrorAction SilentlyContinue
+    }
+  } catch {
+    Write-Warning "Could not validate stale $Service runtime endpoint record; leaving it untouched."
+  }
+}
+
 function Get-ServiceSafe {
   return Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 }
@@ -166,6 +181,8 @@ function Stop-ResearchOsServiceAndApi {
   # A service can report Stopped before a spawned Python process has fully exited.
   # Only terminate listeners that can be positively identified as Research OS.
   Stop-ResearchOsApiListener
+  Remove-StaleRuntimeEndpoint 'api'
+  Remove-StaleRuntimeEndpoint 'developer'
 }
 
 function Set-ServiceEnvironment([string]$PythonPath) {
