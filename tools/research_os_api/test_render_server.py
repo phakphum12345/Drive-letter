@@ -118,8 +118,8 @@ class RenderServerEntrypointTests(unittest.TestCase):
         thread.start()
         try:
             with patch.object(render_server, "_assert_friend_provider_ready", return_value={"providers": ["gemini"]}):
-                with patch("agent_server.get_google_workspace_dashboard", return_value={"connected": False}):
-                    with patch("agent_server.sync_configured", return_value=False):
+                with patch("server.get_google_workspace_dashboard", return_value={"connected": False}):
+                    with patch("server.sync_configured", return_value=False):
                         request = urllib.request.Request(
                             f"http://127.0.0.1:{httpd.server_address[1]}/health",
                             headers={"Accept": "application/json"},
