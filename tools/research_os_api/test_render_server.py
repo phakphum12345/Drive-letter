@@ -112,6 +112,36 @@ class RenderServerEntrypointTests(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, "not connected"):
                             render_server._ensure_friend_service()
 
+    def test_health_returns_200_and_preserves_base_health_contract_when_friend_is_ready(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), render_server.CloudResearchOSHandler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with patch.object(render_server, "_assert_friend_provider_ready", return_value={"providers": ["gemini"]}):
+                with patch("agent_server.get_google_workspace_dashboard", return_value={"connected": False}):
+                    with patch("agent_server.sync_configured", return_value=False):
+                        request = urllib.request.Request(
+                            f"http://127.0.0.1:{httpd.server_address[1]}/health",
+                            headers={"Accept": "application/json"},
+                        )
+                        with urllib.request.urlopen(request, timeout=3) as response:
+                            self.assertEqual(200, response.status)
+                            payload = json.loads(response.read().decode("utf-8"))
+            self.assertEqual("ok", payload["status"])
+            self.assertEqual("research-os-api", payload["service"])
+            self.assertEqual("0.8.0", payload["version"])
+            self.assertIsInstance(payload["ui"], bool)
+            self.assertTrue(payload["memory"])
+            self.assertFalse(payload["memory_commit"])
+            self.assertTrue(payload["github"])
+            self.assertFalse(payload["cloud_sync"])
+            self.assertTrue(payload["google_workspace"])
+            self.assertFalse(payload["google_workspace_connected"])
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=2)
+
     def test_health_returns_503_when_friend_provider_is_unavailable(self):
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), render_server.CloudResearchOSHandler)
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
