@@ -252,7 +252,7 @@ jobs:
           path = Path("android/gradle/wrapper/gradle-wrapper.properties")
           lines = path.read_text(encoding="utf-8").splitlines()
           assert any(
-              line.startswith("distributionUrl=") and "gradle-8.14-all.zip" in line
+              line.startswith("distributionUrl=") and "gradle-9.1.0-all.zip" in line
               for line in lines
           ), "Flutter stable template Gradle version changed; review checksum before updating mirror"
           lines = [
@@ -265,21 +265,21 @@ jobs:
           ]
           lines.extend([
               r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-8.14.8-bin.zip",
-              "distributionSha256Sum=94da89692fc3ca6d2d0ce6bb48548762ea0f1897ba444286f5c7f3759c7af651",
+              "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806",
               "networkTimeout=60000",
           ])
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           result = path.read_text(encoding="utf-8")
           assert "mirrors.huaweicloud.com/gradle/gradle-8.14.8-bin.zip" in result
-          assert "distributionSha256Sum=94da89692fc3ca6d2d0ce6bb48548762ea0f1897ba444286f5c7f3759c7af651" in result
+          assert "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806" in result
           assert "networkTimeout=60000" in result
           print("GRADLE_DISTRIBUTION_HOST=mirrors.huaweicloud.com")
-          print("GRADLE_DISTRIBUTION_VERSION=8.14.8")
+          print("GRADLE_DISTRIBUTION_VERSION=9.1.0")
           print("GRADLE_DISTRIBUTION_SHA256_PINNED=PASS")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
 
-          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-8.14.8-bin.zip"
+          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip"
           attempt=1
           while [ "$attempt" -le 3 ]; do
             set +e
