@@ -40,9 +40,9 @@ The 1 GB disk is a starting capacity assumption, not a measured capacity require
 
 ## 4. Cost estimate — verify before applying
 
-The current Render pricing page lists the Starter web-service compute tier at approximately **$6/month** and persistent disk storage at **$0.25 per GB per month**. A 1 GB disk therefore gives a planning estimate of **about $6.25/month**, before bandwidth or other usage charges. Pricing can change; re-check the Render plan preview and billing page immediately before approval.
+The current Render pricing page lists its smallest paid web-service compute tier (less than 1 CPU, 512 MB RAM) at **$7/month** and persistent disk storage at **$0.25 per GB per month**. A 1 GB disk therefore gives a planning estimate of **about $7.25/month** for compute plus disk, before bandwidth or other usage charges. Render's disk documentation states that persistent disks are available only on paid services. These published rates were checked on **2026-11-23**; pricing can change, so re-check the actual service plan preview and billing page immediately before approval.
 
-This estimate is incremental to the current Free service configuration. No paid resource is created by this document or its pull request.
+This estimate includes the paid compute tier required to attach the disk; it is not just the incremental disk charge over the current Free service configuration. No paid resource is created by this document or its pull request. Sources: [Render pricing](https://render.com/pricing) and [Render persistent disks](https://render.com/docs/disks).
 
 ## 5. Operational constraints
 
