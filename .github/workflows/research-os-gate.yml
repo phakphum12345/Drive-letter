@@ -264,13 +264,13 @@ jobs:
               ))
           ]
           lines.extend([
-              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-8.14.8-bin.zip",
+              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip",
               "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806",
               "networkTimeout=60000",
           ])
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           result = path.read_text(encoding="utf-8")
-          assert "mirrors.huaweicloud.com/gradle/gradle-8.14.8-bin.zip" in result
+          assert "mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip" in result
           assert "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806" in result
           assert "networkTimeout=60000" in result
           print("GRADLE_DISTRIBUTION_HOST=mirrors.huaweicloud.com")
