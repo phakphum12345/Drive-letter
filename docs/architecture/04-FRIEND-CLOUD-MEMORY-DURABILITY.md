@@ -7,7 +7,7 @@
 
 ## 1. Decision
 
-The Render service currently runs on the Free plan and has no persistent disk configured in its service definition. Friend memory must therefore be described as filesystem-backed but not guaranteed durable across Render restarts or deploys.
+The repository's `render.yaml` declares the `research-os-api-phakphoum` web service on the Free plan and does not declare a persistent disk. This is a repository deployment blueprint only; it does not establish the live Render service's current plan, disk attachment, environment values, or deployed configuration. The live service configuration must be checked separately in the Render Dashboard before any cutover decision. Render documents that service filesystems are ephemeral unless a persistent disk is attached, so Friend memory must not be represented as guaranteed durable across restarts or deploys until the live configuration and persistence behavior are verified.
 
 The target is to preserve the existing Friend store layout on a Render persistent disk mounted at `/var/data`, with `RESEARCH_OS_OWNER_DATA_ROOT=/var/data`. This is a single-instance design and is not a multi-replica storage solution.
 
@@ -40,16 +40,16 @@ The 1 GB disk is a starting capacity assumption, not a measured capacity require
 
 ## 4. Cost estimate — verify before applying
 
-The current Render pricing page lists its smallest paid web-service compute tier (less than 1 CPU, 512 MB RAM) at **$7/month** and persistent disk storage at **$0.25 per GB per month**. A 1 GB disk therefore gives a planning estimate of **about $7.25/month** for compute plus disk, before bandwidth or other usage charges. Render's disk documentation states that persistent disks are available only on paid services. These published rates were checked on **2026-11-23**; pricing can change, so re-check the actual service plan preview and billing page immediately before approval.
+The Render pricing page currently lists its smallest paid web-service compute tier (less than 1 CPU, 512 MB RAM) at **$7/month** and persistent disk storage at **$0.25 per GB per month**. A 1 GB disk therefore gives a planning estimate of **about $7.25/month** for compute plus disk, before bandwidth or other usage charges. Render's disk documentation states that persistent disks are available only on paid services. These published rates were checked on **2026-11-23**; pricing can change, so re-check the actual service plan preview and billing page immediately before approval.
 
-This estimate includes the paid compute tier required to attach the disk; it is not just the incremental disk charge over the current Free service configuration. No paid resource is created by this document or its pull request. Sources: [Render pricing](https://render.com/pricing) and [Render persistent disks](https://render.com/docs/disks).
+This estimate includes the paid compute tier required to attach the disk; it is not an assertion about the current live service's plan or bill. No paid resource is created by this document or its pull request. Sources: [Render pricing](https://render.com/pricing) and [Render persistent disks](https://render.com/docs/disks).
 
 ## 5. Operational constraints
 
 Render persistent disks:
 - Preserve only files written under the configured mount path.
 - Are accessible to one service instance; a service with a disk cannot be horizontally scaled to multiple instances.
-- Disable zero-downtime deploys; the old instance is stopped before the new instance starts.
+- Disable zero-downtime deploys; Render stops the existing instance before bringing up the new instance, causing a brief interruption.
 - Receive automatic daily snapshots retained for seven days.
 
 Therefore the first implementation must retain the current single-instance model, provide a tested export/restore path, and disclose the brief service interruption associated with deploys.
@@ -60,7 +60,7 @@ Therefore the first implementation must retain the current single-instance model
 2. Provide an owner-authorized export/backup of existing Friend stores from the currently running instance. Do not assume that attaching a new disk copies the old ephemeral filesystem.
 3. Record file counts, byte totals, schema versions, owner boundaries, and cryptographic hashes in a private audit artifact.
 4. Verify that the backup can be restored into an isolated temporary data root and that owner/profile/session isolation remains intact.
-5. Review the exact Render infrastructure plan, mount path, capacity, compute plan, and monthly cost.
+5. Review the exact live Render service plan, disk configuration, mount path, capacity, compute plan, and monthly cost.
 6. Only after explicit cutover approval, attach the disk to the existing service and set `RESEARCH_OS_OWNER_DATA_ROOT=/var/data`.
 7. Restore the verified export to the mounted disk before enabling writes, or use a controlled maintenance cutover that prevents writes from being lost.
 8. Verify memory, evidence, learning, approval, trace, and preview stores; compare counts and hashes where applicable.
