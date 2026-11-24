@@ -65,7 +65,7 @@ enum ResearchOSConversationState {
 class ResearchOSConversationController extends ChangeNotifier {
   ResearchOSConversationController({
     required ResearchOSConversationBackend backend,
-  }) : _backend = backend;
+  }) : this._backend = backend;
 
   ResearchOSConversationController.fromApiClient({
     required ResearchOSApiClient apiClient,
