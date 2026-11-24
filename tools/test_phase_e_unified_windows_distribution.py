@@ -33,11 +33,11 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
     def test_platform_matrix_is_staged_zipped_and_verified_after_install(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
         self.assertIn(
-            'Copy-Item "docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" "$p\\\\docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" -Force',
+            'Copy-Item "docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" "$p\\docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" -Force',
             workflow,
         )
         self.assertIn("'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'", workflow)
-        self.assertIn("'docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'", workflow)
+        self.assertIn("'docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'", workflow)
         self.assertIn("$matrixManifestEntry", workflow)
         self.assertIn("$checks['platform_matrix_manifest_binding'] = $true", workflow)
 
