@@ -132,7 +132,10 @@ $staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
-    Expand-Archive -LiteralPath $ZipPath -DestinationPath $staging -Force
+    # Use the two-argument ZipFile overload for compatibility with the bundled
+    # PowerShell/.NET combinations; Expand-Archive may select an unavailable
+    # three-argument ExtractToDirectory overload on some Windows runners.
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $staging)
 
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
     $manifestHashPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.sha256'
