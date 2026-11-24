@@ -19,6 +19,8 @@ REQUIRED_COMPONENTS = {
     "runtime_python",
 }
 
+PLATFORM_MATRIX_PATH = "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
+
 REQUIRED_PACKAGE_PATHS = {
     "app/research_os_flutter.exe",
     "owner_special/app/research_os_owner_special.exe",
@@ -35,8 +37,6 @@ REQUIRED_PACKAGE_PATHS = {
     "scripts/research-os-service.ps1",
     PLATFORM_MATRIX_PATH,
 }
-
-PLATFORM_MATRIX_PATH = "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
 
 SERVICE_SOURCE = ROOT / "tools" / "research_os_service" / "Program.cs"
 SERVICE_ENTRYPOINT = "server.py"
