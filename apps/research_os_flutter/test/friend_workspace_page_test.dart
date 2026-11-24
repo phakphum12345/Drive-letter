@@ -19,6 +19,10 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
         home: FriendWorkspacePage(
           apiClient: ResearchOSApiClient(baseUrl: 'http://127.0.0.1:8787'),
         ),

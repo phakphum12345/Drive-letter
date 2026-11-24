@@ -845,7 +845,7 @@ class _MessageBubble extends StatelessWidget {
             if (renderMarkdown)
               MarkdownBody(
                 data: message.text,
-                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                styleSheetTheme: MarkdownStyleSheetBaseTheme.material,
               )
             else
               Text(message.text),

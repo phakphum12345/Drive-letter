@@ -46,7 +46,13 @@ void main() {
     final apiClient = ChatFlowApiClient();
 
     await tester.pumpWidget(
-      MaterialApp(home: ChatPage(apiClient: apiClient)),
+      MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
+        home: ChatPage(apiClient: apiClient),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -106,7 +112,13 @@ void main() {
 
     final reopenedClient = ChatFlowApiClient();
     await tester.pumpWidget(
-      MaterialApp(home: ChatPage(apiClient: reopenedClient)),
+      MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
+        home: ChatPage(apiClient: reopenedClient),
+      ),
     );
     await tester.pumpAndSettle();
 

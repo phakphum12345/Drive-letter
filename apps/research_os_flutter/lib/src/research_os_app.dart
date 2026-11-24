@@ -95,6 +95,11 @@ class _ResearchOSAppState extends State<ResearchOSApp> {
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
       themeMode: _themeMode,
+      builder: (context, child) {
+        // flutter_markdown still reads the SDK-bundled Material theme.
+        // ignore: deprecated_member_use
+        return MaterialUiCompatibilityBridge(child: child!);
+      },
       home: apiClient == null || _apiBaseUrl == null || _authenticated == null
           ? const Scaffold(
               body: Center(child: CircularProgressIndicator()),
