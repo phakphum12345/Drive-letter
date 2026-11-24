@@ -41,6 +41,19 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("$matrixManifestEntry", workflow)
         self.assertIn("$checks['platform_matrix_manifest_binding'] = $true", workflow)
 
+    def test_installer_uses_compatible_zip_extraction_overload(self) -> None:
+        installer = (
+            validator.ROOT
+            / "owner_special"
+            / "installer"
+            / "install-platform-zip.ps1"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "[System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $staging)",
+            installer,
+        )
+        self.assertNotIn("Expand-Archive -LiteralPath $ZipPath", installer)
+
     def test_contract_reconciles(self) -> None:
         self.assertEqual((), validator.validate())
 
