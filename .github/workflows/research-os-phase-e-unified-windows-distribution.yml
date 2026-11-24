@@ -157,7 +157,7 @@ jobs:
         shell: pwsh
         run: |
           $p = "$env:GITHUB_WORKSPACE\phase-e\package"
-          New-Item -ItemType Directory -Force "$p\owner_special\app","$p\owner_special\research_os_friend","$p\owner_special\scripts","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
+          New-Item -ItemType Directory -Force "$p\owner_special\app","$p\owner_special\research_os_friend","$p\owner_special\scripts","$p\docs","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
           Copy-Item "owner_special\flutter_app\build\windows\x64\runner\Release\*" "$p\owner_special\app" -Recurse -Force
           Copy-Item "owner_special\research_os_friend\*" "$p\owner_special\research_os_friend" -Recurse -Force
           Copy-Item "owner_special\scripts\*" "$p\owner_special\scripts" -Recurse -Force
@@ -168,6 +168,8 @@ jobs:
           Copy-Item "tools\*" "$p\tools" -Recurse -Force
           Copy-Item "v3\*" "$p\v3" -Recurse -Force
           Copy-Item "current\*" "$p\current" -Recurse -Force
+          Copy-Item "docs\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" "$p\docs\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" -Force
+          Write-Host 'PLATFORM_MATRIX_STAGED=PASS'
           Copy-Item "current\GENERATE_WORKFLOW_REGISTRY.yml","tools\validate_generate_orchestrator.py","tools\validate_v35_contract.py",".github\workflows\research-os-unified-final-gate.yml" "$p\workflow" -Force
           Copy-Item "apps\research_os_web\*" "$p\platform\research_os_web" -Recurse -Force
           Copy-Item "current\RESEARCH_OS_UNIFIED_FINAL_GATE.yml",".github\workflows\research-os-platform-surface-matrix.yml" "$p\platform" -Force
@@ -217,7 +219,8 @@ jobs:
             "$p\runtime\python\python.exe",
             "$p\service_host\ResearchOS.ServiceHost.exe",
             "$p\service_host\ResearchOS.Owner.ServiceHost.exe",
-            "$p\scripts\research-os-service.ps1"
+            "$p\scripts\research-os-service.ps1",
+            "$p\docs\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
           )
           foreach ($x in $required) { if (-not (Test-Path $x)) { throw "Missing distribution component: $x" } }
           $entries = foreach ($f in Get-ChildItem $p -Recurse -File | Sort-Object FullName) {
@@ -258,6 +261,7 @@ jobs:
             foreach ($requiredZipEntry in @(
               'app/research_os_flutter.exe',
               'owner_special/app/research_os_owner_special.exe',
+              'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md',
               'DISTRIBUTION_MANIFEST.json',
               'DISTRIBUTION_MANIFEST.sha256'
             )) {
@@ -382,6 +386,7 @@ jobs:
             'service_host\ResearchOS.ServiceHost.exe',
             'service_host\ResearchOS.Owner.ServiceHost.exe',
             'scripts\research-os-service.ps1',
+            'docs\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md',
             'DISTRIBUTION_MANIFEST.json',
             'DISTRIBUTION_MANIFEST.sha256',
             'OWNER_SPECIAL_PLATFORM_INSTALL_PROVENANCE.json'
@@ -401,6 +406,13 @@ jobs:
           if ($installedManifest.company_name -ne 'Research OS Team') { throw 'Installed manifest company identity mismatch.' }
           $installedManifestHash = (Get-FileHash (Join-Path $installRoot 'DISTRIBUTION_MANIFEST.json') -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($installedManifestHash -ne $manifestHashValue) { throw 'Installed manifest SHA256 mismatch.' }
+          $matrixManifestEntry = @($installedManifest.files | Where-Object { $_.path -eq 'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md' })
+          if ($matrixManifestEntry.Count -ne 1) { throw 'Installed manifest must contain exactly one canonical Platform Matrix entry.' }
+          $installedMatrixPath = Join-Path $installRoot 'docs\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'
+          $installedMatrixHash = (Get-FileHash $installedMatrixPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($installedMatrixHash -ne $matrixManifestEntry[0].sha256) { throw 'Installed Platform Matrix SHA256 does not match distribution manifest.' }
+          $checks['platform_matrix_manifest_binding'] = $true
+          Write-Host 'INSTALLED_PLATFORM_MATRIX=PASS'
           $checks['manifest_provenance'] = $true
           $checks['platform_zip_integrity'] = $true
 
