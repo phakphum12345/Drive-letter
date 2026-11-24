@@ -64,10 +64,9 @@ enum ResearchOSConversationState {
 
 class ResearchOSConversationController extends ChangeNotifier {
   // The public named parameter intentionally remains `backend` for callers.
-  // ignore: prefer_initializing_formals
   ResearchOSConversationController({
     required ResearchOSConversationBackend backend,
-  }) : _backend = backend;
+  }) : _backend = backend; // ignore: prefer_initializing_formals
 
   ResearchOSConversationController.fromApiClient({
     required ResearchOSApiClient apiClient,
