@@ -117,7 +117,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
     foreach ($entry in $archive.Entries) {
-        $name = $entry.FullName.Replace('\','/')
+        $name = $entry.FullName.Replace([string][char]92, '/')
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
         if ($name.StartsWith('/') -or $name -match '^[A-Za-z]:') { throw "Unsafe absolute ZIP entry: $name" }
         $segments = $name.Split('/')
