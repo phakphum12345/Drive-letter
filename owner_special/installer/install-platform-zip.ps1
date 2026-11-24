@@ -132,7 +132,18 @@ $staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
-    Expand-Archive -LiteralPath $ZipPath -DestinationPath $staging -Force
+    try {
+        # The installer deliberately launches Windows PowerShell 5.1. Its .NET
+        # Framework runtime does not expose the three-argument ZipFile overload
+        # used by the PowerShell 7 Archive module's Expand-Archive implementation.
+        # Use the two-argument API available on .NET Framework 4.5+ instead.
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
+        Write-Diagnostic "STEP expand-archive result=PASS"
+    }
+    catch {
+        Write-Diagnostic "STEP expand-archive result=FAIL message=$($_.Exception.Message)"
+        throw "Unable to extract Platform ZIP with the Windows PowerShell-compatible API: $($_.Exception.Message)"
+    }
 
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
     $manifestHashPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.sha256'
