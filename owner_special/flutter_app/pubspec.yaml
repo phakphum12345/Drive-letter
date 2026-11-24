@@ -4,11 +4,12 @@ publish_to: "none"
 version: 1.2.0-owner.1+1
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.13.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+  material_ui: ^1.11.1
   research_os_contracts:
     path: ../../packages/research_os_contracts
   url_launcher: ^6.3.2

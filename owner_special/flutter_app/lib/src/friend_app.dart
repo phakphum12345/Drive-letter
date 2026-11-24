@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'friend_app_shell.dart';
 import 'contracts/control_center_capabilities.dart';

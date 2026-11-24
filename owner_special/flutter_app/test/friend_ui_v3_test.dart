@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:research_os_owner_special/src/friend_ui_v3.dart';
 import 'package:research_os_owner_special/src/owner_api.dart';
