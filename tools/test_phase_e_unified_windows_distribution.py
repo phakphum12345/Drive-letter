@@ -2,12 +2,45 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from tools import validate_phase_e_unified_windows_distribution as validator
 
 
 class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
+    def test_platform_matrix_is_required_by_distribution_contract(self) -> None:
+        contract = validator.json.loads(
+            validator.CONTRACT.read_text(encoding="utf-8")
+        )
+        self.assertIn(validator.PLATFORM_MATRIX_PATH, validator.REQUIRED_PACKAGE_PATHS)
+        self.assertIn(validator.PLATFORM_MATRIX_PATH, contract["required_package_paths"])
+        self.assertTrue(contract["install_e2e"]["platform_matrix_required"])
+
+    def test_platform_matrix_source_is_fail_closed(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            self.assertEqual(
+                (f"required Platform Matrix source is missing: {validator.PLATFORM_MATRIX_PATH}",),
+                validator._platform_matrix_source_errors(root),
+            )
+            matrix = root / validator.PLATFORM_MATRIX_PATH
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text("# Platform Matrix\\n", encoding="utf-8")
+            self.assertEqual((), validator._platform_matrix_source_errors(root))
+
+    def test_platform_matrix_is_staged_zipped_and_verified_after_install(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn(
+            'Copy-Item "docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" "$p\\\\docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" -Force',
+            workflow,
+        )
+        self.assertIn("'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'", workflow)
+        self.assertIn("'docs\\\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'", workflow)
+        self.assertIn("$matrixManifestEntry", workflow)
+        self.assertIn("$checks['platform_matrix_manifest_binding'] = $true", workflow)
+
     def test_contract_reconciles(self) -> None:
         self.assertEqual((), validator.validate())
 
