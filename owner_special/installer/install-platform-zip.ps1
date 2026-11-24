@@ -140,7 +140,7 @@ try {
         $stagingRoot = [System.IO.Path]::GetFullPath($staging)
         $stagingPrefix = $stagingRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
         foreach ($entry in $archive.Entries) {
-            $entryName = $entry.FullName.Replace('\\','/')
+            $entryName = $entry.FullName.Replace([string][char]92, '/')
             if ([string]::IsNullOrWhiteSpace($entryName)) { continue }
             if ($entryName.StartsWith('/') -or $entryName -match '^[A-Za-z]:') {
                 throw "Unsafe absolute ZIP entry during extraction: $entryName"
