@@ -417,7 +417,7 @@ jobs:
                       name = "VerifiedKotlinCentralMirror"
                       url = uri(kotlinMirror)
                       content {
-                          includeGroupByRegex("org\.jetbrains\.kotlin(\..*)?")
+                          includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
                       }
                   }
               }
@@ -431,7 +431,7 @@ jobs:
                       name = "VerifiedKotlinCentralMirror"
                       url = uri(kotlinMirror)
                       content {
-                          includeGroupByRegex("org\.jetbrains\.kotlin(\..*)?")
+                          includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?")
                       }
                   }
               }
