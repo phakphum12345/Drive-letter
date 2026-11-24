@@ -57,9 +57,13 @@ jobs:
         with:
           python-version: "3.11"
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "22"
+          node-version: "24.22.3"
+      - name: Verify Node.js toolchain
+        run: |
+          node --version
+          node -e "if (process.versions.node !== '24.22.3') process.exit(1)"
       - name: Validate JavaScript syntax
         run: node --check apps/research_os_web/app.js
       - name: Validate Control Center source contract
