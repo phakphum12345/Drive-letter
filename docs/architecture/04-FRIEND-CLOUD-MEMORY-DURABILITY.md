@@ -85,7 +85,7 @@ Changing `RESEARCH_OS_OWNER_DATA_ROOT` for Friend does not move `ROOT/research/a
 Only after backup/export and restore verification, the proposed configuration for the **existing** service is:
 
 ```yaml
-plan: starter
+plan: 0.5c-512mb
 disk:
   name: friend-owner-data
   mountPath: /var/data
@@ -97,7 +97,7 @@ envVars:
 
 The 1 GB size is a planning assumption, not a measured capacity requirement. Measure the current store tree and its growth before choosing capacity. Attach the disk to the existing API service; do not create a second API service or database.
 
-The plan change from the observed Free compute plan to a paid plan and the disk attachment are separate infrastructure/billing changes. Neither is authorized by this document or by merging this documentation PR.
+The current Render Blueprint reference identifies the smallest paid web-service tier as plan ID `0.5c-512mb` (0.5 CPU, 512 MB); use that current ID rather than the older `starter` label in a future Blueprint. The plan change from the observed Free compute plan to this paid plan and the disk attachment are separate infrastructure/billing changes. Neither is authorized by this document or by merging this documentation PR.
 
 ## 6. Cost estimate — re-check before any approval
 
@@ -105,7 +105,7 @@ Render's pricing page, checked on 2026-11-24, lists the smallest paid web-servic
 
 This is not a quote or a statement of the current bill. It excludes bandwidth, any workspace-level subscription (if applicable), additional usage, taxes, and any future pricing change. Render bills compute per service and prorates it by time. Confirm the exact plan, disk size, workspace plan, and final monthly estimate in the Render Dashboard immediately before any approval.
 
-Sources: [Render pricing](https://render.com/pricing) and [Render persistent disks](https://render.com/docs/disks).
+Sources: [Render pricing](https://render.com/pricing), [Render Blueprint YAML reference](https://render.com/docs/blueprint-spec), and [Render persistent disks](https://render.com/docs/disks).
 
 ## 7. Operational constraints from current Render documentation
 
