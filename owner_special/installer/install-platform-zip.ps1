@@ -132,56 +132,11 @@ $staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
-    # Expand-Archive on the hosted PowerShell/.NET combination resolves to a
-    # ZipFile.ExtractToDirectory overload that is not available on that runtime.
-    # Extract entries explicitly while enforcing canonical destination containment.
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($zipItem.FullName)
-    try {
-        $stagingRoot = [System.IO.Path]::GetFullPath($staging)
-        $stagingPrefix = $stagingRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-        foreach ($entry in $archive.Entries) {
-            $entryName = $entry.FullName.Replace([string][char]92, '/')
-            if ([string]::IsNullOrWhiteSpace($entryName)) { continue }
-            if ($entryName.StartsWith('/') -or $entryName -match '^[A-Za-z]:') {
-                throw "Unsafe absolute ZIP entry during extraction: $entryName"
-            }
-            $segments = $entryName.Split('/')
-            if ($segments -contains '..') {
-                throw "Unsafe parent ZIP entry during extraction: $entryName"
-            }
-            $relativeName = $entryName.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
-            $destinationPath = [System.IO.Path]::GetFullPath(
-                [System.IO.Path]::Combine($stagingRoot, $relativeName)
-            )
-            if (-not $destinationPath.StartsWith($stagingPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-                throw "ZIP entry escapes staging directory: $entryName"
-            }
-            if ($entryName.EndsWith('/')) {
-                New-Item -ItemType Directory -Force -Path $destinationPath | Out-Null
-                continue
-            }
-            $destinationDirectory = [System.IO.Path]::GetDirectoryName($destinationPath)
-            New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
-            $entryStream = $entry.Open()
-            $outputStream = $null
-            try {
-                $outputStream = [System.IO.File]::Open(
-                    $destinationPath,
-                    [System.IO.FileMode]::Create,
-                    [System.IO.FileAccess]::Write,
-                    [System.IO.FileShare]::None
-                )
-                $entryStream.CopyTo($outputStream)
-            }
-            finally {
-                if ($null -ne $outputStream) { $outputStream.Dispose() }
-                $entryStream.Dispose()
-            }
-        }
-    }
-    finally {
-        $archive.Dispose()
-    }
+    # Use the two-argument .NET API directly. Expand-Archive in the hosted
+    # PowerShell module selects a three-argument overload unavailable on this
+    # runtime; the two-argument overload is supported by Windows PowerShell 5.1
+    # and PowerShell 7 while the ZIP entries are validated above.
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
     Write-Diagnostic "STEP expand-archive result=PASS"
 
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
