@@ -105,7 +105,7 @@ Render's pricing page, checked on 2026-11-24, lists the smallest paid web-servic
 
 This is not a quote or a statement of the current bill. It excludes bandwidth, any workspace-level subscription (if applicable), additional usage, taxes, and any future pricing change. Render bills compute per service and prorates it by time. Confirm the exact plan, disk size, workspace plan, and final monthly estimate in the Render Dashboard immediately before any approval.
 
-Sources: [Render pricing](https://render.com/pricing), [Render Blueprint YAML reference](https://render.com/docs/blueprint-spec), and [Render persistent disks](https://render.com/docs/disks).
+Sources: [Render pricing](https://render.com/pricing), [Render Blueprint YAML reference](https://render.com/docs/blueprint-spec), [Render persistent disks](https://render.com/docs/disks), and [Render deploys / skip phrases](https://render.com/docs/deploys).
 
 ## 7. Operational constraints from current Render documentation
 
