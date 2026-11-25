@@ -55,7 +55,7 @@ jobs:
       - name: Set up Flutter
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
       - name: Build Flutter web
@@ -133,7 +133,7 @@ jobs:
       - name: Set up Flutter
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
       - name: Run backend sanity checks
@@ -269,7 +269,7 @@ jobs:
       - name: Set up Flutter
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
       - name: Build unsigned iOS app

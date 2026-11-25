@@ -26,7 +26,7 @@ jobs:
       - name: Setup exact Flutter toolchain
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
 
@@ -75,7 +75,7 @@ jobs:
           # Research OS Windows source bundle
           SOURCE_COMMIT=f1ef9671e5b76dac0fc5df62f64fe31f54845072
           VERIFIED_WINDOWS_RUN=31485474577
-          FLUTTER_VERSION=3.44.9
+          FLUTTER_VERSION=3.50.1
           APP_SOURCE=apps/research_os_flutter
           LOCAL_API_SOURCE=tools/research_os_api
           WINDOWS_WORKFLOW=.github/workflows/research-os-windows-artifact.yml

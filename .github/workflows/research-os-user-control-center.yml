@@ -75,7 +75,7 @@ jobs:
       - name: Set up Flutter SDK
         uses: ./.github/actions/flutter-setup
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
       - name: Verify Flutter and Dart toolchains
