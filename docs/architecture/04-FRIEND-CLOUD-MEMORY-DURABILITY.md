@@ -4,7 +4,8 @@
 **Repository:** `phakphum12345/Drive-letter`  
 **Service:** `research-os-api-phakphoum`  
 **Scope:** Owner Friend filesystem-backed stores only  
-**Evidence review date:** 2026-11-24
+**Evidence review date:** 2026-11-25  
+**Source mainline SHA reviewed:** `dd257710b95eb718d6204ba887024b125cc1322d`
 
 ## 1. Decision and boundaries
 
@@ -18,7 +19,7 @@ This document is a design proposal only. It does not create a disk, change a pla
 
 ### 2.1 Blueprint configuration (`render.yaml`)
 
-At the reviewed PR base, `render.yaml` declares:
+At mainline SHA `dd257710b95eb718d6204ba887024b125cc1322d`, `render.yaml` declares:
 
 - Web service `research-os-api-phakphoum`, linked to branch `main`
 - `plan: free`
@@ -28,7 +29,7 @@ At the reviewed PR base, `render.yaml` declares:
 
 This is repository blueprint evidence only. It does not, by itself, establish the live service's plan, attached disks, manually configured environment variables, or deployed revision.
 
-### 2.2 Read-only live Render observation (2026-11-24)
+### 2.2 Read-only live Render observation (2026-11-25)
 
 A read-only Render service lookup returned the following for the existing service:
 
@@ -41,19 +42,19 @@ A read-only Render service lookup returned the following for the existing servic
 
 The API also returned a separate `buildPlan: starter` field. That is not the service's compute `plan`; the compute plan returned by the same response is `free`.
 
-The service event history queried from its creation date (2026-10-06) through this review contained no `disk_created`, `disk_updated`, `disk_deleted`, or `disk_snapshot_restored` event. The service-detail response does not expose a direct disk-mount field, so this is recorded as event-history evidence rather than a direct disk inventory. Render's current documentation says persistent disks are available only to paid services; the observed Free compute plan is therefore incompatible with the proposed disk.
+A read-only event query filtered for `disk_created`, `disk_updated`, `disk_deleted`, and `disk_snapshot_restored` from the service's creation date (2026-10-06) through 2026-11-25 returned no matching events. The service-detail response does not expose a direct disk-mount field, so this is event-history evidence, not a direct disk inventory. Render's current documentation says persistent disks can be attached only to paid services; the observed Free compute plan is therefore incompatible with the proposed disk.
 
 The read-only service response did not expose environment-variable values. The live value of `RESEARCH_OS_OWNER_DATA_ROOT` is consequently **not verified** by this review. No secret values were requested or read. Do not infer a live environment override from `render.yaml`.
 
 ## 3. Current source-backed Friend data-root behavior
 
-`tools/research_os_api/render_server.py` resolves the Friend data root in this order:
+When `tools/research_os_api/render_server.py` cannot find a healthy Friend service at its configured loopback URL, it starts one and resolves the data root in this order:
 
 1. `RESEARCH_OS_OWNER_DATA_ROOT`
 2. `RESEARCH_OS_DATA_DIR`
 3. `Path.home() / ".research_os_owner_special"`
 
-The resolved root is passed to `OwnerFriendService`, which creates the Friend runtime with that data root. If neither environment variable is set, the third path is used. Render documents that the service filesystem is ephemeral unless a persistent disk is attached; therefore the fallback path must not be described as durable across Render restarts or deploys.
+It passes that resolved root to `OwnerFriendService`, which passes it to `FriendRuntime.create_owner_special`. If neither environment variable is set, the third path is used. If a healthy loopback Friend service is already running, `_ensure_friend_service` reuses it and does not construct a replacement; that existing process's data-root configuration remains authoritative. The Render startup code therefore does not prove the live environment override. Render documents that the service filesystem is ephemeral unless a persistent disk is attached; the fallback path must not be described as durable across Render restarts or deploys.
 
 When `FriendRuntime.create_owner_special` receives a data root, the current stores are laid out as follows:
 
@@ -74,7 +75,7 @@ The existing `owner_special/tests/test_friend_persistence.py` test proves that F
 
 The `/v1/memory/commit` endpoint is not the Friend filesystem store:
 
-- It requires explicit `confirm: true` and the API sync-key authorization.
+- It requires a verified Friend identity, API sync-key authorization, and explicit `confirm: true`.
 - It writes curated Markdown research artifacts under `ROOT/research/artifacts` and updates that artifact index.
 - The endpoint returns `durability: "runtime-ephemeral"` and explicitly notes that the Render Free-service filesystem is ephemeral.
 
@@ -97,11 +98,11 @@ envVars:
 
 The 1 GB size is a planning assumption, not a measured capacity requirement. Measure the current store tree and its growth before choosing capacity. Attach the disk to the existing API service; do not create a second API service or database.
 
-The current Render Blueprint reference identifies the smallest paid web-service tier as plan ID `0.5c-512mb` (0.5 CPU, 512 MB); use that current ID rather than the older `starter` label in a future Blueprint. The plan change from the observed Free compute plan to this paid plan and the disk attachment are separate infrastructure/billing changes. Neither is authorized by this document or by merging this documentation PR.
+Render introduced the plan ID `0.5c-512mb` for 0.5 CPU and 512 MB RAM as the newer name corresponding to legacy `starter`. Render continues to support legacy plan names in Blueprints and the API with identical specifications and pricing. The proposal uses `0.5c-512mb` for clarity; this does not mean `starter` is invalid. The plan change from the observed Free compute plan to this paid plan and the disk attachment are separate infrastructure/billing changes. Neither is authorized by this document or by merging this documentation PR.
 
 ## 6. Cost estimate — re-check before any approval
 
-Render's pricing page, checked on 2026-11-24, lists the smallest paid web-service compute tier (less than 1 CPU, 512 MB RAM) at **$7/month** and SSD storage at **$0.25 per GB per month**. If a 1 GB disk is ultimately selected, the planning estimate is therefore **about $7.25/month for compute plus disk**.
+Render's pricing page, checked on 2026-11-25, lists the smallest paid web-service compute tier (less than 1 CPU, 512 MB RAM) at **$7/month** and SSD storage at **$0.25 per GB per month**. If a 1 GB disk is ultimately selected, the planning estimate is therefore **about $7.25/month for compute plus disk**.
 
 This is not a quote or a statement of the current bill. It excludes bandwidth, any workspace-level subscription (if applicable), additional usage, taxes, and any future pricing change. Render bills compute per service and prorates it by time. Confirm the exact plan, disk size, workspace plan, and final monthly estimate in the Render Dashboard immediately before any approval.
 
@@ -124,7 +125,7 @@ The existing service is observed as a single instance today. The proposed disk k
 
 ## 8. Mandatory data-preserving cutover sequence
 
-No Friend-store export/restore utility or completed Render cutover drill was found in the reviewed source. The following are **future implementation and approval gates**, not existing capabilities:
+No Friend-store export/restore utility or completed Render cutover drill was found in the reviewed source. The existing `OwnerBundleBuilder` test explicitly verifies that its ZIP is source-only and excludes runtime `data/`; it is not a runtime owner-data export. The following are **future implementation and approval gates**, not existing capabilities:
 
 1. Measure and inventory the current Friend store tree without exposing memory contents in logs.
 2. Implement an owner-authorized export/backup for all Friend stores from the currently running instance. Do not assume attaching a disk copies the old ephemeral filesystem.
@@ -139,7 +140,7 @@ No Friend-store export/restore utility or completed Render cutover drill was fou
 
 ## 9. Deployment and safety controls
 
-The live service is observed with `autoDeploy: yes` on `main`. Render documents `[skip render]` and `[render skip]` as commit-message phrases that suppress an automatic deploy for a commit. The merge commit for this documentation-only PR must include `[skip render]` so that merging the proposal does not deploy or restart the live service.
+The read-only Render service response observed `autoDeploy: yes` on `main`. Render documents `[skip render]` and `[render skip]` as commit-message phrases that suppress an automatic deploy for that commit. The merge commit for this documentation-only PR must include `[skip render]`; the resulting Render Events history will be checked separately to verify that the commit was ignored rather than deployed.
 
 - Preserve owner/profile/session isolation and do not copy local-only workstation data into Cloud.
 - Do not expose memory text, OAuth tokens, secrets, or environment values in logs, CI output, or PR artifacts.
