@@ -132,13 +132,16 @@ $staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
-    # Use the two-argument .NET API directly. Expand-Archive in the hosted
-    # PowerShell module selects a three-argument overload unavailable on this
-    # runtime; the two-argument overload is supported by Windows PowerShell 5.1
-    # and PowerShell 7 while the ZIP entries are validated above.
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
-    Write-Diagnostic "STEP expand-archive result=PASS"
-
+    try {
+        # Use the two-argument .NET API supported by Windows PowerShell 5.1
+        # and PowerShell 7. ZIP entries have already been checked for traversal.
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
+        Write-Diagnostic "STEP expand-archive result=PASS"
+    }
+    catch {
+        Write-Diagnostic "STEP expand-archive result=FAIL message=$($_.Exception.Message)"
+        throw "Unable to extract Platform ZIP with the Windows PowerShell-compatible API: $($_.Exception.Message)"
+    }
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
     $manifestHashPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.sha256'
     if (-not (Test-Path $manifestPath -PathType Leaf)) { throw 'Platform ZIP is missing DISTRIBUTION_MANIFEST.json' }

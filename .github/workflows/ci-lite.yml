@@ -133,6 +133,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' || inputs.include_flutter == true }}
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
 

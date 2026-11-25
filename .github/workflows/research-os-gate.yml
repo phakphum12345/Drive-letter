@@ -139,6 +139,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
 
@@ -245,7 +246,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          gradle_version="$(python3 - <<'PY'
           from pathlib import Path
           import re
 
@@ -262,34 +263,36 @@ jobs:
               r"gradle-([0-9]+(?:\.[0-9]+){1,2})-(all|bin)\.zip",
               distribution_lines[0],
           )
-          assert match, (
-              "Flutter generated an unsupported Gradle distribution URL; "
-              "review the URL format before changing the pinned distribution"
-          )
-          gradle_version = match.group(1)
-          print(f"GRADLE_DISTRIBUTION_VERSION={gradle_version}")
-          print(f"GRADLE_TEMPLATE_DISTRIBUTION_TYPE={match.group(2)}")
-          PY
-
-          gradle_version="$(python3 - <<'PY'
-          from pathlib import Path
-          import re
-          line = next(line for line in Path("android/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8").splitlines() if line.startswith("distributionUrl="))
-          match = re.search(r"gradle-([0-9]+(?:\.[0-9]+){1,2})-(?:all|bin)\.zip", line)
-          if not match:
-              raise SystemExit("Unable to parse exact Gradle version from generated wrapper")
+          assert match, "Unsupported generated Gradle distribution URL"
           print(match.group(1))
           PY
           )"
+
+          expected_gradle_version="9.1.0"
+          expected_checksum="a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806"
+
+          if [[ "$gradle_version" != "$expected_gradle_version" ]]; then
+            echo "::error::Flutter generated Gradle $gradle_version; expected reviewed version $expected_gradle_version."
+            exit 1
+          fi
+
           distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-${gradle_version}-bin.zip"
           checksum_url="https://services.gradle.org/distributions/gradle-${gradle_version}-bin.zip.sha256"
 
           checksum="$(curl --fail --silent --show-error --location --max-time 45 "$checksum_url")"
           checksum="$(printf '%s' "$checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+
           if [[ ! "$checksum" =~ ^[a-f0-9]{64}$ ]]; then
-            echo "::error::Official Gradle SHA-256 endpoint returned an invalid checksum for $gradle_version."
+            echo "::error::Official Gradle SHA-256 endpoint returned an invalid checksum."
             exit 1
           fi
+
+          if [[ "$checksum" != "$expected_checksum" ]]; then
+            echo "::error::Official Gradle checksum differs from the reviewed pin for $gradle_version."
+            exit 1
+          fi
+
+          echo "GRADLE_DISTRIBUTION_VERSION=$gradle_version"
           echo "GRADLE_DISTRIBUTION_SHA256_SOURCE=services.gradle.org"
           echo "GRADLE_DISTRIBUTION_SHA256=$checksum"
 
@@ -322,7 +325,6 @@ jobs:
           print("GRADLE_DISTRIBUTION_SHA256_PINNED=PASS")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
-
           attempt=1
           while [ "$attempt" -le 3 ]; do
             set +e
@@ -511,6 +513,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
       - name: Install Linux desktop build prerequisites
@@ -660,6 +663,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
       - name: Recon Xcode and Apple SDKs
