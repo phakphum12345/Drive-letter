@@ -47,6 +47,7 @@ jobs:
       - name: Set up Flutter
         uses: ./.github/actions/flutter-setup
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
       - name: Resolve dependencies

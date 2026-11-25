@@ -139,6 +139,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
 
@@ -251,7 +252,7 @@ jobs:
           path = Path("android/gradle/wrapper/gradle-wrapper.properties")
           lines = path.read_text(encoding="utf-8").splitlines()
           assert any(
-              line.startswith("distributionUrl=") and "gradle-9.3.1-all.zip" in line
+              line.startswith("distributionUrl=") and "gradle-9.1.0-all.zip" in line
               for line in lines
           ), "Flutter stable template Gradle version changed; review checksum before updating mirror"
           lines = [
@@ -263,22 +264,22 @@ jobs:
               ))
           ]
           lines.extend([
-              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip",
-              "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06",
+              r"distributionUrl=https\://mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip",
+              "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806",
               "networkTimeout=60000",
           ])
           path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           result = path.read_text(encoding="utf-8")
-          assert "mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip" in result
-          assert "distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06" in result
+          assert "mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip" in result
+          assert "distributionSha256Sum=a17ddd85a26b6a7f5ddb71ff8b05fc5104c0202c6e64782429790c933686c806" in result
           assert "networkTimeout=60000" in result
           print("GRADLE_DISTRIBUTION_HOST=mirrors.huaweicloud.com")
-          print("GRADLE_DISTRIBUTION_VERSION=9.3.1")
+          print("GRADLE_DISTRIBUTION_VERSION=9.1.0")
           print("GRADLE_DISTRIBUTION_SHA256_PINNED=PASS")
           print("GRADLE_WRAPPER_NETWORK_TIMEOUT_MS=60000")
           PY
 
-          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip"
+          distribution_url="https://mirrors.huaweicloud.com/gradle/gradle-9.1.0-bin.zip"
           attempt=1
           while [ "$attempt" -le 3 ]; do
             set +e
@@ -467,6 +468,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
       - name: Install Linux desktop build prerequisites
@@ -616,6 +618,7 @@ jobs:
       - name: Download and set up Flutter SDK
         uses: ./.github/actions/flutter-setup
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
       - name: Recon Xcode and Apple SDKs

@@ -66,6 +66,7 @@ jobs:
 
       - uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
+          flutter-version: "3.44.9"
           channel: stable
           cache: true
 
