@@ -102,6 +102,36 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
         spine.write_text(json.dumps(certification), encoding="utf-8")
         return target
 
+
+    def refresh_archive_bindings(self, root: Path, archive: Path, refresh_manifest: bool = False):
+        archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+        (root / (archive.name + ".sha256")).write_text(f"{archive_hash}  {archive.name}")
+        release_path = root / "RELEASE_EVIDENCE.json"
+        release = json.loads(release_path.read_text())
+        release["platform_zip_sha256"] = archive_hash
+        release_path.write_text(json.dumps(release), encoding="utf-8")
+        install_path = root / "WINDOWS_INSTALL_E2E_EVIDENCE.json"
+        install = json.loads(install_path.read_text())
+        install["platform_zip_sha256"] = archive_hash
+
+        if refresh_manifest:
+            manifest_path = root / "DISTRIBUTION_MANIFEST.json"
+            manifest = json.loads(manifest_path.read_text())
+            with zipfile.ZipFile(archive) as package:
+                for item in manifest["files"]:
+                    payload = package.read(item["path"])
+                    item["sha256"] = hashlib.sha256(payload).hexdigest()
+                    item["bytes"] = len(payload)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            (root / "DISTRIBUTION_MANIFEST.sha256").write_text(
+                f"{manifest_hash}  DISTRIBUTION_MANIFEST.json"
+            )
+            install["manifest_sha256"] = manifest_hash
+            install["manifest_hash_file"] = f"{manifest_hash}  DISTRIBUTION_MANIFEST.json"
+
+        install_path.write_text(json.dumps(install), encoding="utf-8")
+
     def verify_fixture(self, root, spine, provenance, target):
         return verify(root, spine, target, "900", "100", provenance, "102")
 
@@ -135,7 +165,8 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
             archive = next(root.glob("Research-OS-Platform-Windows-x64-*.zip"))
             with zipfile.ZipFile(archive, "w") as package:
                 package.writestr("app/app.exe", b"tampered")
-            with self.assertRaisesRegex(ValueError, "ZIP file digest mismatch"):
+            self.refresh_archive_bindings(root, archive)
+            with self.assertRaisesRegex(ValueError, "distribution ZIP file digest mismatch: app/app.exe"):
                 self.verify_fixture(root, spine, provenance, target)
 
     def test_rejects_missing_provenance_run_reference(self):
@@ -160,7 +191,8 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
                 package.writestr("app/app.exe", b"app")
                 package.writestr("owner_special/app/research_os_owner_special.exe", b"altered")
                 package.writestr("owner_special/app/OWNER_BUILD_IDENTITY.json", json.dumps({"passed": True, "commit": target, "sha256": "0" * 64}))
-            with self.assertRaisesRegex(ValueError, "ZIP file digest mismatch"):
+            self.refresh_archive_bindings(root, archive, refresh_manifest=True)
+            with self.assertRaisesRegex(ValueError, "Owner build identity commit/EXE SHA256 provenance mismatch"):
                 self.verify_fixture(root, spine, provenance, target)
 
     def test_rejects_provenance_root_tampering(self):
