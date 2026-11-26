@@ -66,6 +66,10 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
         raise ValueError(f"expected exactly one Owner Special Setup.exe, found {len(setups)}")
     setup = setups[0]
     archive_hash, setup_hash = sha256(archive), sha256(setup)
+    archive_hash_file = one(root, archive.name + ".sha256")
+    archive_hash_fields = archive_hash_file.read_text(encoding="utf-8-sig").strip().split()
+    if len(archive_hash_fields) < 2 or archive_hash_fields[0].lower() != archive_hash or archive_hash_fields[1].lstrip("*") != archive.name:
+        raise ValueError("platform ZIP SHA256 sidecar mismatch")
     with zipfile.ZipFile(archive) as package:
         names = set(package.namelist())
         for item in files:
