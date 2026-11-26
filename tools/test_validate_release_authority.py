@@ -172,6 +172,30 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "RELEASE is self-asserted"):
                 self.verify_fixture(root, spine, provenance, target)
 
+    def test_rejects_unmanifested_zip_entry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "candidate"; root.mkdir()
+            spine = Path(temp) / "spine.json"; provenance = Path(temp) / "provenance"
+            target = self.fixture(root, spine, provenance)
+            archive = next(root.glob("Research-OS-Platform-Windows-x64-*.zip"))
+            with zipfile.ZipFile(archive, "a") as package:
+                package.writestr("unmanifested/payload.bin", b"unexpected")
+            self.refresh_archive_bindings(root, archive)
+            with self.assertRaisesRegex(ValueError, "inventory differs from manifest"):
+                self.verify_fixture(root, spine, provenance, target)
+
+    def test_rejects_duplicate_zip_file_entry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "candidate"; root.mkdir()
+            spine = Path(temp) / "spine.json"; provenance = Path(temp) / "provenance"
+            target = self.fixture(root, spine, provenance)
+            archive = next(root.glob("Research-OS-Platform-Windows-x64-*.zip"))
+            with zipfile.ZipFile(archive, "a") as package:
+                package.writestr("app/app.exe", b"duplicate")
+            self.refresh_archive_bindings(root, archive)
+            with self.assertRaisesRegex(ValueError, "duplicate file entries"):
+                self.verify_fixture(root, spine, provenance, target)
+
     def test_rejects_tampered_package_entry(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "candidate"; root.mkdir()
