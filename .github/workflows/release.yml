@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Verify trusted tooling checkout
         run: |
@@ -67,6 +67,13 @@ jobs:
           test "$(git rev-parse --abbrev-ref HEAD)" = main
           echo "RELEASE_WORKFLOW_REF=main"
           echo "TRUSTED_RELEASE_TOOLING_REF=main"
+
+      - name: Verify target SHA belongs to canonical main history
+        run: |
+          set -euo pipefail
+          git cat-file -e "$TARGET_SHA^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" main
+          echo "CANONICAL_MAIN_TARGET_SHA=PASS"
 
       - name: Run release authority regression tests
         run: python -m unittest tools.test_validate_release_authority -v
