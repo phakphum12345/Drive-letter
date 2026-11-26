@@ -92,15 +92,21 @@ jobs:
           set -euo pipefail
           validate_run() {
             local run_id="$1" expected_workflow="$2" expected_sha="$3"
-            local workflow status conclusion head_sha
+            local workflow status conclusion head_sha head_branch event
             workflow="$(gh run view "$run_id" --repo "${{ github.repository }}" --json workflowName --jq '.workflowName')"
             status="$(gh run view "$run_id" --repo "${{ github.repository }}" --json status --jq '.status')"
             conclusion="$(gh run view "$run_id" --repo "${{ github.repository }}" --json conclusion --jq '.conclusion')"
             head_sha="$(gh run view "$run_id" --repo "${{ github.repository }}" --json headSha --jq '.headSha')"
+            head_branch="$(gh run view "$run_id" --repo "${{ github.repository }}" --json headBranch --jq '.headBranch')"
+            event="$(gh run view "$run_id" --repo "${{ github.repository }}" --json event --jq '.event')"
             test "$workflow" = "$expected_workflow"
             test "$status" = completed
             test "$conclusion" = success
             if [ -n "$expected_sha" ]; then test "$head_sha" = "$expected_sha"; fi
+            if [ "$expected_workflow" = "Research OS Release Spine Gate" ]; then
+              test "$head_branch" = main
+              test "$event" = workflow_dispatch
+            fi
           }
           test -n "$TARGET_SHA"
           resolve_run() {
