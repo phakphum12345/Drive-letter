@@ -275,6 +275,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" \
             "$release_evidence" "$install_evidence" "$certification" \
+            "$provenance_evidence" "$provenance_ledger" "$provenance_roots" "$provenance_verification" \
             --repo "${{ github.repository }}" \
             --target "$TARGET_SHA" \
             --title "Research OS $RELEASE_TAG" \
