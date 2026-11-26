@@ -114,6 +114,19 @@ def main() -> None:
     )
     assert "existing_sha" in text, "existing repair refs must be checked against TARGET_SHA"
     assert "Upload repair evidence artifact" in text, "repair evidence must persist outside the ephemeral runner"
+    assert "fetch-depth: 0" in text, "release ancestry validation requires complete checkout history"
+    assert 'dispatch_ref = "main"' in text, "release workflow must be dispatched from trusted main"
+    assert 'git merge-base", "--is-ancestor", target_sha, "origin/main' in text, (
+        "release target must be proven to be an ancestor of canonical main"
+    )
+    assert '"ref": dispatch_ref' in text, "workflow dispatch must use the resolved trusted ref"
+    assert "expected_head_branch = \"main\"" in text, "release run correlation must bind to main"
+    assert "head_branch" in RELEASE.read_text(encoding="utf-8"), (
+        "release authority must validate release-spine run branch provenance"
+    )
+    assert "event" in RELEASE.read_text(encoding="utf-8"), (
+        "release authority must validate release-spine dispatch event provenance"
+    )
 
     print(
         f"Generate orchestrator contract validation passed: {len(stages)} stages, "
