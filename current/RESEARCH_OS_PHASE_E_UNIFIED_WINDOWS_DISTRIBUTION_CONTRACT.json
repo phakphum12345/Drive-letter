@@ -32,7 +32,8 @@
     "runtime/python/python.exe",
     "service_host/ResearchOS.ServiceHost.exe",
     "service_host/ResearchOS.Owner.ServiceHost.exe",
-    "scripts/research-os-service.ps1"
+    "scripts/research-os-service.ps1",
+    "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
   ],
   "identity": {
     "product_name": "Research OS",
@@ -94,6 +95,7 @@
       8787,
       8790
     ],
-    "release_authority": "FINAL_GATE"
+    "release_authority": "FINAL_GATE",
+    "platform_matrix_required": true
   }
 }
