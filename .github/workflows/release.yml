@@ -9,7 +9,12 @@ on:
         type: string
 
       candidate_run_id:
-        description: Successful Research OS Unified Windows Distribution workflow run ID
+        description: Legacy V3 Candidate run ID passed by Generate Orchestrator; compatibility-only and ignored for release binding
+        required: false
+        type: string
+
+      distribution_run_id:
+        description: Optional successful Research OS Unified Windows Distribution run ID override
         required: false
         type: string
 
@@ -49,7 +54,8 @@ jobs:
 
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
-      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      CANDIDATE_RUN_ID: ${{ inputs.distribution_run_id }}
+      LEGACY_V3_CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
       SPINE_RUN_ID: ${{ inputs.spine_run_id }}
       FINAL_GATE_RUN_ID: ${{ inputs.final_gate_run_id }}
 
