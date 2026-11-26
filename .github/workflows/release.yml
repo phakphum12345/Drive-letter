@@ -267,7 +267,11 @@ jobs:
           release_evidence="$(find release-input -type f -name 'RELEASE_EVIDENCE.json' -print -quit)"
           install_evidence="$(find release-input -type f -name 'WINDOWS_INSTALL_E2E_EVIDENCE.json' -print -quit)"
           certification="$(find spine-input -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
-          for file in "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" "$release_evidence" "$install_evidence" "$certification"; do test -n "$file"; done
+          provenance_evidence="$(find provenance-input -type f -name 'TARGET_BOUND_EVIDENCE.json' -print -quit)"
+          provenance_ledger="$(find provenance-input -type f -name 'TARGET_BOUND_PROVENANCE.json' -print -quit)"
+          provenance_roots="$(find provenance-input -type f -name 'TARGET_BOUND_ROOTS.json' -print -quit)"
+          provenance_verification="$(find provenance-input -type f -name 'TARGET_BOUND_VERIFICATION.json' -print -quit)"
+          for file in "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" "$release_evidence" "$install_evidence" "$certification" "$provenance_evidence" "$provenance_ledger" "$provenance_roots" "$provenance_verification"; do test -n "$file"; done
           gh release create "$RELEASE_TAG" \
             "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" \
             "$release_evidence" "$install_evidence" "$certification" \
