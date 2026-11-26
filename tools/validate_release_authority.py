@@ -57,7 +57,7 @@ def validate_provenance(root: Path, target: str, run_id: str) -> dict:
     unsigned = dict(entry)
     entry_hash = unsigned.pop("entry_hash", None)
     canonical_entry = json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    expected_entry_hash = hashlib.sha256(b"provenance-entry-v1\\x00" + canonical_entry).hexdigest()
+    expected_entry_hash = hashlib.sha256(b"provenance-entry-v1\x00" + canonical_entry).hexdigest()
     if entry_hash != expected_entry_hash:
         raise ValueError("provenance ledger entry hash mismatch")
     if entry.get("subject_id") != target or entry.get("output_hashes", {}).get("target_commit", {}).get("digest") != target:
