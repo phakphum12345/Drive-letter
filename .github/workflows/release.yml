@@ -94,7 +94,7 @@ jobs:
             local supplied="$1" expected_workflow="$2" found=""
             if [ -n "$supplied" ]; then printf '%s' "$supplied"; return 0; fi
             for attempt in $(seq 1 10); do
-              found="$(gh run list --repo "${{ github.repository }}" --workflow "$expected_workflow" --commit "$TARGET_SHA" --limit 50 --json databaseId,status,conclusion,headSha --jq --arg sha "$TARGET_SHA" '[.[] | select(.headSha == $sha and .status == "completed" and .conclusion == "success")] | .[0].databaseId // empty')"
+              found="$(gh run list --repo "${{ github.repository }}" --workflow "$expected_workflow" --commit "$TARGET_SHA" --limit 50 --json databaseId,status,conclusion,headSha | jq -r --arg sha "$TARGET_SHA" '[.[] | select(.headSha == $sha and .status == "completed" and .conclusion == "success")] | .[0].databaseId // empty')"
               if [ -n "$found" ]; then printf '%s' "$found"; return 0; fi
               if [ "$attempt" -lt 10 ]; then sleep 15; fi
             done
