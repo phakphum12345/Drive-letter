@@ -16,6 +16,8 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
         with zipfile.ZipFile(archive, "w") as package:
             package.writestr("app/app.exe", b"app")
         setup.write_bytes(b"installer")
+        archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+        (root / (archive.name + ".sha256")).write_text(f"{archive_hash}  {archive.name}")
         manifest = {
             "schema_version": 1, "distribution": "Research OS Unified Windows",
             "source_sha": target, "file_count": 1,
