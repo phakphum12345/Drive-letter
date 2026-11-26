@@ -180,8 +180,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          setup="$(find release-input -maxdepth 1 -type f -name 'Research-OS-Owner-Special-Setup-*-x64.exe' -print -quit)"
-          archive="$(find release-input -maxdepth 1 -type f -name "Research-OS-Platform-Windows-x64-$TARGET_SHA.zip" -print -quit)"
+          setup="$(find release-input -type f -name 'Research-OS-Owner-Special-Setup-*-x64.exe' -print -quit)"
+          archive="$(find release-input -type f -name "Research-OS-Platform-Windows-x64-$TARGET_SHA.zip" -print -quit)"
           manifest="$(find release-input -type f -name 'DISTRIBUTION_MANIFEST.json' -print -quit)"
           manifest_hash="$(find release-input -type f -name 'DISTRIBUTION_MANIFEST.sha256' -print -quit)"
           release_evidence="$(find release-input -type f -name 'RELEASE_EVIDENCE.json' -print -quit)"
