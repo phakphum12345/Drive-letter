@@ -76,6 +76,33 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "RELEASE is self-asserted"):
                 verify(root, spine, target, "900", "100")
 
+    def test_rejects_tampered_package_entry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "candidate"
+            root.mkdir()
+            spine = Path(temp) / "spine.json"
+            target = self.fixture(root, spine)
+            archive = next(root.glob("Research-OS-Platform-Windows-x64-*.zip"))
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr("app/app.exe", b"tampered")
+            with self.assertRaisesRegex(ValueError, "ZIP file digest mismatch"):
+                verify(root, spine, target, "900", "100")
+
+    def test_rejects_missing_provenance_run_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "candidate"
+            root.mkdir()
+            spine = Path(temp) / "spine.json"
+            target = self.fixture(root, spine)
+            data = json.loads(spine.read_text())
+            data["run_refs"]["provenance"] = ""
+            unsigned = dict(data)
+            unsigned.pop("manifest_sha256")
+            data["manifest_sha256"] = hashlib.sha256(json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            spine.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "run references are missing"):
+                verify(root, spine, target, "900", "100")
+
     def test_rejects_target_sha_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "candidate"
