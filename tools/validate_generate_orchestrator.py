@@ -80,6 +80,11 @@ def main() -> None:
     assert "target_sha" in candidate_inputs, "V3 candidate must accept target_sha"
     assert "target_sha" in release_inputs, "release must accept exact target SHA"
     assert not unsupported_required_inputs(release_inputs), "release must not require orchestrator-unknown run IDs"
+    legacy_candidate = release_inputs.get("candidate_run_id", {})
+    assert legacy_candidate.get("required") is False and "ignored" in str(legacy_candidate.get("description", "")).lower(), (
+        "legacy V3 candidate_run_id must remain optional and ignored for release authority"
+    )
+    assert "distribution_run_id" in release_inputs, "release must expose the canonical Unified Windows run override"
 
     release_text = RELEASE.read_text(encoding="utf-8")
     for workflow_name in ("Research OS Unified Windows Distribution", "Research OS Unified Final Gate", "Research OS Release Spine Gate"):
