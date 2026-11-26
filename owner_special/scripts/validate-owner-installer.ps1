@@ -198,6 +198,11 @@ function Invoke-CleanValidation {
             $desktopStart.FileName = $appExe
             $desktopStart.WorkingDirectory = (Split-Path $appExe)
             $desktopStart.UseShellExecute = $false
+            # Preserve the runner's complete process environment while explicitly
+            # pinning the two values required by the installed Desktop E2E.
+            foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
+                $desktopStart.EnvironmentVariables[$entry.Key] = [string]$entry.Value
+            }
             $desktopStart.EnvironmentVariables['RESEARCH_OS_API_BASE_URL'] = $apiBase
             $desktopStart.EnvironmentVariables['RESEARCH_OS_STARTUP_PROBE_LOG'] = $probeLog
             $app = [System.Diagnostics.Process]::Start($desktopStart)
