@@ -63,7 +63,9 @@ jobs:
       - name: Verify trusted tooling checkout
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
           test "$(git rev-parse --abbrev-ref HEAD)" = main
+          echo "RELEASE_WORKFLOW_REF=main"
           echo "TRUSTED_RELEASE_TOOLING_REF=main"
 
       - name: Run release authority regression tests
@@ -198,12 +200,10 @@ jobs:
 
           echo "Release tag: $tag"
 
-          case "$tag" in
-            refs/*)
-              echo "Invalid release tag: $tag"
-              exit 1
-              ;;
-          esac
+          if [[ ! "$tag" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Invalid release tag: $tag"
+            exit 1
+          fi
 
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
