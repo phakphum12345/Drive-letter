@@ -19,6 +19,8 @@ REQUIRED_COMPONENTS = {
     "runtime_python",
 }
 
+PLATFORM_MATRIX_PATH = "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
+
 REQUIRED_PACKAGE_PATHS = {
     "app/research_os_flutter.exe",
     "owner_special/app/research_os_owner_special.exe",
@@ -33,6 +35,7 @@ REQUIRED_PACKAGE_PATHS = {
     "service_host/ResearchOS.ServiceHost.exe",
     "service_host/ResearchOS.Owner.ServiceHost.exe",
     "scripts/research-os-service.ps1",
+    PLATFORM_MATRIX_PATH,
 }
 
 SERVICE_SOURCE = ROOT / "tools" / "research_os_service" / "Program.cs"
@@ -52,8 +55,15 @@ def _read_unified_final_gate(root: Path) -> str:
     ).read_text(encoding="utf-8")
 
 
+def _platform_matrix_source_errors(root: Path) -> tuple[str, ...]:
+    if not (root / PLATFORM_MATRIX_PATH).is_file():
+        return (f"required Platform Matrix source is missing: {PLATFORM_MATRIX_PATH}",)
+    return ()
+
+
 def validate(root: Path = ROOT) -> tuple[str, ...]:
     errors: list[str] = []
+    errors.extend(_platform_matrix_source_errors(root))
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
 
     service_source = SERVICE_SOURCE.read_text(encoding="utf-8")
@@ -103,6 +113,7 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "evidence_required",
         "install_required",
         "component_verification_required",
+        "platform_matrix_required",
         "manifest_source_sha_required",
         "manifest_sha256_required",
         "research_os_api_readiness_required",
@@ -151,6 +162,12 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "ref: ${{ env.TARGET_SHA }}",
         "Research-OS-Unified-Windows-x64-${{ env.TARGET_SHA }}",
         "DISTRIBUTION_MANIFEST.sha256",
+        'Copy-Item "docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" "$p\\docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md" -Force',
+        '"$p\\docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"',
+        "'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'",
+        "'docs\\RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md'",
+        "$matrixManifestEntry",
+        "$checks['platform_matrix_manifest_binding'] = $true",
         "RESEARCH_OS_UNIFIED_WINDOWS_DISTRIBUTION",
         "research_os_owner_special.exe",
         "Research-OS-Platform-Windows-x64-",
@@ -188,7 +205,7 @@ def main() -> int:
         return 1
     print("PHASE_E_DISTRIBUTION=PASS")
     print("COMPONENTS=8")
-    print("PACKAGE_PATHS=13")
+    print("PACKAGE_PATHS=14")
     print("RELEASE_AUTHORITY=FINAL_GATE")
     return 0
 
