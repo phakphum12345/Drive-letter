@@ -120,9 +120,41 @@ jobs:
             echo "No completed successful exact-SHA run found for $expected_workflow ($TARGET_SHA)" >&2
             return 1
           }
+          resolve_spine_run() {
+            local supplied="$1" run_id temp_dir spine found=""
+            if [ -n "$supplied" ]; then printf '%s' "$supplied"; return 0; fi
+            while IFS= read -r run_id; do
+              [ -n "$run_id" ] || continue
+              temp_dir="$(mktemp -d)"
+              if gh run download "$run_id" --repo "${{ github.repository }}" \
+                  --name "research-os-release-spine-$TARGET_SHA" --dir "$temp_dir" >/dev/null 2>&1; then
+                spine="$(find "$temp_dir" -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
+                if [ -n "$spine" ] && python - "$spine" "$TARGET_SHA" "$run_id" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
+          raise SystemExit(0 if data.get("commit") == sys.argv[2] and str(data.get("run_id")) == sys.argv[3] else 1)
+          PY
+                then
+                  rm -rf "$temp_dir"
+                  printf '%s' "$run_id"
+                  return 0
+                fi
+              fi
+              rm -rf "$temp_dir"
+            done < <(
+              gh run list --repo "${{ github.repository }}" \
+                --workflow "Research OS Release Spine Gate" --branch main \
+                --event workflow_dispatch --limit 50 \
+                --json databaseId,status,conclusion,headBranch,event |
+                jq -r '[.[] | select(.status == "completed" and .conclusion == "success" and .headBranch == "main" and .event == "workflow_dispatch")] | .[].databaseId'
+            )
+            echo "No successful main-branch Release Spine artifact certifies target $TARGET_SHA" >&2
+            return 1
+          }
           CANDIDATE_RUN_ID="$(resolve_run "$CANDIDATE_RUN_ID" "Research OS Unified Windows Distribution")"
           FINAL_GATE_RUN_ID="$(resolve_run "$FINAL_GATE_RUN_ID" "Research OS Unified Final Gate")"
-          SPINE_RUN_ID="$(resolve_run "$SPINE_RUN_ID" "Research OS Release Spine Gate")"
+          SPINE_RUN_ID="$(resolve_spine_run "$SPINE_RUN_ID")"
           {
             echo "CANDIDATE_RUN_ID=$CANDIDATE_RUN_ID"
             echo "FINAL_GATE_RUN_ID=$FINAL_GATE_RUN_ID"
