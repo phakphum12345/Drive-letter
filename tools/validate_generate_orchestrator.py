@@ -78,15 +78,15 @@ def main() -> None:
     candidate_inputs = workflow_dispatch_inputs(WORKFLOWS / "v3-candidate.yml")
     release_inputs = workflow_dispatch_inputs(RELEASE)
     assert "target_sha" in candidate_inputs, "V3 candidate must accept target_sha"
-    assert {"target_sha", "candidate_run_id"} <= set(release_inputs), "release must accept exact SHA and candidate run ID"
+    assert "target_sha" in release_inputs, "release must accept exact target SHA"
+    assert not unsupported_required_inputs(release_inputs), "release must not require orchestrator-unknown run IDs"
 
     release_text = RELEASE.read_text(encoding="utf-8")
-    assert 'test "$workflow" = "Research OS V3 Candidate"' in release_text, (
-        "release must verify the exact V3 candidate workflow that emits its artifact"
-    )
+    for workflow_name in ("Research OS Unified Windows Distribution", "Research OS Unified Final Gate", "Research OS Release Spine Gate"):
+        assert workflow_name in release_text, f"release must verify {workflow_name}"
     candidate_text = (WORKFLOWS / "v3-candidate.yml").read_text(encoding="utf-8")
-    artifact_name = "research-os-v3-verified-candidate-${{ env.TARGET_SHA }}"
-    assert artifact_name in candidate_text, "V3 candidate artifact name contract changed"
+    artifact_name = "Research-OS-Unified-Windows-x64-$TARGET_SHA"
+    assert artifact_name in release_text, "release must download the canonical Unified Windows Distribution artifact"
 
     text = ORCHESTRATOR.read_text(encoding="utf-8")
     required_fragments = {
