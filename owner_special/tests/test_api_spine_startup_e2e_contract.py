@@ -27,6 +27,16 @@ class OwnerApiSpineStartupContractTests(unittest.TestCase):
         self.assertIn("Stop-Process -Id $gateway.Id", step)
         self.assertIn("Stop-Process -Id $service.Id", step)
 
+    def test_desktop_startup_probe_has_opt_in_secret_safe_diagnostics(self):
+        main = (ROOT / "owner_special/flutter_app/lib/main.dart").read_text(encoding="utf-8")
+
+        self.assertIn("RESEARCH_OS_STARTUP_PROBE_LOG", main)
+        self.assertIn("START api_base_url=", main)
+        self.assertIn("PASS public_health_status=", main)
+        self.assertIn("FAIL error_type=", main)
+        self.assertIn("Do not log exception text, request headers, or session credentials", main)
+        self.assertIn("_probeStartupInBackground(api, baseUrl)", main)
+
     def test_installed_desktop_is_probed_through_the_canonical_api_spine(self):
         validator = (ROOT / "owner_special/scripts/validate-owner-installer.ps1").read_text(encoding="utf-8")
 
@@ -35,6 +45,10 @@ class OwnerApiSpineStartupContractTests(unittest.TestCase):
         self.assertIn("$env:RESEARCH_OS_FRIEND_URL = 'http://127.0.0.1:8790'", validator)
         self.assertIn('"$apiBase/owner/status"', validator)
         self.assertIn('"$apiBase/owner/provider"', validator)
+        self.assertIn("[System.Diagnostics.Process]::Start($desktopStart)", validator)
+        self.assertIn("EnvironmentVariables['RESEARCH_OS_API_BASE_URL']", validator)
+        self.assertIn("EnvironmentVariables['RESEARCH_OS_STARTUP_PROBE_LOG']", validator)
+        self.assertIn("Installed Owner Desktop startup probe log", validator)
         self.assertIn("through the API Spine", validator)
         self.assertIn("Stop-Process -Id $apiProcess.Id", validator)
         self.assertIn("Remove-Item \"Env:$name\"", validator)
