@@ -202,8 +202,16 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
             spine = Path(temp) / "spine.json"; provenance = Path(temp) / "provenance"
             target = self.fixture(root, spine, provenance)
             archive = next(root.glob("Research-OS-Platform-Windows-x64-*.zip"))
+            with zipfile.ZipFile(archive) as source:
+                existing = {
+                    info.filename: source.read(info.filename)
+                    for info in source.infolist()
+                    if not info.is_dir() and info.filename not in {"DISTRIBUTION_MANIFEST.json", "DISTRIBUTION_MANIFEST.sha256"}
+                }
+            existing["app/app.exe"] = b"tampered"
             with zipfile.ZipFile(archive, "w") as package:
-                package.writestr("app/app.exe", b"tampered")
+                for name, payload in existing.items():
+                    package.writestr(name, payload)
             self.refresh_archive_bindings(root, archive)
             with self.assertRaisesRegex(ValueError, "distribution ZIP file digest mismatch: app/app.exe"):
                 self.verify_fixture(root, spine, provenance, target)
