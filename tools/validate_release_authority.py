@@ -148,7 +148,7 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
                 raise ValueError(f"distribution ZIP file digest mismatch: {name}")
         identity_path = "owner_special/app/OWNER_BUILD_IDENTITY.json"
         executable_path = "owner_special/app/research_os_owner_special.exe"
-        if identity_path not in names or executable_path not in names:
+        if identity_path not in zip_names or executable_path not in zip_names:
             raise ValueError("Owner build identity or executable is missing from the canonical ZIP")
         identity = json.loads(package.read(identity_path).decode("utf-8-sig"))
         owner_exe_hash = hashlib.sha256(package.read(executable_path)).hexdigest()
