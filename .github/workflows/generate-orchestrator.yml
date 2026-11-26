@@ -49,6 +49,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Resolve exact target SHA
         id: target
@@ -289,7 +290,22 @@ jobs:
 
               print(f"\n=== DISPATCH stage {entry['stage']}: {workflow} ===")
               print(f"Dispatch inputs: {sorted(inputs)}")
-              api(f"repos/{repo}/actions/workflows/{encoded}/dispatches", "POST", {"ref": target_ref, "inputs": inputs})
+              dispatch_ref = target_ref
+              expected_head_sha = target_sha
+              expected_head_branch = target_ref
+              if workflow == "release.yml":
+                  # Release tooling is trusted only from main; the candidate SHA remains an explicit input.
+                  subprocess.run(["git", "fetch", "origin", "main"], check=True)
+                  main_sha = subprocess.check_output(["git", "rev-parse", "origin/main"], text=True).strip()
+                  ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", target_sha, "origin/main"])
+                  if ancestor.returncode != 0:
+                      raise RuntimeError(f"RELEASE_TARGET_NOT_ON_MAIN: target_sha={target_sha} main_sha={main_sha}")
+                  dispatch_ref = "main"
+                  expected_head_sha = main_sha
+                  expected_head_branch = "main"
+                  print(f"RELEASE_DISPATCH_REF=main RELEASE_TOOLING_SHA={main_sha} TARGET_SHA={target_sha}")
+
+              api(f"repos/{repo}/actions/workflows/{encoded}/dispatches", "POST", {"ref": dispatch_ref, "inputs": inputs})
 
               deadline = time.time() + 3600
               run = None
@@ -299,8 +315,8 @@ jobs:
                       item for item in data.get("workflow_runs", [])
                       if int(item.get("id", -1)) not in prior_ids
                       and item.get("event") == "workflow_dispatch"
-                      and item.get("head_sha") == target_sha
-                      and item.get("head_branch") == target_ref
+                      and item.get("head_sha") == expected_head_sha
+                      and item.get("head_branch") == expected_head_branch
                   ]
                   if candidates:
                       run = max(candidates, key=lambda item: int(item["id"]))
@@ -309,12 +325,12 @@ jobs:
 
               if not run:
                   recovery(entry["stage"], workflow, "")
-                  raise RuntimeError(f"STAGE_DISCOVERY_FAILURE|stage={entry['stage']}|workflow={workflow}|target_sha={target_sha}|target_ref={target_ref}")
+                  raise RuntimeError(f"STAGE_DISCOVERY_FAILURE|stage={entry['stage']}|workflow={workflow}|target_sha={target_sha}|dispatch_ref={dispatch_ref}")
 
               downstream_run = str(run["id"])
-              if run.get("head_sha") != target_sha or run.get("head_branch") != target_ref:
+              if run.get("head_sha") != expected_head_sha or run.get("head_branch") != expected_head_branch:
                   recovery(entry["stage"], workflow, downstream_run)
-                  raise RuntimeError(f"SHA_LINEAGE_FAILURE|stage={entry['stage']}|workflow={workflow}|expected_sha={target_sha}|actual_sha={run.get('head_sha')}|expected_ref={target_ref}|actual_ref={run.get('head_branch')}")
+                  raise RuntimeError(f"SHA_LINEAGE_FAILURE|stage={entry['stage']}|workflow={workflow}|expected_sha={expected_head_sha}|actual_sha={run.get('head_sha')}|expected_ref={expected_head_branch}|actual_ref={run.get('head_branch')}")
 
               print(f"Correlated run {downstream_run}: {run.get('html_url', '')}")
               while time.time() < deadline:
@@ -324,9 +340,9 @@ jobs:
                   current_sha = current.get("head_sha")
                   current_ref = current.get("head_branch")
                   print(f"run {downstream_run}: status={status} conclusion={conclusion} head_sha={current_sha} head_branch={current_ref}")
-                  if current_sha != target_sha or current_ref != target_ref:
+                  if current_sha != expected_head_sha or current_ref != expected_head_branch:
                       recovery(entry["stage"], workflow, downstream_run)
-                      raise RuntimeError(f"SHA_LINEAGE_FAILURE|stage={entry['stage']}|workflow={workflow}|expected_sha={target_sha}|actual_sha={current_sha}|expected_ref={target_ref}|actual_ref={current_ref}")
+                      raise RuntimeError(f"SHA_LINEAGE_FAILURE|stage={entry['stage']}|workflow={workflow}|expected_sha={expected_head_sha}|actual_sha={current_sha}|expected_ref={expected_head_branch}|actual_ref={current_ref}")
                   if status == "completed":
                       if conclusion != "success":
                           recovery(entry["stage"], workflow, downstream_run)
