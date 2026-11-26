@@ -10,17 +10,17 @@ on:
 
       candidate_run_id:
         description: Successful Research OS Unified Windows Distribution workflow run ID
-        required: true
+        required: false
         type: string
 
       final_gate_run_id:
         description: Successful Research OS Unified Final Gate workflow run ID
-        required: true
+        required: false
         type: string
 
       spine_run_id:
         description: Successful Research OS Release Spine Gate workflow run ID
-        required: true
+        required: false
         type: string
 
       tag_name:
@@ -88,9 +88,25 @@ jobs:
             if [ -n "$expected_sha" ]; then test "$head_sha" = "$expected_sha"; fi
           }
           test -n "$TARGET_SHA"
-          test -n "$CANDIDATE_RUN_ID"
-          test -n "$SPINE_RUN_ID"
-          test -n "$FINAL_GATE_RUN_ID"
+          resolve_run() {
+            local supplied="$1" expected_workflow="$2" found=""
+            if [ -n "$supplied" ]; then printf '%s' "$supplied"; return 0; fi
+            for attempt in $(seq 1 10); do
+              found="$(gh run list --repo "${{ github.repository }}" --workflow "$expected_workflow" --commit "$TARGET_SHA" --limit 50 --json databaseId,status,conclusion,headSha --jq --arg sha "$TARGET_SHA" '[.[] | select(.headSha == $sha and .status == "completed" and .conclusion == "success")] | .[0].databaseId // empty')"
+              if [ -n "$found" ]; then printf '%s' "$found"; return 0; fi
+              if [ "$attempt" -lt 10 ]; then sleep 15; fi
+            done
+            echo "No completed successful exact-SHA run found for $expected_workflow ($TARGET_SHA)" >&2
+            return 1
+          }
+          CANDIDATE_RUN_ID="$(resolve_run "$CANDIDATE_RUN_ID" "Research OS Unified Windows Distribution")"
+          FINAL_GATE_RUN_ID="$(resolve_run "$FINAL_GATE_RUN_ID" "Research OS Unified Final Gate")"
+          SPINE_RUN_ID="$(resolve_run "$SPINE_RUN_ID" "Research OS Release Spine Gate")"
+          {
+            echo "CANDIDATE_RUN_ID=$CANDIDATE_RUN_ID"
+            echo "FINAL_GATE_RUN_ID=$FINAL_GATE_RUN_ID"
+            echo "SPINE_RUN_ID=$SPINE_RUN_ID"
+          } >> "$GITHUB_ENV"
           validate_run "$CANDIDATE_RUN_ID" "Research OS Unified Windows Distribution" "$TARGET_SHA"
           validate_run "$FINAL_GATE_RUN_ID" "Research OS Unified Final Gate" "$TARGET_SHA"
           validate_run "$SPINE_RUN_ID" "Research OS Release Spine Gate" ""
