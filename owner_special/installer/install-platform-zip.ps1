@@ -20,28 +20,17 @@ Write-Diagnostic "START ZipPath=$ZipPath TargetRoot=$TargetRoot ExpectedZipSha25
 function Normalize-Hash([string]$Value) { return $Value.Trim().ToLowerInvariant() }
 
 function Get-Sha256([string]$Path) {
+    $stream = $null
+    $sha = $null
     try {
-        $hashResult = Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop
-        if ($null -eq $hashResult -or [string]::IsNullOrWhiteSpace([string]$hashResult.Hash)) {
-            throw "Get-FileHash returned no SHA256 hash."
-        }
-        return ([string]$hashResult.Hash).Trim().ToLowerInvariant()
+        $stream = [System.IO.File]::OpenRead($Path)
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $sha.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($hashBytes).Replace('-', '')).ToLowerInvariant()
     }
-    catch {
-        $getFileHashError = $_.Exception.Message
-        Write-Diagnostic "SHA256 fallback=certutil path=$Path get-filehash-error=$getFileHashError"
-        $certutilOutput = & certutil.exe -hashfile "$Path" SHA256 2>&1
-        $certutilCode = $LASTEXITCODE
-        if ($certutilCode -ne 0) {
-            throw "Unable to compute SHA256 for $Path with Get-FileHash or certutil. Get-FileHash: $getFileHashError"
-        }
-        $hashLine = $certutilOutput | ForEach-Object {
-            if ([string]$_ -match '([0-9A-Fa-f]{64})') { $Matches[1] }
-        } | Select-Object -First 1
-        if ([string]::IsNullOrWhiteSpace([string]$hashLine)) {
-            throw "certutil did not return a valid SHA256 hash for $Path."
-        }
-        return ([string]$hashLine).Trim().ToLowerInvariant()
+    finally {
+        if ($null -ne $sha) { $sha.Dispose() }
+        if ($null -ne $stream) { $stream.Dispose() }
     }
 }
 
@@ -75,36 +64,8 @@ finally {
 }
 
 Write-Diagnostic "STEP verify-zip-sha256 begin algorithm=SHA256 path=$($zipItem.FullName)"
-$actualZipSha = $null
-try {
-    $hashResult = Get-FileHash -LiteralPath $zipItem.FullName -Algorithm SHA256 -ErrorAction Stop
-    if ($null -eq $hashResult -or [string]::IsNullOrWhiteSpace([string]$hashResult.Hash)) {
-        throw "Get-FileHash returned no SHA256 hash."
-    }
-    $actualZipSha = ([string]$hashResult.Hash).Trim().ToLowerInvariant()
-    Write-Diagnostic "STEP verify-zip-sha256 computed=$actualZipSha"
-}
-catch {
-    $getFileHashError = $_.Exception.Message
-    Write-Diagnostic "STEP verify-zip-sha256 get-filehash-failed message=$getFileHashError"
-    Write-Diagnostic "STEP verify-zip-sha256 fallback=certutil"
-    $certutilOutput = & certutil.exe -hashfile "$($zipItem.FullName)" SHA256 2>&1
-    $certutilCode = $LASTEXITCODE
-    Write-Diagnostic "STEP verify-zip-sha256 certutil-exit-code=$certutilCode"
-    if ($certutilCode -ne 0) {
-        throw "Unable to compute Platform ZIP SHA256 with Get-FileHash or certutil. Get-FileHash: $getFileHashError"
-    }
-    $hashLine = $certutilOutput | ForEach-Object {
-        if ([string]$_ -match '([0-9A-Fa-f]{64})') {
-            $Matches[1]
-        }
-    } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace([string]$hashLine)) {
-        throw "certutil did not return a valid SHA256 hash."
-    }
-    $actualZipSha = ([string]$hashLine).Trim().ToLowerInvariant()
-    Write-Diagnostic "STEP verify-zip-sha256 certutil-computed=$actualZipSha"
-}
+$actualZipSha = Get-Sha256 $zipItem.FullName
+Write-Diagnostic "STEP verify-zip-sha256 computed=$actualZipSha source=dotnet-cryptography"
 $expectedZipSha = Normalize-Hash $ExpectedZipSha256
 Write-Diagnostic "STEP verify-zip-sha256 actual=$actualZipSha expected=$expectedZipSha"
 if ($actualZipSha -ne $expectedZipSha) {
@@ -117,7 +78,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
     foreach ($entry in $archive.Entries) {
-        $name = $entry.FullName.Replace([string][char]92, '/')
+        $name = $entry.FullName.Replace('\','/')
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
         if ($name.StartsWith('/') -or $name -match '^[A-Za-z]:') { throw "Unsafe absolute ZIP entry: $name" }
         $segments = $name.Split('/')
@@ -132,16 +93,8 @@ $staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
-    try {
-        # Use the two-argument .NET API supported by Windows PowerShell 5.1
-        # and PowerShell 7. ZIP entries have already been checked for traversal.
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
-        Write-Diagnostic "STEP expand-archive result=PASS"
-    }
-    catch {
-        Write-Diagnostic "STEP expand-archive result=FAIL message=$($_.Exception.Message)"
-        throw "Unable to extract Platform ZIP with the Windows PowerShell-compatible API: $($_.Exception.Message)"
-    }
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $staging)
+
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
     $manifestHashPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.sha256'
     if (-not (Test-Path $manifestPath -PathType Leaf)) { throw 'Platform ZIP is missing DISTRIBUTION_MANIFEST.json' }
