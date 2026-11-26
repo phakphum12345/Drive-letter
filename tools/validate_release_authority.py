@@ -13,6 +13,13 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def one(root: Path, name: str) -> Path:
+    matches = list(root.rglob(name))
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one {name}, found {len(matches)}")
+    return matches[0]
+
+
 def load(path: Path) -> dict:
     if not path.is_file():
         raise ValueError(f"required evidence missing: {path}")
@@ -25,8 +32,8 @@ def load(path: Path) -> dict:
 def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: str) -> dict:
     if not re.fullmatch(r"[0-9a-f]{40}", target):
         raise ValueError("target SHA must be a full 40-character lowercase commit")
-    manifest_path = root / "DISTRIBUTION_MANIFEST.json"
-    manifest_hash_path = root / "DISTRIBUTION_MANIFEST.sha256"
+    manifest_path = one(root, "DISTRIBUTION_MANIFEST.json")
+    manifest_hash_path = one(root, "DISTRIBUTION_MANIFEST.sha256")
     manifest = load(manifest_path)
     manifest_hash = sha256(manifest_path)
     declared_hash = manifest_hash_path.read_text(encoding="utf-8-sig").strip().split()[0].lower()
@@ -40,8 +47,8 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
     if not files or any(not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))) for item in files):
         raise ValueError("distribution manifest contains invalid file digest")
 
-    release = load(root / "RELEASE_EVIDENCE.json")
-    install = load(root / "WINDOWS_INSTALL_E2E_EVIDENCE.json")
+    release = load(one(root, "RELEASE_EVIDENCE.json"))
+    install = load(one(root, "WINDOWS_INSTALL_E2E_EVIDENCE.json"))
     if release.get("source_sha") != target or install.get("source_sha") != target:
         raise ValueError("release or installation evidence target SHA mismatch")
     if release.get("release_authority") != "FINAL_GATE" or install.get("release_authority") != "FINAL_GATE":
@@ -51,11 +58,11 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
     if install.get("manifest_sha256") != manifest_hash or install.get("manifest_hash_file", "").split()[0].lower() != manifest_hash:
         raise ValueError("installed E2E evidence is not bound to the distribution manifest")
 
-    archives = list(root.glob(f"Research-OS-Platform-Windows-x64-{target}.zip"))
-    setups = list(root.glob("Research-OS-Owner-Special-Setup-*-x64.exe"))
-    if len(archives) != 1 or len(setups) != 1:
-        raise ValueError("expected exactly one canonical platform ZIP and Owner Special Setup.exe")
-    archive, setup = archives[0], setups[0]
+    archive = one(root, f"Research-OS-Platform-Windows-x64-{target}.zip")
+    setups = list(root.rglob("Research-OS-Owner-Special-Setup-*-x64.exe"))
+    if len(setups) != 1:
+        raise ValueError(f"expected exactly one Owner Special Setup.exe, found {len(setups)}")
+    setup = setups[0]
     archive_hash, setup_hash = sha256(archive), sha256(setup)
     if release.get("platform_zip") != archive.name or release.get("platform_zip_sha256") != archive_hash:
         raise ValueError("platform ZIP identity or SHA256 mismatch")
