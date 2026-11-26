@@ -60,6 +60,9 @@ jobs:
           ref: ${{ inputs.target_sha }}
           fetch-depth: 1
 
+      - name: Run release authority regression tests
+        run: python -m unittest tools.test_validate_release_authority -v
+
       - name: Validate candidate and release spine workflow runs
         shell: bash
         env:
