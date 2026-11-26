@@ -160,7 +160,7 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
                 package.writestr("app/app.exe", b"app")
                 package.writestr("owner_special/app/research_os_owner_special.exe", b"altered")
                 package.writestr("owner_special/app/OWNER_BUILD_IDENTITY.json", json.dumps({"passed": True, "commit": target, "sha256": "0" * 64}))
-            with self.assertRaisesRegex(ValueError, "Owner build identity commit/EXE SHA256 provenance mismatch"):
+            with self.assertRaisesRegex(ValueError, "ZIP file digest mismatch"):
                 self.verify_fixture(root, spine, provenance, target)
 
     def test_rejects_provenance_root_tampering(self):
