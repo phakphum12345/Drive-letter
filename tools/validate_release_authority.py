@@ -8,7 +8,7 @@ import json
 import re
 import subprocess
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 def sha256(path: Path) -> str:
@@ -91,6 +91,17 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
         raise ValueError("distribution manifest file inventory mismatch")
     if not files or any(not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))) for item in files):
         raise ValueError("distribution manifest contains invalid file digest")
+    manifest_paths = []
+    for item in files:
+        name = str(item.get("path", ""))
+        path = PurePosixPath(name)
+        if (not name or "\\" in name or path.is_absolute() or
+                any(part in ("", ".", "..") for part in path.parts) or
+                not isinstance(item.get("bytes"), int) or item["bytes"] < 0):
+            raise ValueError(f"distribution manifest contains unsafe or incomplete file entry: {name!r}")
+        manifest_paths.append(name)
+    if len(manifest_paths) != len(set(manifest_paths)):
+        raise ValueError("distribution manifest contains duplicate file paths")
 
     release = load(one(root, "RELEASE_EVIDENCE.json"))
     install = load(one(root, "WINDOWS_INSTALL_E2E_EVIDENCE.json"))
@@ -115,12 +126,25 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
     if len(archive_hash_fields) < 2 or archive_hash_fields[0].lower() != archive_hash or archive_hash_fields[1].lstrip("*") != archive.name:
         raise ValueError("platform ZIP SHA256 sidecar mismatch")
     with zipfile.ZipFile(archive) as package:
-        names = set(package.namelist())
+        file_infos = [info for info in package.infolist() if not info.is_dir()]
+        zip_names = [info.filename for info in file_infos]
+        if len(zip_names) != len(set(zip_names)):
+            raise ValueError("distribution ZIP contains duplicate file entries")
+        expected_names = set(manifest_paths) | {"DISTRIBUTION_MANIFEST.json", "DISTRIBUTION_MANIFEST.sha256"}
+        if set(zip_names) != expected_names:
+            missing = sorted(expected_names - set(zip_names))
+            unexpected = sorted(set(zip_names) - expected_names)
+            raise ValueError(f"distribution ZIP inventory differs from manifest: missing={missing} unexpected={unexpected}")
+        if package.read("DISTRIBUTION_MANIFEST.json") != manifest_path.read_bytes():
+            raise ValueError("embedded distribution manifest differs from verified external manifest")
+        if package.read("DISTRIBUTION_MANIFEST.sha256") != manifest_hash_path.read_bytes():
+            raise ValueError("embedded distribution manifest SHA256 sidecar differs from external sidecar")
         for item in files:
-            name = str(item.get("path", ""))
-            if not name or name not in names:
-                raise ValueError(f"distribution ZIP is missing manifest file: {name}")
-            if hashlib.sha256(package.read(name)).hexdigest() != item["sha256"]:
+            name = str(item["path"])
+            payload = package.read(name)
+            if len(payload) != item["bytes"]:
+                raise ValueError(f"distribution ZIP file size mismatch: {name}")
+            if hashlib.sha256(payload).hexdigest() != item["sha256"]:
                 raise ValueError(f"distribution ZIP file digest mismatch: {name}")
         identity_path = "owner_special/app/OWNER_BUILD_IDENTITY.json"
         executable_path = "owner_special/app/research_os_owner_special.exe"
