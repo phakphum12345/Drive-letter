@@ -216,12 +216,13 @@ jobs:
           set -euo pipefail
           setup="$(find release-input -type f -name 'Research-OS-Owner-Special-Setup-*-x64.exe' -print -quit)"
           archive="$(find release-input -type f -name "Research-OS-Platform-Windows-x64-$TARGET_SHA.zip" -print -quit)"
+          archive_hash="$(find release-input -type f -name "Research-OS-Platform-Windows-x64-$TARGET_SHA.zip.sha256" -print -quit)"
           manifest="$(find release-input -type f -name 'DISTRIBUTION_MANIFEST.json' -print -quit)"
           manifest_hash="$(find release-input -type f -name 'DISTRIBUTION_MANIFEST.sha256' -print -quit)"
           release_evidence="$(find release-input -type f -name 'RELEASE_EVIDENCE.json' -print -quit)"
           install_evidence="$(find release-input -type f -name 'WINDOWS_INSTALL_E2E_EVIDENCE.json' -print -quit)"
           certification="$(find spine-input -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
-          for file in "$setup" "$archive" "$manifest" "$manifest_hash" "$release_evidence" "$install_evidence" "$certification"; do test -n "$file"; done
+          for file in "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" "$release_evidence" "$install_evidence" "$certification"; do test -n "$file"; done
           gh release create "$RELEASE_TAG" \
             "$setup" "$archive" "$manifest" "$manifest_hash" \
             "$release_evidence" "$install_evidence" "$certification" \
