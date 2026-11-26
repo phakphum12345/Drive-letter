@@ -11,8 +11,9 @@ class APISpineContractTests(unittest.TestCase):
     def test_app_shell_launches_before_background_startup_probe(self):
         main = self.read("owner_special/flutter_app/lib/main.dart")
         self.assertIn("runApp(OwnerFriendApp(api: api));", main)
-        self.assertIn("unawaited(_probeStartupInBackground(api));", main)
-        self.assertLess(main.index("runApp(OwnerFriendApp(api: api));"), main.index("unawaited(_probeStartupInBackground(api));"))
+        probe_call = "unawaited(_probeStartupInBackground(api, baseUrl));"
+        self.assertIn(probe_call, main)
+        self.assertLess(main.index("runApp(OwnerFriendApp(api: api));"), main.index(probe_call))
 
     def test_native_client_uses_one_api_base_url(self):
         main = self.read("owner_special/flutter_app/lib/main.dart")
