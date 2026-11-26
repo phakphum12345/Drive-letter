@@ -13,6 +13,11 @@ on:
         required: true
         type: string
 
+      final_gate_run_id:
+        description: Successful Research OS Unified Final Gate workflow run ID
+        required: true
+        type: string
+
       spine_run_id:
         description: Successful Research OS Release Spine Gate workflow run ID
         required: true
@@ -39,13 +44,14 @@ concurrency:
 
 jobs:
   release:
-    name: Verify and publish Research OS V3 release
+    name: Verify and publish certified Research OS release
     runs-on: ubuntu-latest
 
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
       CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
       SPINE_RUN_ID: ${{ inputs.spine_run_id }}
+      FINAL_GATE_RUN_ID: ${{ inputs.final_gate_run_id }}
 
     steps:
       - name: Checkout exact candidate commit
@@ -75,10 +81,13 @@ jobs:
           test -n "$TARGET_SHA"
           test -n "$CANDIDATE_RUN_ID"
           test -n "$SPINE_RUN_ID"
+          test -n "$FINAL_GATE_RUN_ID"
           validate_run "$CANDIDATE_RUN_ID" "Research OS Unified Windows Distribution" "$TARGET_SHA"
+          validate_run "$FINAL_GATE_RUN_ID" "Research OS Unified Final Gate" "$TARGET_SHA"
           validate_run "$SPINE_RUN_ID" "Research OS Release Spine Gate" ""
           echo "CANDIDATE_RUN_VALIDATION=PASS"
           echo "SPINE_RUN_VALIDATION=PASS"
+          echo "UNIFIED_FINAL_GATE_VALIDATION=PASS"
 
       - name: Download exact-SHA candidate and release spine artifacts
         shell: bash
