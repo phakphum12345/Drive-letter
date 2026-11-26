@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -30,7 +31,50 @@ def load(path: Path) -> dict:
     return value
 
 
-def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: str) -> dict:
+def validate_provenance(root: Path, target: str, run_id: str) -> dict:
+    evidence_path = one(root, "TARGET_BOUND_EVIDENCE.json")
+    ledger_path = one(root, "TARGET_BOUND_PROVENANCE.json")
+    roots_path = one(root, "TARGET_BOUND_ROOTS.json")
+    verification_path = one(root, "TARGET_BOUND_VERIFICATION.json")
+    evidence = load(evidence_path)
+    ledger = load(ledger_path)
+    roots = load(roots_path)
+    verification = load(verification_path)
+    evidence_hash = sha256(evidence_path)
+    if evidence.get("workflow") != "Provenance Evidence Gate" or str(evidence.get("run_id")) != str(run_id):
+        raise ValueError("provenance artifact workflow/run identity mismatch")
+    if evidence.get("target_commit") != target or not re.fullmatch(r"[0-9a-f]{40}", str(evidence.get("source_commit", ""))):
+        raise ValueError("provenance evidence target/source commit mismatch")
+    parent = subprocess.check_output(["git", "rev-parse", f"{target}^"], text=True).strip()
+    tree = subprocess.check_output(["git", "show", "-s", "--format=%T", target], text=True).strip()
+    if evidence["source_commit"] != parent or evidence.get("commit_tree") != tree:
+        raise ValueError("provenance source parent or commit tree mismatch")
+    if roots.get("target_commit") != target or roots.get("source_commit") != parent or roots.get("evidence_root") != evidence_hash:
+        raise ValueError("provenance roots are not bound to target/evidence bytes")
+    if ledger.get("contract_version") != "1.1.0" or not isinstance(ledger.get("entries"), list) or len(ledger["entries"]) != 1:
+        raise ValueError("provenance ledger schema or entry cardinality mismatch")
+    entry = ledger["entries"][0]
+    unsigned = dict(entry)
+    entry_hash = unsigned.pop("entry_hash", None)
+    canonical_entry = json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    expected_entry_hash = hashlib.sha256(b"provenance-entry-v1\\x00" + canonical_entry).hexdigest()
+    if entry_hash != expected_entry_hash:
+        raise ValueError("provenance ledger entry hash mismatch")
+    if entry.get("subject_id") != target or entry.get("output_hashes", {}).get("target_commit", {}).get("digest") != target:
+        raise ValueError("provenance ledger target attestation mismatch")
+    if entry.get("input_hashes", {}).get("source_commit", {}).get("digest") != parent:
+        raise ValueError("provenance ledger source parent mismatch")
+    if entry.get("output_hashes", {}).get("evidence", {}).get("digest") != evidence_hash:
+        raise ValueError("provenance ledger evidence hash mismatch")
+    canonical_ledger = json.dumps(ledger, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    if roots.get("provenance_root") != hashlib.sha256(canonical_ledger).hexdigest():
+        raise ValueError("provenance ledger root mismatch")
+    if verification.get("status") != "PASS" or verification.get("roots_verified") is not True or verification.get("errors"):
+        raise ValueError("independent provenance verification report is not PASS")
+    return {"provenance_run_id": str(run_id), "evidence_root": evidence_hash, "provenance_root": roots["provenance_root"]}
+
+
+def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: str, provenance_dir: Path, provenance_run: str) -> dict:
     if not re.fullmatch(r"[0-9a-f]{40}", target):
         raise ValueError("target SHA must be a full 40-character lowercase commit")
     manifest_path = one(root, "DISTRIBUTION_MANIFEST.json")
@@ -78,6 +122,14 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
                 raise ValueError(f"distribution ZIP is missing manifest file: {name}")
             if hashlib.sha256(package.read(name)).hexdigest() != item["sha256"]:
                 raise ValueError(f"distribution ZIP file digest mismatch: {name}")
+        identity_path = "owner_special/app/OWNER_BUILD_IDENTITY.json"
+        executable_path = "owner_special/app/research_os_owner_special.exe"
+        if identity_path not in names or executable_path not in names:
+            raise ValueError("Owner build identity or executable is missing from the canonical ZIP")
+        identity = json.loads(package.read(identity_path).decode("utf-8-sig"))
+        owner_exe_hash = hashlib.sha256(package.read(executable_path)).hexdigest()
+        if identity.get("passed") is not True or identity.get("commit") != target or str(identity.get("sha256", "")).lower() != owner_exe_hash:
+            raise ValueError("Owner build identity commit/EXE SHA256 provenance mismatch")
     if release.get("platform_zip") != archive.name or release.get("platform_zip_sha256") != archive_hash:
         raise ValueError("platform ZIP identity or SHA256 mismatch")
     if release.get("owner_special_setup") != setup.name or release.get("owner_special_setup_sha256") != setup_hash:
@@ -111,7 +163,10 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
         raise ValueError("release spine constituent workflow run references are missing")
     if str(refs["candidate"]) != str(candidate_run):
         raise ValueError("candidate run ID differs from certified release spine")
-    return {f"{key}_run_id": str(refs[key]) for key in expected if key != "candidate"} | {
+    provenance = validate_provenance(provenance_dir, target, provenance_run)
+    if str(refs["provenance"]) != str(provenance_run):
+        raise ValueError("provenance run ID differs from certified release spine")
+    return {f"{key}_run_id": str(refs[key]) for key in expected if key != "candidate"} | provenance | {
         "target_sha": target, "spine_run_id": str(spine_run),
         "distribution_manifest_sha256": manifest_hash, "platform_zip_sha256": archive_hash,
         "owner_setup_sha256": setup_hash,
@@ -125,10 +180,12 @@ def main() -> int:
     parser.add_argument("--target-sha", required=True)
     parser.add_argument("--spine-run-id", required=True)
     parser.add_argument("--candidate-run-id", required=True)
+    parser.add_argument("--provenance-dir", type=Path, required=True)
+    parser.add_argument("--provenance-run-id", required=True)
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
     try:
-        result = verify(args.artifact_dir, args.spine, args.target_sha, args.spine_run_id, args.candidate_run_id)
+        result = verify(args.artifact_dir, args.spine, args.target_sha, args.spine_run_id, args.candidate_run_id, args.provenance_dir, args.provenance_run_id)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
         print(f"RELEASE_AUTHORITY_VALIDATION=FAIL: {exc}")
         return 1
