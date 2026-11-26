@@ -27,8 +27,6 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
             package.writestr("owner_special/app/research_os_owner_special.exe", owner_exe)
             package.writestr("owner_special/app/OWNER_BUILD_IDENTITY.json", json.dumps(identity))
         setup.write_bytes(b"installer")
-        archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
-        (root / (archive.name + ".sha256")).write_text(f"{archive_hash}  {archive.name}")
         files = [
             {"path": "app/app.exe", "sha256": hashlib.sha256(b"app").hexdigest(), "bytes": 3},
             {"path": "owner_special/app/research_os_owner_special.exe", "sha256": hashlib.sha256(owner_exe).hexdigest(), "bytes": len(owner_exe)},
@@ -38,7 +36,13 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
         manifest_path = root / "DISTRIBUTION_MANIFEST.json"
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-        (root / "DISTRIBUTION_MANIFEST.sha256").write_text(f"{manifest_hash}  DISTRIBUTION_MANIFEST.json")
+        manifest_sidecar = root / "DISTRIBUTION_MANIFEST.sha256"
+        manifest_sidecar.write_text(f"{manifest_hash}  DISTRIBUTION_MANIFEST.json")
+        with zipfile.ZipFile(archive, "a") as package:
+            package.writestr("DISTRIBUTION_MANIFEST.json", manifest_path.read_bytes())
+            package.writestr("DISTRIBUTION_MANIFEST.sha256", manifest_sidecar.read_bytes())
+        archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
+        (root / (archive.name + ".sha256")).write_text(f"{archive_hash}  {archive.name}")
         setup_hash = hashlib.sha256(setup.read_bytes()).hexdigest()
         release = {
             "source_sha": target, "release_authority": "FINAL_GATE", "installer_role": "OWNER_SPECIAL",
@@ -104,6 +108,30 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
 
 
     def refresh_archive_bindings(self, root: Path, archive: Path, refresh_manifest: bool = False):
+        manifest_path = root / "DISTRIBUTION_MANIFEST.json"
+        manifest_hash_path = root / "DISTRIBUTION_MANIFEST.sha256"
+        if refresh_manifest:
+            manifest = json.loads(manifest_path.read_text())
+            with zipfile.ZipFile(archive) as package:
+                for item in manifest["files"]:
+                    payload = package.read(item["path"])
+                    item["sha256"] = hashlib.sha256(payload).hexdigest()
+                    item["bytes"] = len(payload)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+            manifest_hash_path.write_text(f"{manifest_hash}  DISTRIBUTION_MANIFEST.json")
+
+        rebuilt = archive.with_suffix(".rebuilt.zip")
+        with zipfile.ZipFile(archive) as source, zipfile.ZipFile(rebuilt, "w") as destination:
+            for info in source.infolist():
+                if info.is_dir() or info.filename in {"DISTRIBUTION_MANIFEST.json", "DISTRIBUTION_MANIFEST.sha256"}:
+                    continue
+                destination.writestr(info, source.read(info.filename))
+            destination.writestr("DISTRIBUTION_MANIFEST.json", manifest_path.read_bytes())
+            destination.writestr("DISTRIBUTION_MANIFEST.sha256", manifest_hash_path.read_bytes())
+        archive.write_bytes(rebuilt.read_bytes())
+        rebuilt.unlink()
+
         archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
         (root / (archive.name + ".sha256")).write_text(f"{archive_hash}  {archive.name}")
         release_path = root / "RELEASE_EVIDENCE.json"
@@ -113,23 +141,10 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
         install_path = root / "WINDOWS_INSTALL_E2E_EVIDENCE.json"
         install = json.loads(install_path.read_text())
         install["platform_zip_sha256"] = archive_hash
-
         if refresh_manifest:
-            manifest_path = root / "DISTRIBUTION_MANIFEST.json"
-            manifest = json.loads(manifest_path.read_text())
-            with zipfile.ZipFile(archive) as package:
-                for item in manifest["files"]:
-                    payload = package.read(item["path"])
-                    item["sha256"] = hashlib.sha256(payload).hexdigest()
-                    item["bytes"] = len(payload)
-            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-            (root / "DISTRIBUTION_MANIFEST.sha256").write_text(
-                f"{manifest_hash}  DISTRIBUTION_MANIFEST.json"
-            )
             install["manifest_sha256"] = manifest_hash
             install["manifest_hash_file"] = f"{manifest_hash}  DISTRIBUTION_MANIFEST.json"
-
         install_path.write_text(json.dumps(install), encoding="utf-8")
 
     def verify_fixture(self, root, spine, provenance, target):
