@@ -141,20 +141,27 @@ jobs:
             --dir spine-input
           find release-input spine-input -type f -print | sort
 
-      - name: Validate immutable release authority evidence
+      - name: Resolve certified constituent workflow run references
         id: authority
         run: |
           set -euo pipefail
           spine="$(find spine-input -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
           test -n "$spine"
-          python tools/validate_release_authority.py \
-            --artifact-dir release-input \
-            --spine "$spine" \
-            --target-sha "$TARGET_SHA" \
-            --spine-run-id "$SPINE_RUN_ID" \
-            --candidate-run-id "$CANDIDATE_RUN_ID" \
-            --github-output "$GITHUB_OUTPUT"
-          echo "CANDIDATE_PROVENANCE_LINEAGE_CERTIFICATION=PASS"
+          python - "$spine" "$TARGET_SHA" "$SPINE_RUN_ID" "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path, target, run_id, output = sys.argv[1:]
+          data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+          if data.get("commit") != target or str(data.get("run_id")) != run_id:
+              raise SystemExit("release spine target/run identity mismatch")
+          refs = data.get("run_refs", {})
+          for key in ("research_gate", "provenance", "lineage"):
+              value = str(refs.get(key, ""))
+              if not value.isdigit():
+                  raise SystemExit(f"missing certified run reference: {key}")
+              with open(output, "a", encoding="utf-8") as stream:
+                  stream.write(f"{key}_run_id={value}\\n")
+          PY
 
       - name: Independently validate certified constituent workflow runs
         shell: bash
@@ -183,6 +190,36 @@ jobs:
           validate_exact_run "$LINEAGE_RUN_ID" "Canonical Source Lineage Gate"
           echo "RELEASE_SPINE_CONSTITUENT_RUNS=PASS"
 
+      - name: Download exact-SHA target-bound provenance evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_RUN_ID: ${{ steps.authority.outputs.provenance_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p provenance-input
+          gh run download "$PROVENANCE_RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name "target-bound-provenance-$PROVENANCE_RUN_ID" \
+            --dir provenance-input
+          find provenance-input -type f -print | sort
+
+      - name: Validate immutable release, provenance, and Owner identity evidence
+        run: |
+          set -euo pipefail
+          spine="$(find spine-input -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
+          test -n "$spine"
+          python tools/validate_release_authority.py \
+            --artifact-dir release-input \
+            --spine "$spine" \
+            --target-sha "$TARGET_SHA" \
+            --spine-run-id "$SPINE_RUN_ID" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --provenance-dir provenance-input \
+            --provenance-run-id "${{ steps.authority.outputs.provenance_run_id }}" \
+            --github-output "$GITHUB_OUTPUT"
+          echo "CANDIDATE_PROVENANCE_LINEAGE_CERTIFICATION_OWNER_IDENTITY=PASS"
+
       - name: Upload release-ready artifact and certification evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -190,6 +227,7 @@ jobs:
           path: |
             release-input/**
             spine-input/**
+            provenance-input/**
           if-no-files-found: error
           retention-days: 30
 
