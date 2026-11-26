@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import zipfile
 from pathlib import Path
 
 
@@ -44,7 +45,7 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
     files = manifest.get("files")
     if not isinstance(files, list) or manifest.get("file_count") != len(files):
         raise ValueError("distribution manifest file inventory mismatch")
-    if not files or any(not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))) for item in files):
+    if not files or any(not isinstance(item, dict) or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", ""))) for item in files):
         raise ValueError("distribution manifest contains invalid file digest")
 
     release = load(one(root, "RELEASE_EVIDENCE.json"))
@@ -55,7 +56,8 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
         raise ValueError("final gate authority binding missing")
     if release.get("installer_role") != "OWNER_SPECIAL" or release.get("installation_payload") != "RESEARCH_OS_PLATFORM_ZIP":
         raise ValueError("canonical installer role or payload mismatch")
-    if install.get("manifest_sha256") != manifest_hash or install.get("manifest_hash_file", "").split()[0].lower() != manifest_hash:
+    hash_file_value = str(install.get("manifest_hash_file", "")).split()
+    if install.get("manifest_sha256") != manifest_hash or not hash_file_value or hash_file_value[0].lower() != manifest_hash:
         raise ValueError("installed E2E evidence is not bound to the distribution manifest")
 
     archive = one(root, f"Research-OS-Platform-Windows-x64-{target}.zip")
@@ -64,6 +66,14 @@ def verify(root: Path, spine: Path, target: str, spine_run: str, candidate_run: 
         raise ValueError(f"expected exactly one Owner Special Setup.exe, found {len(setups)}")
     setup = setups[0]
     archive_hash, setup_hash = sha256(archive), sha256(setup)
+    with zipfile.ZipFile(archive) as package:
+        names = set(package.namelist())
+        for item in files:
+            name = str(item.get("path", ""))
+            if not name or name not in names:
+                raise ValueError(f"distribution ZIP is missing manifest file: {name}")
+            if hashlib.sha256(package.read(name)).hexdigest() != item["sha256"]:
+                raise ValueError(f"distribution ZIP file digest mismatch: {name}")
     if release.get("platform_zip") != archive.name or release.get("platform_zip_sha256") != archive_hash:
         raise ValueError("platform ZIP identity or SHA256 mismatch")
     if release.get("owner_special_setup") != setup.name or release.get("owner_special_setup_sha256") != setup_hash:
