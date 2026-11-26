@@ -35,7 +35,7 @@ jobs:
       - name: Setup Flutter
         uses: ./.github/actions/flutter-setup # vendored composite; nested actions pinned
         with:
-          flutter-version: "3.44.9"
+          flutter-version: "3.50.1"
           channel: stable
           cache: true
 

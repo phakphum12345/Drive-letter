@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
 import 'package:research_os_flutter/src/features/chat/chat_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,27 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
+  testWidgets('legacy Markdown receives the Material UI theme bridge', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
+        home: const Scaffold(
+          body: MarkdownBody(
+            data: '**Research OS** markdown compatibility',
+            styleSheetTheme: MarkdownStyleSheetBaseTheme.material,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MarkdownBody), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('chat sends replies keeps context and restores session', (tester) async {
     tester.view.physicalSize = const Size(1440, 1200);
     tester.view.devicePixelRatio = 1;
@@ -46,7 +68,13 @@ void main() {
     final apiClient = ChatFlowApiClient();
 
     await tester.pumpWidget(
-      MaterialApp(home: ChatPage(apiClient: apiClient)),
+      MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
+        home: ChatPage(apiClient: apiClient),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -106,7 +134,13 @@ void main() {
 
     final reopenedClient = ChatFlowApiClient();
     await tester.pumpWidget(
-      MaterialApp(home: ChatPage(apiClient: reopenedClient)),
+      MaterialApp(
+        builder: (context, child) {
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
+        home: ChatPage(apiClient: reopenedClient),
+      ),
     );
     await tester.pumpAndSettle();
 

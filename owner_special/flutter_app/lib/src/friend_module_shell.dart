@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class FriendModuleShell extends StatelessWidget {
   const FriendModuleShell({required this.title, required this.child, this.actions = const <Widget>[], super.key});

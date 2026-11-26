@@ -117,7 +117,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
     foreach ($entry in $archive.Entries) {
-        $name = $entry.FullName.Replace('\','/')
+        $name = $entry.FullName.Replace([string][char]92, '/')
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
         if ($name.StartsWith('/') -or $name -match '^[A-Za-z]:') { throw "Unsafe absolute ZIP entry: $name" }
         $segments = $name.Split('/')
@@ -133,10 +133,8 @@ New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
     try {
-        # The installer deliberately launches Windows PowerShell 5.1. Its .NET
-        # Framework runtime does not expose the three-argument ZipFile overload
-        # used by the PowerShell 7 Archive module's Expand-Archive implementation.
-        # Use the two-argument API available on .NET Framework 4.5+ instead.
+        # Use the two-argument .NET API supported by Windows PowerShell 5.1
+        # and PowerShell 7. ZIP entries have already been checked for traversal.
         [System.IO.Compression.ZipFile]::ExtractToDirectory($zipItem.FullName, $staging)
         Write-Diagnostic "STEP expand-archive result=PASS"
     }
@@ -144,7 +142,6 @@ try {
         Write-Diagnostic "STEP expand-archive result=FAIL message=$($_.Exception.Message)"
         throw "Unable to extract Platform ZIP with the Windows PowerShell-compatible API: $($_.Exception.Message)"
     }
-
     $manifestPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.json'
     $manifestHashPath = Join-Path $staging 'DISTRIBUTION_MANIFEST.sha256'
     if (-not (Test-Path $manifestPath -PathType Leaf)) { throw 'Platform ZIP is missing DISTRIBUTION_MANIFEST.json' }

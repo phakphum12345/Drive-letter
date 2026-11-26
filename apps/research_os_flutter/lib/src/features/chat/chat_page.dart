@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -845,7 +845,7 @@ class _MessageBubble extends StatelessWidget {
             if (renderMarkdown)
               MarkdownBody(
                 data: message.text,
-                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                styleSheetTheme: MarkdownStyleSheetBaseTheme.material,
               )
             else
               Text(message.text),

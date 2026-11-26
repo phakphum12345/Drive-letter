@@ -1,10 +1,10 @@
 # Friend Cloud Memory Durability — Design and Safe Cutover
 
-**Status:** Proposal only; no infrastructure change or data cutover is authorized or applied  
-**Repository:** `phakphum12345/Drive-letter`  
-**Service:** `research-os-api-phakphoum`  
-**Scope:** Owner Friend filesystem-backed stores only  
-**Evidence review date:** 2026-11-25  
+- **Status:** Proposal only; no infrastructure change or data cutover is authorized or applied
+- **Repository:** `phakphum12345/Drive-letter`
+- **Service:** `research-os-api-phakphoum`
+- **Scope:** Owner Friend filesystem-backed stores only
+- **Evidence review date:** 2026-11-25
 **Source mainline SHA reviewed:** `dd257710b95eb718d6204ba887024b125cc1322d`
 
 ## 1. Decision and boundaries

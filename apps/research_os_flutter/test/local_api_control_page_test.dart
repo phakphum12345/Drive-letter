@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:research_os_flutter/src/features/local_api/local_api_control_page.dart';
 import 'package:research_os_flutter/src/platform/local_api_manager.dart';

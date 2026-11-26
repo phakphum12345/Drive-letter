@@ -190,7 +190,24 @@ function Invoke-CleanValidation {
             if (-not $apiStatus -or -not $apiProvider) { throw 'API Spine Owner status/provider preflight failed' }
 
             if (Test-Path $audit) { Clear-Content $audit -ErrorAction SilentlyContinue }
-            $app = Start-Process -FilePath $appExe -WorkingDirectory (Split-Path $appExe) -PassThru
+            $probeLog = Join-Path $env:RUNNER_TEMP 'owner-installer-desktop-startup-probe.log'
+            if (Test-Path $probeLog) { Remove-Item $probeLog -Force }
+            Write-Host "Installed Desktop API base URL: $apiBase"
+            Write-Host "Installed Desktop startup probe log: $probeLog"
+            $desktopStart = [System.Diagnostics.ProcessStartInfo]::new()
+            $desktopStart.FileName = $appExe
+            $desktopStart.WorkingDirectory = (Split-Path $appExe)
+            $desktopStart.UseShellExecute = $false
+            # Preserve the runner's complete process environment while explicitly
+            # pinning the two values required by the installed Desktop E2E.
+            foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
+                $desktopStart.EnvironmentVariables[$entry.Key] = [string]$entry.Value
+            }
+            $desktopStart.EnvironmentVariables['RESEARCH_OS_API_BASE_URL'] = $apiBase
+            $desktopStart.EnvironmentVariables['RESEARCH_OS_STARTUP_PROBE_LOG'] = $probeLog
+            $app = [System.Diagnostics.Process]::Start($desktopStart)
+            if (-not $app) { throw 'Could not start installed Owner Desktop process' }
+            Write-Host "Installed Owner Desktop PID: $($app.Id)"
             $proved = $false
             for ($i=0; $i -lt 60; $i++) {
                 if ($app.HasExited) { throw "Installed Owner Desktop exited during startup E2E (exit code $($app.ExitCode))" }
@@ -201,12 +218,29 @@ function Invoke-CleanValidation {
                 }
                 Start-Sleep -Milliseconds 300
             }
-            if (-not $proved) { throw 'Installed Owner Desktop did not prove the public health probe through the API Spine' }
+            if (-not $proved) {
+                Write-Host '=== Installed Owner Desktop startup probe log ==='
+                if (Test-Path $probeLog) { Get-Content $probeLog -Tail 100 | Out-Host } else { Write-Host '<startup probe log missing>' }
+                Write-Host '=== Installed Owner Desktop process diagnostics ==='
+                if ($app) {
+                    $app.Refresh()
+                    Write-Host "PID=$($app.Id) HasExited=$($app.HasExited) ExitCode=$(if ($app.HasExited) { $app.ExitCode } else { '<running>' })"
+                }
+                throw 'Installed Owner Desktop did not prove the public health probe through the API Spine'
+            }
             Write-Host 'INSTALLED_OWNER_DESKTOP_API_SPINE_E2E=PASS'
             Get-Content $audit | Out-Host
         } catch {
             Write-Host '=== Installed Owner API Spine diagnostics ==='
-            if (Test-Path $audit) { Get-Content $audit -Tail 100 | Out-Host }
+            if (Test-Path $audit) { Get-Content $audit -Tail 100 | Out-Host } else { Write-Host '<API audit file missing>' }
+            if ($probeLog -and (Test-Path $probeLog)) {
+                Write-Host '=== Installed Owner Desktop startup probe log ==='
+                Get-Content $probeLog -Tail 100 | Out-Host
+            } elseif ($probeLog) { Write-Host "Startup probe log missing: $probeLog" }
+            if ($app) {
+                $app.Refresh()
+                Write-Host "Installed Owner Desktop PID=$($app.Id) HasExited=$($app.HasExited)"
+            }
             if (Test-Path $apiOut) { Get-Content $apiOut -Tail 80 | Out-Host }
             if (Test-Path $apiErr) { Get-Content $apiErr -Tail 120 | Out-Host }
             throw
