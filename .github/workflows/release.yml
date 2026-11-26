@@ -160,7 +160,7 @@ jobs:
               if not value.isdigit():
                   raise SystemExit(f"missing certified run reference: {key}")
               with open(output, "a", encoding="utf-8") as stream:
-                  stream.write(f"{key}_run_id={value}\\n")
+                  stream.write(f"{key}_run_id={value}\n")
           PY
 
       - name: Independently validate certified constituent workflow runs
