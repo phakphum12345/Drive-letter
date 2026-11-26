@@ -224,7 +224,7 @@ jobs:
           certification="$(find spine-input -type f -name 'RELEASE_SPINE_CERTIFICATION.json' -print -quit)"
           for file in "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" "$release_evidence" "$install_evidence" "$certification"; do test -n "$file"; done
           gh release create "$RELEASE_TAG" \
-            "$setup" "$archive" "$manifest" "$manifest_hash" \
+            "$setup" "$archive" "$archive_hash" "$manifest" "$manifest_hash" \
             "$release_evidence" "$install_evidence" "$certification" \
             --repo "${{ github.repository }}" \
             --target "$TARGET_SHA" \
