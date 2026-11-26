@@ -2,6 +2,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from tools.validate_release_authority import verify
@@ -12,12 +13,13 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
         target = "a" * 40
         archive = root / f"Research-OS-Platform-Windows-x64-{target}.zip"
         setup = root / "Research-OS-Owner-Special-Setup-1.3.1-x64.exe"
-        archive.write_bytes(b"platform archive")
+        with zipfile.ZipFile(archive, "w") as package:
+            package.writestr("app/app.exe", b"app")
         setup.write_bytes(b"installer")
         manifest = {
             "schema_version": 1, "distribution": "Research OS Unified Windows",
             "source_sha": target, "file_count": 1,
-            "files": [{"path": "app/app.exe", "sha256": "b" * 64, "bytes": 1}],
+            "files": [{"path": "app/app.exe", "sha256": hashlib.sha256(b"app").hexdigest(), "bytes": 3}],
         }
         manifest_path = root / "DISTRIBUTION_MANIFEST.json"
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
