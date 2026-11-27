@@ -208,7 +208,7 @@ class ReleaseAuthorityValidationTest(unittest.TestCase):
                     for info in source.infolist()
                     if not info.is_dir() and info.filename not in {"DISTRIBUTION_MANIFEST.json", "DISTRIBUTION_MANIFEST.sha256"}
                 }
-            existing["app/app.exe"] = b"tampered"
+            existing["app/app.exe"] = b"bad"
             with zipfile.ZipFile(archive, "w") as package:
                 for name, payload in existing.items():
                     package.writestr(name, payload)
