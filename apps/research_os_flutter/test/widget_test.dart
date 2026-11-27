@@ -209,8 +209,8 @@ void main() {
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('gemini'), findsOneWidget);
     expect(find.text('Ready'), findsOneWidget);
-    expect(find.text('AI & Agents'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('home-workspace-ai-agents')));
+    expect(find.text('Agent Center'), findsOneWidget);
+    await tester.tap(find.text('Agent Center'));
     expect(selectedIndex, 2);
     expect(tester.takeException(), isNull);
   });
