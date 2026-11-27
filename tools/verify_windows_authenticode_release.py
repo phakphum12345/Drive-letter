@@ -84,7 +84,8 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
             package_evidence = json.loads(package.read("CODE_SIGNING_EVIDENCE.json").decode("utf-8-sig"))
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("embedded package Authenticode evidence is missing or invalid") from exc
-        if (package_evidence.get("schema") != "research-os.package-authenticode.v1" or
+        if (not isinstance(package_evidence, dict) or
+                package_evidence.get("schema") != "research-os.package-authenticode.v1" or
                 package_evidence.get("source_sha") != target_sha or
                 package_evidence.get("status") != "PASS" or
                 package_evidence.get("executable_count") != len(executable_names)):
