@@ -23,6 +23,7 @@ PLATFORM_MATRIX_PATH = "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
 
 REQUIRED_PACKAGE_PATHS = {
     "app/research_os_flutter.exe",
+    "CODE_SIGNING_EVIDENCE.json",
     "owner_special/app/research_os_owner_special.exe",
     "owner_special/OWNER_MANIFEST.json",
     "owner_special/research_os_friend",
