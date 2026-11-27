@@ -59,6 +59,8 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("WINDOWS_CODESIGN_CERT_BASE64", workflow)
         self.assertIn("WINDOWS_CODESIGN_CERT_PASSWORD", workflow)
         self.assertIn("signtool verify /pa /all /v", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("Only the repository owner may authorize code signing.", workflow)
         self.assertIn("Self-issued/self-signed signing certificates are forbidden.", workflow)
         self.assertIn("CODE_SIGNING_EVIDENCE.json", workflow)
         self.assertIn("status = 'NOT_SIGNED'", workflow)
