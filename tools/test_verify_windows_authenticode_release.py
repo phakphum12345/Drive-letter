@@ -88,6 +88,21 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             identity = verify_signature(exe, ca)
             self.assertEqual(("/CN=Publisher", "/CN=Public CA"), identity)
 
+    @patch("tools.verify_windows_authenticode_release.subprocess.run")
+    def test_signature_verifier_rejects_self_issued_certificate(self, run):
+        from subprocess import CompletedProcess
+        run.return_value = CompletedProcess(
+            args=[], returncode=0,
+            stdout="Subject: /CN=Local Self Signed\\nIssuer: /CN=Local Self Signed\\n",
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            exe = root / "test.exe"; exe.write_bytes(b"MZ")
+            ca = root / "ca.pem"; ca.write_text("CA", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Self-issued/self-signed"):
+                verify_signature(exe, ca)
+
     @patch("tools.verify_windows_authenticode_release.verify_signature")
     def test_rejects_missing_signing_evidence(self, verify_signature):
         with tempfile.TemporaryDirectory() as directory:
