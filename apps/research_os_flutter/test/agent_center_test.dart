@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:research_os_flutter/src/api/research_os_api_client.dart';
@@ -12,6 +14,10 @@ class FakeAgentApiClient extends ResearchOSApiClient {
   bool cancelled = false;
   bool retried = false;
   bool knowledgeSearched = false;
+  int executeCalls = 0;
+  int confirmCalls = 0;
+  Object? actionError;
+  Completer<void>? executeGate;
 
   @override
   Future<Map<String, dynamic>> getOrchestrations({
@@ -115,13 +121,18 @@ class FakeAgentApiClient extends ResearchOSApiClient {
     String runId, {
     bool confirmed = false,
   }) async {
+    executeCalls++;
+    if (actionError != null) throw actionError!;
     executed = true;
+    if (executeGate != null) await executeGate!.future;
     runs.first['status'] = 'awaiting_confirmation';
     return <String, dynamic>{'run': runs.first};
   }
 
   @override
   Future<Map<String, dynamic>> confirmOrchestration(String runId) async {
+    confirmCalls++;
+    if (actionError != null) throw actionError!;
     confirmed = true;
     runs.first['status'] = 'completed';
     final steps = runs.first['steps'] as List<dynamic>;
@@ -208,6 +219,12 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('confirm-run-12345678')));
     await tester.tap(find.byKey(const Key('confirm-run-12345678')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('orchestration-confirmation-preview')), findsOneWidget);
+    expect(find.byKey(const Key('confirmation-preview-objective')), findsOneWidget);
+    expect(find.textContaining('Research source material'), findsOneWidget);
+    expect(api.confirmCalls, 0);
+    await tester.tap(find.byKey(const Key('confirm-preview-submit')));
+    await tester.pumpAndSettle();
     expect(api.confirmed, isTrue);
     expect(find.text('completed'), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -286,5 +303,122 @@ void main() {
     expect(api.cancelled, isTrue);
     expect(find.text('cancelled'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  }); 
+  testWidgets('Agent Center exposes only lifecycle-valid controls', (tester) async {
+    final api = FakeAgentApiClient();
+    api.runs.addAll([
+      <String, dynamic>{
+        'run_id': 'run-interrupted',
+        'objective': 'Recover interrupted workflow',
+        'status': 'interrupted',
+        'steps': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'step_id': 'step-1',
+            'objective': 'Continue saved work',
+            'status': 'interrupted',
+            'depends_on': <String>[],
+          },
+        ],
+      },
+      <String, dynamic>{
+        'run_id': 'run-completed',
+        'objective': 'Already completed',
+        'status': 'completed',
+        'steps': <Map<String, dynamic>>[],
+      },
+      <String, dynamic>{
+        'run_id': 'run-failed-exhausted',
+        'objective': 'Retry limit reached',
+        'status': 'failed',
+        'steps': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'step_id': 'step-failed',
+            'objective': 'Exhausted step',
+            'status': 'failed',
+            'attempt_count': 3,
+            'max_attempts': 3,
+          },
+        ],
+      },
+    ]);
+    configureView(tester, height: 1600);
+
+    await tester.pumpWidget(testApp(api));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('continue-run-interrupted')), findsOneWidget);
+    expect(find.byKey(const Key('resume-run-interrupted')), findsNothing);
+    expect(find.byKey(const Key('execute-run-interrupted')), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('continue-run-interrupted')));
+    await tester.tap(find.byKey(const Key('continue-run-interrupted')));
+    await tester.pumpAndSettle();
+    expect(api.executeCalls, 1);
+    expect(find.byKey(const Key('execute-run-completed')), findsNothing);
+    expect(find.byKey(const Key('cancel-run-completed')), findsNothing);
+    expect(find.byKey(const Key('retry-run-failed-exhausted')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Agent Center reports Owner authorization errors clearly', (tester) async {
+    final api = FakeAgentApiClient()
+      ..actionError = const ResearchOSApiException(
+        'Research OS API error 403: owner_authorization_required',
+        statusCode: 403,
+      );
+    api.runs.add(<String, dynamic>{
+      'run_id': 'run-owner-only',
+      'objective': 'Owner-only workflow',
+      'status': 'planned',
+      'steps': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'step_id': 'step-1',
+          'objective': 'Wait for authorized execution',
+          'status': 'planned',
+        },
+      ],
+    });
+    configureView(tester, height: 1400);
+
+    await tester.pumpWidget(testApp(api));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('execute-run-owner-only')));
+    await tester.tap(find.byKey(const Key('execute-run-owner-only')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('ไม่มีสิทธิ์ Owner'), findsOneWidget);
+    expect(api.executeCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Agent Center prevents duplicate execution requests', (tester) async {
+    final api = FakeAgentApiClient()..executeGate = Completer<void>();
+    api.runs.add(<String, dynamic>{
+      'run_id': 'run-single-flight',
+      'objective': 'Single execution',
+      'status': 'planned',
+      'steps': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'step_id': 'step-1',
+          'objective': 'Run once',
+          'status': 'planned',
+        },
+      ],
+    });
+    configureView(tester, height: 1400);
+
+    await tester.pumpWidget(testApp(api));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('execute-run-single-flight')));
+    await tester.tap(find.byKey(const Key('execute-run-single-flight')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('execute-run-single-flight')));
+    await tester.pump();
+
+    expect(api.executeCalls, 1);
+    api.executeGate!.complete();
+    await tester.pumpAndSettle();
+    expect(api.executeCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
 }
