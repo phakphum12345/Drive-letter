@@ -183,7 +183,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
               children: [
                 const Text('Objective', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('${run['objective'] ?? 'Untitled orchestration'}'),
+                Text('${run['objective'] ?? 'Untitled orchestration'}', key: const Key('confirmation-preview-objective')),
                 const SizedBox(height: 14),
                 const Text('Steps to be confirmed', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
@@ -202,7 +202,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
                 const SizedBox(height: 8),
                 const Text(
                   'Confirmation authorizes the backend to continue the waiting workflow. '
-                  'Review the objective and every step before proceeding.',
+                  'This preview shows the fields returned by the API; it does not independently verify external side effects or resource permissions. Review the objective and every step before proceeding.',
                 ),
               ],
             ),
