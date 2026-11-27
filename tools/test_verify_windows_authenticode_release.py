@@ -26,6 +26,8 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             "source_sha": target,
             "status": "PASS",
             "signer": {"subject": "CN=Research OS Publisher", "issuer": "CN=Public CA"},
+            "package_executable_count": 2,
+            "setup": {"name": setup.name, "sha256": __import__("hashlib").sha256(setup.read_bytes()).hexdigest()},
         }
         (root / "CODE_SIGNING_EVIDENCE.json").write_text(json.dumps(evidence), encoding="utf-8")
         return target, ca
@@ -75,6 +77,32 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "self-issued"):
                 verify_release(root, target, ca)
             verify_signature.assert_not_called()
+
+    @patch("tools.verify_windows_authenticode_release.verify_signature")
+    def test_rejects_setup_evidence_hash_mismatch(self, verify_signature):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target, ca = self.fixture(root)
+            path = root / "CODE_SIGNING_EVIDENCE.json"
+            data = json.loads(path.read_text())
+            data["setup"]["sha256"] = "0" * 64
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "does not bind the exact installer bytes"):
+                verify_release(root, target, ca)
+            verify_signature.assert_not_called()
+
+    @patch("tools.verify_windows_authenticode_release.verify_signature")
+    def test_rejects_package_executable_count_mismatch(self, verify_signature):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target, ca = self.fixture(root)
+            path = root / "CODE_SIGNING_EVIDENCE.json"
+            data = json.loads(path.read_text())
+            data["package_executable_count"] = 1
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "count differs"):
+                verify_release(root, target, ca)
+            verify_signature.assert_called_once()
 
     @patch("tools.verify_windows_authenticode_release.verify_signature")
     def test_rejects_invalid_pe_even_if_extension_is_exe(self, verify_signature):
