@@ -173,6 +173,10 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             archive = root / f"Research-OS-Platform-Windows-x64-{target}.zip"
             with zipfile.ZipFile(archive, "a") as package:
                 package.writestr("bad.exe", b"not a PE")
+            evidence_path = root / "CODE_SIGNING_EVIDENCE.json"
+            evidence = json.loads(evidence_path.read_text())
+            evidence["package_executable_count"] = 3
+            evidence_path.write_text(json.dumps(evidence))
             with self.assertRaisesRegex(ValueError, "not a Windows PE"):
                 verify_release(root, target, ca)
 
