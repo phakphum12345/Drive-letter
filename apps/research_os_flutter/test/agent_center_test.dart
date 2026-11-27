@@ -220,7 +220,7 @@ void main() {
     await tester.tap(find.byKey(const Key('confirm-run-12345678')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('orchestration-confirmation-preview')), findsOneWidget);
-    expect(find.text('Build a research summary'), findsOneWidget);
+    expect(find.byKey(const Key('confirmation-preview-objective')), findsOneWidget);
     expect(find.textContaining('Research source material'), findsOneWidget);
     expect(api.confirmCalls, 0);
     await tester.tap(find.byKey(const Key('confirm-preview-submit')));
@@ -349,6 +349,10 @@ void main() {
     expect(find.byKey(const Key('continue-run-interrupted')), findsOneWidget);
     expect(find.byKey(const Key('resume-run-interrupted')), findsNothing);
     expect(find.byKey(const Key('execute-run-interrupted')), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('continue-run-interrupted')));
+    await tester.tap(find.byKey(const Key('continue-run-interrupted')));
+    await tester.pumpAndSettle();
+    expect(api.executeCalls, 1);
     expect(find.byKey(const Key('execute-run-completed')), findsNothing);
     expect(find.byKey(const Key('cancel-run-completed')), findsNothing);
     expect(find.byKey(const Key('retry-run-failed-exhausted')), findsNothing);
