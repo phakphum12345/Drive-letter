@@ -48,6 +48,20 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn('python -m unittest discover -s tools/research_os_api -p "test_api.py" -v', workflow)
         self.assertIn("tools/research_os_api/contract-requirements.txt", workflow)
 
+    def test_distribution_signing_is_explicit_and_fail_closed(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("authorize_signing:", workflow)
+        self.assertIn("inputs.authorize_signing == true", workflow)
+        self.assertIn("environment:", workflow)
+        self.assertIn("code-signing", workflow)
+        self.assertIn("WINDOWS_CODESIGN_CERT_BASE64", workflow)
+        self.assertIn("WINDOWS_CODESIGN_CERT_PASSWORD", workflow)
+        self.assertIn("signtool verify /pa /all /v", workflow)
+        self.assertIn("Self-issued/self-signed signing certificates are forbidden.", workflow)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", workflow)
+        self.assertIn("status = 'NOT_SIGNED'", workflow)
+
+
     def test_installer_uses_compatible_zip_extraction_overload(self) -> None:
         installer = (
             validator.ROOT
