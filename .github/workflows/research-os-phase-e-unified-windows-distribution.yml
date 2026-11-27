@@ -62,7 +62,7 @@ jobs:
       - run: python tools/validate_phase_e_unified_windows_distribution.py
       - env:
           PYTHONPATH: .
-        run: python -m unittest tools.test_phase_e_unified_windows_distribution tools.test_windows_service_runtime_diagnostics -v
+        run: python -m unittest tools.test_phase_e_unified_windows_distribution tools.test_windows_service_runtime_diagnostics tools.test_verify_windows_authenticode_release -v
 
       - name: Install API regression test dependencies
         run: python -m pip install --disable-pip-version-check -r tools/research_os_api/contract-requirements.txt
