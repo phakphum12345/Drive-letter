@@ -97,6 +97,19 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
                 not isinstance(package_executables, list) or
                 len(package_executables) != len(executable_names)):
             raise ValueError("embedded package Authenticode evidence is not PASS for the exact executable inventory")
+        evidence_inventory = {}
+        for item in package_executables:
+            if (not isinstance(item, dict) or not isinstance(item.get("path"), str) or
+                    not re.fullmatch(r"[0-9a-f]{64}", str(item.get("sha256", "")))):
+                raise ValueError("embedded package Authenticode inventory entry is malformed")
+            if item["path"] in evidence_inventory:
+                raise ValueError("embedded package Authenticode inventory contains duplicate paths")
+            evidence_inventory[item["path"]] = item["sha256"]
+        if set(evidence_inventory) != set(executable_names):
+            raise ValueError("embedded package Authenticode inventory paths differ from the Platform ZIP")
+        for name in executable_names:
+            if hashlib.sha256(package.read(name)).hexdigest() != evidence_inventory[name]:
+                raise ValueError(f"embedded package Authenticode digest mismatch: {name}")
         with tempfile.TemporaryDirectory(prefix="research-os-authenticode-") as temp:
             temp_root = Path(temp)
             for index, name in enumerate(executable_names):
