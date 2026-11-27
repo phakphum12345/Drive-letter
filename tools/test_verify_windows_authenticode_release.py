@@ -171,8 +171,15 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             root = Path(directory)
             target, ca = self.fixture(root)
             archive = root / f"Research-OS-Platform-Windows-x64-{target}.zip"
-            with zipfile.ZipFile(archive, "a") as package:
-                package.writestr("bad.exe", b"not a PE")
+            with zipfile.ZipFile(archive, "r") as source:
+                payloads = {info.filename: source.read(info.filename) for info in source.infolist() if not info.is_dir()}
+            embedded = json.loads(payloads["CODE_SIGNING_EVIDENCE.json"])
+            embedded["executable_count"] = 3
+            payloads["CODE_SIGNING_EVIDENCE.json"] = json.dumps(embedded).encode("utf-8")
+            payloads["bad.exe"] = b"not a PE"
+            with zipfile.ZipFile(archive, "w") as package:
+                for name, payload in payloads.items():
+                    package.writestr(name, payload)
             evidence_path = root / "CODE_SIGNING_EVIDENCE.json"
             evidence = json.loads(evidence_path.read_text())
             evidence["package_executable_count"] = 3
