@@ -60,6 +60,9 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("Self-issued/self-signed signing certificates are forbidden.", workflow)
         self.assertIn("CODE_SIGNING_EVIDENCE.json", workflow)
         self.assertIn("status = 'NOT_SIGNED'", workflow)
+        self.assertIn("tools.test_verify_windows_authenticode_release", workflow)
+        self.assertIn("Sign staged distribution executables with authorized CA certificate", workflow)
+        self.assertIn("Sign and verify Owner Special Setup.exe", workflow)
 
 
     def test_installer_uses_compatible_zip_extraction_overload(self) -> None:
