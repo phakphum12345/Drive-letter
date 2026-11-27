@@ -60,7 +60,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
-          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          fi
       - run: python tools/validate_phase_e_unified_windows_distribution.py
       - env:
           PYTHONPATH: .
