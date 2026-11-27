@@ -20,7 +20,7 @@ from pathlib import Path
 
 def verify_signature(path: Path, ca_file: Path) -> tuple[str, str]:
     result = subprocess.run(
-        ["osslsigncode", "verify", "-verbose", "-in", str(path), "-CAfile", str(ca_file)],
+        ["osslsigncode", "verify", "-verbose", "-in", str(path), "-CAfile", str(ca_file), "-TSA-CAfile", str(ca_file)],
         capture_output=True,
         text=True,
         check=False,
