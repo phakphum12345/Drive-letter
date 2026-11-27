@@ -20,14 +20,20 @@ from pathlib import Path
 
 def verify_signature(path: Path, ca_file: Path) -> None:
     result = subprocess.run(
-        ["osslsigncode", "verify", "-in", str(path), "-CAfile", str(ca_file)],
+        ["osslsigncode", "verify", "-verbose", "-in", str(path), "-CAfile", str(ca_file)],
         capture_output=True,
         text=True,
         check=False,
     )
+    detail = (result.stdout + "\n" + result.stderr).strip()
     if result.returncode != 0:
-        detail = (result.stdout + "\n" + result.stderr).strip()[-3000:]
-        raise ValueError(f"Authenticode verification failed for {path.name}: {detail}")
+        raise ValueError(f"Authenticode verification failed for {path.name}: {detail[-3000:]}")
+    subject = re.search(r"^\\s*Subject:\\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
+    issuer = re.search(r"^\\s*Issuer:\\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
+    if not subject or not issuer:
+        raise ValueError(f"Authenticode signer identity is missing for {path.name}")
+    if subject.group(1).strip() == issuer.group(1).strip():
+        raise ValueError(f"Self-issued/self-signed certificate is forbidden for {path.name}")
 
 
 def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
