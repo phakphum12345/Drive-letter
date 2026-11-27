@@ -41,9 +41,10 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
         raise ValueError("target SHA must be a full lowercase 40-character commit")
     if not ca_file.is_file():
         raise ValueError(f"trusted CA bundle is missing: {ca_file}")
-    evidence_path = root / "CODE_SIGNING_EVIDENCE.json"
-    if not evidence_path.is_file():
-        raise ValueError("CODE_SIGNING_EVIDENCE.json is missing")
+    evidence_matches = list(root.rglob("CODE_SIGNING_EVIDENCE.json"))
+    if len(evidence_matches) != 1:
+        raise ValueError(f"expected exactly one external CODE_SIGNING_EVIDENCE.json, found {len(evidence_matches)}")
+    evidence_path = evidence_matches[0]
     evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
     if not isinstance(evidence, dict) or evidence.get("schema") != "research-os.authenticode-evidence.v1":
         raise ValueError("code-signing evidence schema mismatch")
