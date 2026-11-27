@@ -50,6 +50,8 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
 
     def test_distribution_signing_is_explicit_and_fail_closed(self) -> None:
         workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", validator.REQUIRED_PACKAGE_PATHS)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", validator.json.loads(validator.CONTRACT.read_text(encoding="utf-8"))["required_package_paths"])
         self.assertIn("authorize_signing:", workflow)
         self.assertIn("inputs.authorize_signing == true", workflow)
         self.assertIn("environment:", workflow)
