@@ -8,6 +8,7 @@ verification of the actual PE bytes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -61,7 +62,7 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
     setup_evidence = evidence.get("setup", {})
     if (not isinstance(setup_evidence, dict) or
             setup_evidence.get("name") != setups[0].name or
-            setup_evidence.get("sha256") != __import__("hashlib").sha256(setups[0].read_bytes()).hexdigest()):
+            setup_evidence.get("sha256") != hashlib.sha256(setups[0].read_bytes()).hexdigest()):
         raise ValueError("setup signature evidence does not bind the exact installer bytes")
 
     verify_signature(setups[0], ca_file)
