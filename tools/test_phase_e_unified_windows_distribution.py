@@ -41,6 +41,13 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn("$matrixManifestEntry", workflow)
         self.assertIn("$checks['platform_matrix_manifest_binding'] = $true", workflow)
 
+    def test_windows_distribution_validation_runs_api_identity_regressions(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("Install API regression test dependencies", workflow)
+        self.assertIn("Run Research OS API identity and route regression tests", workflow)
+        self.assertIn('python -m unittest discover -s tools/research_os_api -p "test_api.py" -v', workflow)
+        self.assertIn("tools/research_os_api/contract-requirements.txt", workflow)
+
     def test_installer_uses_compatible_zip_extraction_overload(self) -> None:
         installer = (
             validator.ROOT
