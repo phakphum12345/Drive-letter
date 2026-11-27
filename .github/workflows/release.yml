@@ -275,7 +275,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Mark release verification complete
+        id: release_verified
+        if: success()
+        shell: bash
+        run: echo "result=PASS" >> "$GITHUB_OUTPUT"
+
       - name: Validate release metadata
+        id: validate_release_metadata
         if: ${{ inputs.publish == true }}
         shell: bash
         run: |
@@ -297,6 +304,7 @@ jobs:
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
+        id: publish_release
         if: ${{ inputs.publish == true }}
         shell: bash
         env:
@@ -328,16 +336,68 @@ jobs:
       - name: Release summary
         if: always()
         shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
+          VERIFICATION_OUTCOME: ${{ steps.release_verified.outcome }}
+          METADATA_OUTCOME: ${{ steps.validate_release_metadata.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish_release.outcome }}
         run: |
           {
             echo "## Research OS Release"
             echo
             echo "- Target SHA: \`$TARGET_SHA\`"
             echo "- Candidate run: \`$CANDIDATE_RUN_ID\`"
-            echo "- Publish requested: \`${{ inputs.publish }}\`"
+            echo "- Publish requested: \`$PUBLISH_REQUESTED\`"
             if [ -n "${RELEASE_TAG:-}" ]; then
               echo "- Release tag: \`$RELEASE_TAG\`"
             fi
             echo
-            echo "Unified Windows candidate, installer SHA256, Windows installation evidence, and immutable release spine certification were verified."
+
+            if [ "$VERIFICATION_OUTCOME" = "success" ]; then
+              echo "- Candidate verification: PASS"
+              echo "- Unified Windows candidate, installer SHA256, Windows installation evidence, provenance, and release spine certification passed validation."
+            else
+              echo "- Candidate verification: NOT VERIFIED"
+              echo "- Verification marker outcome: \`$VERIFICATION_OUTCOME\`"
+              echo "- Job status: \`$JOB_STATUS\`"
+            fi
+
+            if [ "$PUBLISH_REQUESTED" != "true" ]; then
+              echo "- Publication result: NOT REQUESTED"
+              echo "- No GitHub Release or tag was requested by this workflow."
+            else
+              case "$METADATA_OUTCOME" in
+                success)
+                  echo "- Release metadata validation: PASS"
+                  ;;
+                failure)
+                  echo "- Release metadata validation: FAIL"
+                  ;;
+                *)
+                  echo "- Release metadata validation: NOT COMPLETED ($METADATA_OUTCOME)"
+                  ;;
+              esac
+
+              case "$PUBLISH_OUTCOME" in
+                success)
+                  echo "- Publication result: SUCCESS"
+                  echo "- GitHub Release creation step completed successfully."
+                  ;;
+                failure)
+                  echo "- Publication result: FAIL"
+                  echo "- GitHub Release creation step failed."
+                  ;;
+                cancelled)
+                  echo "- Publication result: CANCELLED"
+                  ;;
+                skipped)
+                  echo "- Publication result: NOT COMPLETED"
+                  echo "- GitHub Release creation step was skipped."
+                  ;;
+                *)
+                  echo "- Publication result: INCOMPLETE ($PUBLISH_OUTCOME)"
+                  ;;
+              esac
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
