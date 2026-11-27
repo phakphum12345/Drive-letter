@@ -78,15 +78,20 @@ def main() -> None:
     candidate_inputs = workflow_dispatch_inputs(WORKFLOWS / "v3-candidate.yml")
     release_inputs = workflow_dispatch_inputs(RELEASE)
     assert "target_sha" in candidate_inputs, "V3 candidate must accept target_sha"
-    assert {"target_sha", "candidate_run_id"} <= set(release_inputs), "release must accept exact SHA and candidate run ID"
+    assert "target_sha" in release_inputs, "release must accept exact target SHA"
+    assert not unsupported_required_inputs(release_inputs), "release must not require orchestrator-unknown run IDs"
+    legacy_candidate = release_inputs.get("candidate_run_id", {})
+    assert legacy_candidate.get("required") is False and "ignored" in str(legacy_candidate.get("description", "")).lower(), (
+        "legacy V3 candidate_run_id must remain optional and ignored for release authority"
+    )
+    assert "distribution_run_id" in release_inputs, "release must expose the canonical Unified Windows run override"
 
     release_text = RELEASE.read_text(encoding="utf-8")
-    assert 'test "$workflow" = "Research OS V3 Candidate"' in release_text, (
-        "release must verify the exact V3 candidate workflow that emits its artifact"
-    )
+    for workflow_name in ("Research OS Unified Windows Distribution", "Research OS Unified Final Gate", "Research OS Release Spine Gate"):
+        assert workflow_name in release_text, f"release must verify {workflow_name}"
     candidate_text = (WORKFLOWS / "v3-candidate.yml").read_text(encoding="utf-8")
-    artifact_name = "research-os-v3-verified-candidate-${{ env.TARGET_SHA }}"
-    assert artifact_name in candidate_text, "V3 candidate artifact name contract changed"
+    artifact_name = "Research-OS-Unified-Windows-x64-$TARGET_SHA"
+    assert artifact_name in release_text, "release must download the canonical Unified Windows Distribution artifact"
 
     text = ORCHESTRATOR.read_text(encoding="utf-8")
     required_fragments = {
@@ -109,6 +114,19 @@ def main() -> None:
     )
     assert "existing_sha" in text, "existing repair refs must be checked against TARGET_SHA"
     assert "Upload repair evidence artifact" in text, "repair evidence must persist outside the ephemeral runner"
+    assert "fetch-depth: 0" in text, "release ancestry validation requires complete checkout history"
+    assert 'dispatch_ref = "main"' in text, "release workflow must be dispatched from trusted main"
+    assert '"merge-base", "--is-ancestor", target_sha, "origin/main"' in text, (
+        "release target must be proven to be an ancestor of canonical main"
+    )
+    assert '"ref": dispatch_ref' in text, "workflow dispatch must use the resolved trusted ref"
+    assert "expected_head_branch = \"main\"" in text, "release run correlation must bind to main"
+    assert "head_branch" in RELEASE.read_text(encoding="utf-8"), (
+        "release authority must validate release-spine run branch provenance"
+    )
+    assert "event" in RELEASE.read_text(encoding="utf-8"), (
+        "release authority must validate release-spine dispatch event provenance"
+    )
 
     print(
         f"Generate orchestrator contract validation passed: {len(stages)} stages, "
