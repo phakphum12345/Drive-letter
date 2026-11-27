@@ -122,7 +122,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Unavailable'), findsOneWidget);
-    expect(find.text('AI Chat'), findsOneWidget);
+    expect(find.text('Talk to Friend'), findsOneWidget);
     expect(find.text('Agent Center'), findsOneWidget);
     expect(find.byKey(const Key('home-workflows-unavailable')), findsNothing);
     expect(tester.takeException(), isNull);
