@@ -228,7 +228,7 @@ jobs:
           $signerSubject = $null
           $signerIssuer = $null
           foreach ($exe in $executables) {
-            & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /f $pfx /p $env:WINDOWS_CODESIGN_CERT_PASSWORD $exe.FullName
+            & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /sha1 $signingCert.Thumbprint /s My $exe.FullName
             if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for $($exe.Name)." }
             & $signtool verify /pa /all /v $exe.FullName
             if ($LASTEXITCODE -ne 0) { throw "Authenticode trust verification failed for $($exe.Name)." }
@@ -258,6 +258,7 @@ jobs:
             executable_count = $evidence.Count
             executables = $evidence
           } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $package 'CODE_SIGNING_EVIDENCE.json') -Encoding utf8
+          Remove-Item "Cert:\CurrentUser\My\$($signingCert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           Remove-Item $pfx -Force
           Write-Host "PACKAGE_AUTHENTICODE=PASS executable_count=$($evidence.Count)"
 
@@ -435,7 +436,7 @@ jobs:
           $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" |
             Select-Object -First 1
           if (-not $setup -or -not $signtool) { throw 'Setup executable or signtool is missing.' }
-          & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /f $pfx /p $env:WINDOWS_CODESIGN_CERT_PASSWORD $setup.FullName
+          & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /sha1 $signingCert.Thumbprint /s My $setup.FullName
           if ($LASTEXITCODE -ne 0) { throw 'Owner Special Setup Authenticode signing failed.' }
           & $signtool verify /pa /all /v $setup.FullName
           if ($LASTEXITCODE -ne 0) { throw 'Owner Special Setup Authenticode verification failed.' }
@@ -457,6 +458,7 @@ jobs:
             package_executable_count = $packageEvidence.executable_count
             setup = [ordered]@{ name = $setup.Name; sha256 = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
           } | ConvertTo-Json -Depth 8 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\CODE_SIGNING_EVIDENCE.json" -Encoding utf8
+          Remove-Item "Cert:\CurrentUser\My\$($signingCert.Thumbprint)" -Force -ErrorAction SilentlyContinue
           Remove-Item $pfx -Force
           Write-Host 'OWNER_SPECIAL_SETUP_AUTHENTICODE=PASS'
 
