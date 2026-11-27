@@ -219,7 +219,7 @@ jobs:
           $package = Join-Path $env:GITHUB_WORKSPACE 'phase-e\package'
           $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
-          $signtool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
           if (-not $signtool) { throw 'Windows SDK signtool.exe is unavailable.' }
           $executables = @(Get-ChildItem $package -Recurse -File -Filter '*.exe' | Sort-Object FullName)
@@ -430,7 +430,7 @@ jobs:
           }
           $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
-          $signtool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
           $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" |
             Select-Object -First 1
