@@ -84,11 +84,18 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
             package_evidence = json.loads(package.read("CODE_SIGNING_EVIDENCE.json").decode("utf-8-sig"))
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("embedded package Authenticode evidence is missing or invalid") from exc
+        package_signer = package_evidence.get("signer", {}) if isinstance(package_evidence, dict) else {}
+        package_executables = package_evidence.get("executables", []) if isinstance(package_evidence, dict) else []
         if (not isinstance(package_evidence, dict) or
                 package_evidence.get("schema") != "research-os.package-authenticode.v1" or
                 package_evidence.get("source_sha") != target_sha or
                 package_evidence.get("status") != "PASS" or
-                package_evidence.get("executable_count") != len(executable_names)):
+                package_evidence.get("executable_count") != len(executable_names) or
+                not isinstance(package_signer, dict) or
+                package_signer.get("subject") != signer["subject"] or
+                package_signer.get("issuer") != signer["issuer"] or
+                not isinstance(package_executables, list) or
+                len(package_executables) != len(executable_names)):
             raise ValueError("embedded package Authenticode evidence is not PASS for the exact executable inventory")
         with tempfile.TemporaryDirectory(prefix="research-os-authenticode-") as temp:
             temp_root = Path(temp)
@@ -107,8 +114,8 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
         "target_sha": target_sha,
         "verified_executable_count": len(verified),
         "verified_executables": verified,
-        "signer_subject": signer["subject"],
-        "signer_issuer": signer["issuer"],
+        "signer_subject": signer_identities[0][0],
+        "signer_issuer": signer_identities[0][1],
     }
 
 
