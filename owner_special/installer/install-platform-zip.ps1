@@ -73,23 +73,58 @@ if ($actualZipSha -ne $expectedZipSha) {
 }
 Write-Diagnostic "STEP verify-zip-sha256 result=PASS"
 
+Write-Diagnostic "STEP create-staging-path"
+$staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToString('N'))
+$stagingRoot = [System.IO.Path]::GetFullPath($staging)
+$stagingPrefix = $stagingRoot.TrimEnd([char[]]@([char]92, [char]47)) + [System.IO.Path]::DirectorySeparatorChar
+
 Write-Diagnostic "STEP validate-zip-entries"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
     foreach ($entry in $archive.Entries) {
-        $name = $entry.FullName.Replace('\','/')
+        $name = $entry.FullName.Replace('\', '/')
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
-        if ($name.StartsWith('/') -or $name -match '^[A-Za-z]:') { throw "Unsafe absolute ZIP entry: $name" }
+
+        if ($name.StartsWith('/') -or $name -match '^[A-Za-z]:') {
+            throw "Unsafe absolute ZIP entry: $name"
+        }
+
         $segments = $name.Split('/')
-        if ($segments -contains '..') { throw "Unsafe parent ZIP entry: $name" }
+        foreach ($segment in $segments) {
+            if ($segment.Contains(':')) {
+                throw "Unsafe alternate data stream ZIP entry: $name"
+            }
+            if ($segment -eq '..') {
+                throw "Unsafe parent ZIP entry: $name"
+            }
+        }
+
+        $relativePath = $name.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+        $destinationPath = [System.IO.Path]::GetFullPath(
+            [System.IO.Path]::Combine($stagingRoot, $relativePath)
+        )
+
+        if (-not $destinationPath.StartsWith(
+            $stagingPrefix,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+            throw "ZIP entry escapes staging directory: $name"
+        }
     }
+} catch {
+    $validationError = $_
+    try {
+        Write-Diagnostic "FAIL zip-entry-validation message=$($validationError.Exception.Message)"
+    } catch {
+        # Preserve the original ZIP validation failure if diagnostic logging is unavailable.
+    }
+    throw $validationError
 } finally {
     $archive.Dispose()
 }
 
 Write-Diagnostic "STEP create-staging"
-$staging = Join-Path $env:TEMP ("ResearchOS-Platform-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
     Write-Diagnostic "STEP expand-archive staging=$staging"
