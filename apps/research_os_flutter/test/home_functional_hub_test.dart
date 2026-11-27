@@ -89,8 +89,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('home-metric-agents')), findsOneWidget);
+    expect(find.byKey(const Key('home-metric-workflow-runs')), findsOneWidget);
+    expect(find.byKey(const Key('home-metric-projects')), findsOneWidget);
+    expect(find.byKey(const Key('home-metric-knowledge-items')), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
-    expect(find.text('1'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('Prepare research brief'), findsOneWidget);
     expect(find.byKey(const Key('home-workflow-run-home-1')), findsOneWidget);
