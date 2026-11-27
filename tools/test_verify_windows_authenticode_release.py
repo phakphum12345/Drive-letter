@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -22,7 +23,12 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             "schema": "research-os.package-authenticode.v1",
             "source_sha": target,
             "status": "PASS",
+            "signer": {"subject": "CN=Research OS Publisher", "issuer": "CN=Public CA"},
             "executable_count": 2,
+            "executables": [
+                {"path": "app/research_os_flutter.exe", "sha256": hashlib.sha256(b"MZapp").hexdigest()},
+                {"path": "service_host/ResearchOS.ServiceHost.exe", "sha256": hashlib.sha256(b"MZservice").hexdigest()},
+            ],
         }
         with zipfile.ZipFile(archive, "w") as package:
             package.writestr("app/research_os_flutter.exe", b"MZapp")
@@ -34,7 +40,7 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
             "status": "PASS",
             "signer": {"subject": "CN=Research OS Publisher", "issuer": "CN=Public CA"},
             "package_executable_count": 2,
-            "setup": {"name": setup.name, "sha256": __import__("hashlib").sha256(setup.read_bytes()).hexdigest()},
+            "setup": {"name": setup.name, "sha256": hashlib.sha256(setup.read_bytes()).hexdigest()},
         }
         (root / "CODE_SIGNING_EVIDENCE.json").write_text(json.dumps(evidence), encoding="utf-8")
         return target, ca
@@ -175,6 +181,7 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
                 payloads = {info.filename: source.read(info.filename) for info in source.infolist() if not info.is_dir()}
             embedded = json.loads(payloads["CODE_SIGNING_EVIDENCE.json"])
             embedded["executable_count"] = 3
+            embedded["executables"].append({"path": "bad.exe", "sha256": hashlib.sha256(b"not a PE").hexdigest()})
             payloads["CODE_SIGNING_EVIDENCE.json"] = json.dumps(embedded).encode("utf-8")
             payloads["bad.exe"] = b"not a PE"
             with zipfile.ZipFile(archive, "w") as package:
