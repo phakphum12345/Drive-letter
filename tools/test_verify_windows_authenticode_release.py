@@ -78,7 +78,7 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
         from subprocess import CompletedProcess
         run.return_value = CompletedProcess(
             args=[], returncode=0,
-            stdout="Subject: /CN=Publisher\\nIssuer: /CN=Public CA\\n",
+            stdout="Subject: /CN=Publisher\nIssuer: /CN=Public CA\n",
             stderr="",
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -93,7 +93,7 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
         from subprocess import CompletedProcess
         run.return_value = CompletedProcess(
             args=[], returncode=0,
-            stdout="Subject: /CN=Local Self Signed\\nIssuer: /CN=Local Self Signed\\n",
+            stdout="Subject: /CN=Local Self Signed\nIssuer: /CN=Local Self Signed\n",
             stderr="",
         )
         with tempfile.TemporaryDirectory() as directory:
