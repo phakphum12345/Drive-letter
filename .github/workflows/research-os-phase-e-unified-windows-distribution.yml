@@ -219,6 +219,11 @@ jobs:
           $package = Join-Path $env:GITHUB_WORKSPACE 'phase-e\package'
           $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
+          $securePassword = ConvertTo-SecureString $env:WINDOWS_CODESIGN_CERT_PASSWORD -AsPlainText -Force
+          $imported = @(Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
+          $signingCert = $imported | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } | Select-Object -First 1
+          if (-not $signingCert -or $signingCert.Subject -eq $signingCert.Issuer) { throw 'A valid CA-issued Code Signing certificate with private key is required.' }
+          if (-not ($signingCert.EnhancedKeyUsageList | Where-Object { $_.ObjectId.Value -eq '1.3.6.1.5.5.7.3.3' })) { throw 'PFX certificate lacks Code Signing EKU.' }
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
           if (-not $signtool) { throw 'Windows SDK signtool.exe is unavailable.' }
@@ -258,7 +263,7 @@ jobs:
             executable_count = $evidence.Count
             executables = $evidence
           } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $package 'CODE_SIGNING_EVIDENCE.json') -Encoding utf8
-          Remove-Item "Cert:\CurrentUser\My\$($signingCert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+          foreach ($certificate in $imported) { Remove-Item "Cert:\CurrentUser\My\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue }
           Remove-Item $pfx -Force
           Write-Host "PACKAGE_AUTHENTICODE=PASS executable_count=$($evidence.Count)"
 
@@ -431,6 +436,11 @@ jobs:
           }
           $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
+          $securePassword = ConvertTo-SecureString $env:WINDOWS_CODESIGN_CERT_PASSWORD -AsPlainText -Force
+          $imported = @(Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
+          $signingCert = $imported | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } | Select-Object -First 1
+          if (-not $signingCert -or $signingCert.Subject -eq $signingCert.Issuer) { throw 'A valid CA-issued Code Signing certificate with private key is required.' }
+          if (-not ($signingCert.EnhancedKeyUsageList | Where-Object { $_.ObjectId.Value -eq '1.3.6.1.5.5.7.3.3' })) { throw 'PFX certificate lacks Code Signing EKU.' }
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
           $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" |
@@ -458,7 +468,7 @@ jobs:
             package_executable_count = $packageEvidence.executable_count
             setup = [ordered]@{ name = $setup.Name; sha256 = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
           } | ConvertTo-Json -Depth 8 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\CODE_SIGNING_EVIDENCE.json" -Encoding utf8
-          Remove-Item "Cert:\CurrentUser\My\$($signingCert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+          foreach ($certificate in $imported) { Remove-Item "Cert:\CurrentUser\My\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue }
           Remove-Item $pfx -Force
           Write-Host 'OWNER_SPECIAL_SETUP_AUTHENTICODE=PASS'
 
