@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.verify_windows_authenticode_release import verify_release
+from tools.verify_windows_authenticode_release import verify_release, verify_signature
 
 
 class AuthenticodeReleaseGateTests(unittest.TestCase):
@@ -18,9 +18,16 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
         setup = root / "Research-OS-Owner-Special-Setup-3.0.0-x64.exe"
         setup.write_bytes(b"MZsetup")
         archive = root / f"Research-OS-Platform-Windows-x64-{target}.zip"
+        package_evidence = {
+            "schema": "research-os.package-authenticode.v1",
+            "source_sha": target,
+            "status": "PASS",
+            "executable_count": 2,
+        }
         with zipfile.ZipFile(archive, "w") as package:
             package.writestr("app/research_os_flutter.exe", b"MZapp")
             package.writestr("service_host/ResearchOS.ServiceHost.exe", b"MZservice")
+            package.writestr("CODE_SIGNING_EVIDENCE.json", json.dumps(package_evidence))
         evidence = {
             "schema": "research-os.authenticode-evidence.v1",
             "source_sha": target,
@@ -47,10 +54,39 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target, ca = self.fixture(root)
+            verify_signature.return_value = ("CN=Research OS Publisher", "CN=Public CA")
             result = verify_release(root, target, ca)
             self.assertEqual("PASS", result["status"])
             self.assertEqual(3, result["verified_executable_count"])
             self.assertEqual(3, verify_signature.call_count)
+
+    @patch("tools.verify_windows_authenticode_release.verify_signature")
+    def test_rejects_mixed_signer_identities(self, verify_signature):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target, ca = self.fixture(root)
+            verify_signature.side_effect = [
+                ("CN=Publisher A", "CN=Public CA"),
+                ("CN=Publisher B", "CN=Public CA"),
+                ("CN=Publisher A", "CN=Public CA"),
+            ]
+            with self.assertRaisesRegex(ValueError, "one consistent CA signer identity"):
+                verify_release(root, target, ca)
+
+    @patch("tools.verify_windows_authenticode_release.subprocess.run")
+    def test_signature_verifier_requires_trusted_non_self_issued_signer(self, run):
+        from subprocess import CompletedProcess
+        run.return_value = CompletedProcess(
+            args=[], returncode=0,
+            stdout="Subject: /CN=Publisher\\nIssuer: /CN=Public CA\\n",
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            exe = root / "test.exe"; exe.write_bytes(b"MZ")
+            ca = root / "ca.pem"; ca.write_text("CA", encoding="utf-8")
+            identity = verify_signature(exe, ca)
+            self.assertEqual(("/CN=Publisher", "/CN=Public CA"), identity)
 
     @patch("tools.verify_windows_authenticode_release.verify_signature")
     def test_rejects_missing_signing_evidence(self, verify_signature):
