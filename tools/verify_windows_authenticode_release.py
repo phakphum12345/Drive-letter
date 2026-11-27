@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -59,6 +58,11 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
     archives = list(root.rglob(f"Research-OS-Platform-Windows-x64-{target_sha}.zip"))
     if len(setups) != 1 or len(archives) != 1:
         raise ValueError("expected exactly one setup executable and exact-SHA platform ZIP")
+    setup_evidence = evidence.get("setup", {})
+    if (not isinstance(setup_evidence, dict) or
+            setup_evidence.get("name") != setups[0].name or
+            setup_evidence.get("sha256") != __import__("hashlib").sha256(setups[0].read_bytes()).hexdigest()):
+        raise ValueError("setup signature evidence does not bind the exact installer bytes")
 
     verify_signature(setups[0], ca_file)
     verified = [setups[0].name]
@@ -69,6 +73,8 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
         )
         if not executable_names:
             raise ValueError("platform ZIP contains no executable payload")
+        if evidence.get("package_executable_count") != len(executable_names):
+            raise ValueError("package executable count differs from signed build evidence")
         with tempfile.TemporaryDirectory(prefix="research-os-authenticode-") as temp:
             temp_root = Path(temp)
             for index, name in enumerate(executable_names):
