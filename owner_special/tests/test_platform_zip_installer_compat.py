@@ -36,5 +36,37 @@ class PlatformZipInstallerCompatibilityTest(unittest.TestCase):
         self.assertLess(manifest_validation, copy_to_target)
 
 
+    def test_zip_entry_validation_normalizes_backslashes(self):
+        self.assertIn("$entry.FullName.Replace('\\', '/')", self.script)
+
+    def test_zip_entry_validation_rejects_ads_and_checks_canonical_boundary(self):
+        self.assertIn("$segment.Contains(':')", self.script)
+        self.assertIn("[System.IO.Path]::GetFullPath(", self.script)
+        self.assertIn("[System.StringComparison]::OrdinalIgnoreCase", self.script)
+        self.assertIn("ZIP entry escapes staging directory", self.script)
+
+    def test_zip_validation_failure_is_written_to_diagnostic_log(self):
+        self.assertIn("FAIL zip-entry-validation message=", self.script)
+        validation = self.script.index('Write-Diagnostic "STEP validate-zip-entries"')
+        failure_log = self.script.index("FAIL zip-entry-validation message=")
+        archive_dispose = self.script.index("$archive.Dispose()", failure_log)
+        staging_creation = self.script.index('Write-Diagnostic "STEP create-staging"')
+        self.assertLess(validation, failure_log)
+        self.assertLess(failure_log, archive_dispose)
+        self.assertLess(archive_dispose, staging_creation)
+
+    def test_staging_creation_occurs_after_zip_validation(self):
+        validation = self.script.index('Write-Diagnostic "STEP validate-zip-entries"')
+        staging = self.script.index('Write-Diagnostic "STEP create-staging"')
+        creation = self.script.index(
+            "New-Item -ItemType Directory -Force -Path $staging"
+        )
+        extraction = self.script.index(
+            "[System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $staging)"
+        )
+        self.assertLess(validation, staging)
+        self.assertLess(staging, creation)
+        self.assertLess(creation, extraction)
+
 if __name__ == "__main__":
     unittest.main()
