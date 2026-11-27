@@ -272,7 +272,7 @@ class _HomePageState extends State<HomePage> {
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  mainAxisExtent: 104,
+                  mainAxisExtent: 116,
                   children: <Widget>[
                     _LiveMetric(title: 'Agents', value: _countLabel(_agents, const ['agents']), icon: Icons.smart_toy_outlined),
                     _LiveMetric(title: 'Workflow runs', value: _countLabel(_workflows, const ['runs']), icon: Icons.account_tree_outlined),
@@ -296,7 +296,7 @@ class _HomePageState extends State<HomePage> {
                   spacing: 12,
                   runSpacing: 12,
                   children: <Widget>[
-                    _WorkspaceCard(Icons.chat_bubble_outline, 'AI Chat', 'Start a conversation with the configured AI provider', onTap: () => widget.onNavigate?.call(1)),
+                    _WorkspaceCard(Icons.chat_bubble_outline, 'Talk to Friend', 'Start a conversation with the configured AI provider', onTap: () => widget.onNavigate?.call(1)),
                     _WorkspaceCard(Icons.smart_toy_outlined, 'Agent Center', 'Create, review and control agent workflows', onTap: () => widget.onNavigate?.call(2)),
                     _WorkspaceCard(Icons.account_tree_outlined, 'Workflows', 'Inspect runs, steps, approvals and timelines', onTap: () => widget.onNavigate?.call(15)),
                     _WorkspaceCard(Icons.local_library_outlined, 'Knowledge Library', 'Search and inspect saved research artifacts', onTap: () => widget.onNavigate?.call(3)),
