@@ -7,6 +7,11 @@ on:
         description: Exact immutable source SHA to build and validate
         required: true
         type: string
+      authorize_signing:
+        description: Explicitly authorize CA-backed Authenticode signing for this main-branch build
+        required: false
+        default: false
+        type: boolean
   pull_request:
     branches:
       - main
@@ -50,7 +55,10 @@ jobs:
       - name: Verify exact target SHA
         env:
           TARGET_SHA: ${{ env.TARGET_SHA }}
-        run: test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
       - run: python tools/validate_phase_e_unified_windows_distribution.py
       - env:
           PYTHONPATH: .
@@ -67,6 +75,8 @@ jobs:
   build:
     needs: validate
     runs-on: windows-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_signing == true && 'code-signing' || 'build-only' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -192,6 +202,79 @@ jobs:
           $py = (python -c "import sys; print(sys.base_prefix)").Trim()
           Copy-Item "$py\*" "$p\runtime\python" -Recurse -Force
           if (-not (Test-Path "$p\runtime\python\python.exe")) { throw 'Bundled Python missing.' }
+
+      - name: Sign staged distribution executables with authorized CA certificate
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_signing == true }}
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_CERT_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_BASE64 }}
+          WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_ACTOR -ne 'phakphum12345') { throw 'Only the repository owner may authorize code signing.' }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PASSWORD)) {
+            throw 'CA code-signing certificate secrets are not configured; signing is fail-closed.'
+          }
+          $package = Join-Path $env:GITHUB_WORKSPACE 'phase-e\package'
+          $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
+          $signtool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
+            Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) { throw 'Windows SDK signtool.exe is unavailable.' }
+          $executables = @(Get-ChildItem $package -Recurse -File -Filter '*.exe' | Sort-Object FullName)
+          if ($executables.Count -lt 1) { throw 'No staged executable payload exists to sign.' }
+          $evidence = @()
+          $signerSubject = $null
+          $signerIssuer = $null
+          foreach ($exe in $executables) {
+            & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /f $pfx /p $env:WINDOWS_CODESIGN_CERT_PASSWORD $exe.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for $($exe.Name)." }
+            & $signtool verify /pa /all /v $exe.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode trust verification failed for $($exe.Name)." }
+            $signature = Get-AuthenticodeSignature -FilePath $exe.FullName
+            if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) { throw "Invalid Authenticode signature: $($exe.Name)" }
+            $cert = $signature.SignerCertificate
+            if ($cert.Subject -eq $cert.Issuer) { throw 'Self-issued/self-signed signing certificates are forbidden.' }
+            if (-not ($cert.EnhancedKeyUsageList | Where-Object { $_.ObjectId.Value -eq '1.3.6.1.5.5.7.3.3' })) {
+              throw 'Signing certificate does not contain the Code Signing EKU.'
+            }
+            if ($signerSubject -and ($signerSubject -ne $cert.Subject -or $signerIssuer -ne $cert.Issuer)) {
+              throw 'Executable payloads were signed by inconsistent certificate identities.'
+            }
+            $signerSubject = $cert.Subject
+            $signerIssuer = $cert.Issuer
+            $evidence += [ordered]@{
+              path = $exe.FullName.Substring($package.Length + 1).Replace('\','/')
+              sha256 = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              signer_thumbprint = $cert.Thumbprint
+            }
+          }
+          [ordered]@{
+            schema = 'research-os.package-authenticode.v1'
+            source_sha = (git rev-parse HEAD).Trim()
+            status = 'PASS'
+            signer = [ordered]@{ subject = $signerSubject; issuer = $signerIssuer }
+            executable_count = $evidence.Count
+            executables = $evidence
+          } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $package 'CODE_SIGNING_EVIDENCE.json') -Encoding utf8
+          Remove-Item $pfx -Force
+          Write-Host "PACKAGE_AUTHENTICODE=PASS executable_count=$($evidence.Count)"
+
+      - name: Mark unsigned distribution candidate explicitly
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_signing == true) }}
+        shell: pwsh
+        run: |
+          $package = Join-Path $env:GITHUB_WORKSPACE 'phase-e\package'
+          [ordered]@{
+            schema = 'research-os.package-authenticode.v1'
+            source_sha = (git rev-parse HEAD).Trim()
+            status = 'NOT_SIGNED'
+            signer = $null
+            executable_count = 0
+            executables = @()
+          } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $package 'CODE_SIGNING_EVIDENCE.json') -Encoding utf8
+          Write-Host 'PACKAGE_AUTHENTICODE=NOT_SIGNED (candidate only; publication prohibited)'
 
       - name: Bundled API import smoke test
         shell: pwsh
@@ -331,6 +414,66 @@ jobs:
           $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" | Select-Object -First 1
           if (-not $setup) { throw 'Owner Special Platform Setup.exe missing.' }
           Write-Host "OWNER_SPECIAL_PLATFORM_SETUP=PASS setup=$($setup.Name)"
+
+      - name: Sign and verify Owner Special Setup.exe
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_signing == true }}
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_CERT_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_BASE64 }}
+          WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_ACTOR -ne 'phakphum12345') { throw 'Only the repository owner may authorize code signing.' }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PASSWORD)) {
+            throw 'CA code-signing certificate secrets are not configured; publication cannot proceed.'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'research-os-code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_BASE64))
+          $signtool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction Stop |
+            Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          $setup = Get-ChildItem "$env:GITHUB_WORKSPACE\owner_special\installer\output\Research-OS-Owner-Special-Setup-*-x64.exe" |
+            Select-Object -First 1
+          if (-not $setup -or -not $signtool) { throw 'Setup executable or signtool is missing.' }
+          & $signtool sign /fd SHA256 /td SHA256 /tr 'https://timestamp.digicert.com' /f $pfx /p $env:WINDOWS_CODESIGN_CERT_PASSWORD $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Owner Special Setup Authenticode signing failed.' }
+          & $signtool verify /pa /all /v $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Owner Special Setup Authenticode verification failed.' }
+          $signature = Get-AuthenticodeSignature -FilePath $setup.FullName
+          if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) { throw 'Owner Special Setup signature is not Valid.' }
+          $cert = $signature.SignerCertificate
+          if ($cert.Subject -eq $cert.Issuer) { throw 'Self-issued/self-signed signing certificates are forbidden.' }
+          if (-not ($cert.EnhancedKeyUsageList | Where-Object { $_.ObjectId.Value -eq '1.3.6.1.5.5.7.3.3' })) { throw 'Setup signer lacks Code Signing EKU.' }
+          $packageEvidencePath = Join-Path $env:GITHUB_WORKSPACE 'phase-e\package\CODE_SIGNING_EVIDENCE.json'
+          $packageEvidence = Get-Content $packageEvidencePath -Raw | ConvertFrom-Json
+          if ($packageEvidence.status -ne 'PASS' -or $packageEvidence.source_sha -ne (git rev-parse HEAD).Trim()) {
+            throw 'Package Authenticode evidence is not PASS for this exact source SHA.'
+          }
+          [ordered]@{
+            schema = 'research-os.authenticode-evidence.v1'
+            source_sha = (git rev-parse HEAD).Trim()
+            status = 'PASS'
+            signer = [ordered]@{ subject = $cert.Subject; issuer = $cert.Issuer; thumbprint = $cert.Thumbprint }
+            package_executable_count = $packageEvidence.executable_count
+            setup = [ordered]@{ name = $setup.Name; sha256 = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+          } | ConvertTo-Json -Depth 8 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\CODE_SIGNING_EVIDENCE.json" -Encoding utf8
+          Remove-Item $pfx -Force
+          Write-Host 'OWNER_SPECIAL_SETUP_AUTHENTICODE=PASS'
+
+      - name: Mark unsigned setup candidate explicitly
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_signing == true) }}
+        shell: pwsh
+        run: |
+          $packageEvidence = Get-Content "$env:GITHUB_WORKSPACE\phase-e\package\CODE_SIGNING_EVIDENCE.json" -Raw | ConvertFrom-Json
+          [ordered]@{
+            schema = 'research-os.authenticode-evidence.v1'
+            source_sha = (git rev-parse HEAD).Trim()
+            status = 'NOT_SIGNED'
+            signer = $null
+            package_executable_count = $packageEvidence.executable_count
+            setup = $null
+          } | ConvertTo-Json -Depth 5 | Set-Content "$env:GITHUB_WORKSPACE\phase-e\CODE_SIGNING_EVIDENCE.json" -Encoding utf8
+          Write-Host 'OWNER_SPECIAL_SETUP_AUTHENTICODE=NOT_SIGNED (candidate only; publication prohibited)'
 
       - name: Installer install run uninstall E2E
         shell: pwsh
@@ -797,7 +940,9 @@ jobs:
             phase-e/Research-OS-Platform-Windows-x64-*.zip.sha256
             phase-e/RELEASE_EVIDENCE.json
             phase-e/WINDOWS_INSTALL_E2E_EVIDENCE.json
+            phase-e/CODE_SIGNING_EVIDENCE.json
             phase-e/package/DISTRIBUTION_MANIFEST.json
+            phase-e/package/CODE_SIGNING_EVIDENCE.json
             phase-e/package/DISTRIBUTION_MANIFEST.sha256
             owner_special/installer/output/Research-OS-Owner-Special-Setup-*-x64.exe
           if-no-files-found: error
