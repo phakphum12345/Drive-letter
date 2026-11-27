@@ -48,6 +48,28 @@ class PhaseEUnifiedWindowsDistributionTests(unittest.TestCase):
         self.assertIn('python -m unittest discover -s tools/research_os_api -p "test_api.py" -v', workflow)
         self.assertIn("tools/research_os_api/contract-requirements.txt", workflow)
 
+    def test_distribution_signing_is_explicit_and_fail_closed(self) -> None:
+        workflow = validator._read_phase_e_workflow(validator.ROOT)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", validator.REQUIRED_PACKAGE_PATHS)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", validator.json.loads(validator.CONTRACT.read_text(encoding="utf-8"))["required_package_paths"])
+        self.assertIn("authorize_signing:", workflow)
+        self.assertIn("inputs.authorize_signing == true", workflow)
+        self.assertIn("environment:", workflow)
+        self.assertIn("code-signing", workflow)
+        self.assertIn("WINDOWS_CODESIGN_CERT_BASE64", workflow)
+        self.assertIn("WINDOWS_CODESIGN_CERT_PASSWORD", workflow)
+        self.assertIn("signtool verify /pa /all /v", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("Only the repository owner may authorize code signing.", workflow)
+        self.assertIn('if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then', workflow)
+        self.assertIn("Self-issued/self-signed signing certificates are forbidden.", workflow)
+        self.assertIn("CODE_SIGNING_EVIDENCE.json", workflow)
+        self.assertIn("status = 'NOT_SIGNED'", workflow)
+        self.assertIn("tools.test_verify_windows_authenticode_release", workflow)
+        self.assertIn("Sign staged distribution executables with authorized CA certificate", workflow)
+        self.assertIn("Sign and verify Owner Special Setup.exe", workflow)
+
+
     def test_installer_uses_compatible_zip_extraction_overload(self) -> None:
         installer = (
             validator.ROOT

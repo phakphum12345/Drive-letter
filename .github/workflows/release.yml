@@ -281,6 +281,25 @@ jobs:
         shell: bash
         run: echo "result=PASS" >> "$GITHUB_OUTPUT"
 
+      - name: Install Authenticode verification tooling
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes osslsigncode
+
+      - name: Require valid CA-trusted Authenticode signatures before publication
+        if: ${{ inputs.publish == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/verify_windows_authenticode_release.py \
+            --artifact-dir release-input \
+            --target-sha "$TARGET_SHA" \
+            --ca-file /etc/ssl/certs/ca-certificates.crt
+          echo "PUBLICATION_AUTHENTICODE_GATE=PASS"
+
       - name: Validate release metadata
         id: validate_release_metadata
         if: ${{ inputs.publish == true }}

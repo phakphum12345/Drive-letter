@@ -23,6 +23,7 @@ PLATFORM_MATRIX_PATH = "docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md"
 
 REQUIRED_PACKAGE_PATHS = {
     "app/research_os_flutter.exe",
+    "CODE_SIGNING_EVIDENCE.json",
     "owner_special/app/research_os_owner_special.exe",
     "owner_special/OWNER_MANIFEST.json",
     "owner_special/research_os_friend",
@@ -182,6 +183,12 @@ def validate(root: Path = ROOT) -> tuple[str, ...]:
         "  pull_request:",
         "Bundled API import smoke test",
         "BUNDLED_API_IMPORT=PASS",
+        "authorize_signing:",
+        "inputs.authorize_signing == true",
+        "WINDOWS_CODESIGN_CERT_BASE64",
+        "WINDOWS_CODESIGN_CERT_PASSWORD",
+        "signtool verify /pa /all /v",
+        "CODE_SIGNING_EVIDENCE.json",
         "Get-WinEvent",
         "INSTALLED_API_IMPORT_EXIT=",
         "apiHealth.status -eq 'ok'",
@@ -205,7 +212,7 @@ def main() -> int:
         return 1
     print("PHASE_E_DISTRIBUTION=PASS")
     print("COMPONENTS=8")
-    print("PACKAGE_PATHS=14")
+    print(f"PACKAGE_PATHS={len(REQUIRED_PACKAGE_PATHS)}")
     print("RELEASE_AUTHORITY=FINAL_GATE")
     return 0
 
