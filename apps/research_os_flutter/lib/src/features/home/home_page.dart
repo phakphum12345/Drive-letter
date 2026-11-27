@@ -17,6 +17,10 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   Map<String, dynamic>? _health;
   Map<String, dynamic>? _providers;
+  Map<String, dynamic>? _agents;
+  Map<String, dynamic>? _workflows;
+  Map<String, dynamic>? _projects;
+  Map<String, dynamic>? _knowledge;
 
   @override
   void initState() {
@@ -30,14 +34,22 @@ class _HomePageState extends State<HomePage> {
       _error = null;
     });
     try {
-      final results = await Future.wait<Map<String, dynamic>>(<Future<Map<String, dynamic>>>[
+      final results = await Future.wait<Object?>(<Future<Object?>>[
         widget.apiClient.getHealth(),
         widget.apiClient.getProviders(),
+        _tryLoad(widget.apiClient.getAgents),
+        _tryLoad(() => widget.apiClient.getOrchestrations(limit: 8)),
+        _tryLoad(widget.apiClient.getProjects),
+        _tryLoad(widget.apiClient.getKnowledgeArtifacts),
       ]);
       if (!mounted) return;
       setState(() {
-        _health = results[0];
-        _providers = results[1];
+        _health = results[0] as Map<String, dynamic>;
+        _providers = results[1] as Map<String, dynamic>;
+        _agents = results[2] as Map<String, dynamic>?;
+        _workflows = results[3] as Map<String, dynamic>?;
+        _projects = results[4] as Map<String, dynamic>?;
+        _knowledge = results[5] as Map<String, dynamic>?;
         _loading = false;
       });
     } on Object catch (error) {
@@ -47,6 +59,39 @@ class _HomePageState extends State<HomePage> {
         _loading = false;
       });
     }
+  }
+
+  Future<Map<String, dynamic>?> _tryLoad(
+    Future<Map<String, dynamic>> Function() load,
+  ) async {
+    try {
+      return await load();
+    } on Object {
+      // Optional dashboard panels degrade independently; the primary
+      // health/provider state remains visible when one capability is offline.
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _items(
+    Map<String, dynamic>? payload,
+    List<String> keys,
+  ) {
+    if (payload == null) return const <Map<String, dynamic>>[];
+    for (final key in keys) {
+      final value = payload[key];
+      if (value is List) {
+        return value.whereType<Map>().map(
+          (item) => Map<String, dynamic>.from(item),
+        ).toList();
+      }
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  String _countLabel(Map<String, dynamic>? payload, List<String> keys) {
+    if (payload == null) return 'Unavailable';
+    return '${_items(payload, keys).length}';
   }
 
   @override
@@ -212,10 +257,35 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             _SectionHeader(
-              title: 'Workspaces',
-              subtitle: 'Core areas are grouped by purpose instead of one long menu',
+              title: 'Live workspace activity',
+              subtitle: 'Counts are read from Research OS APIs. Unavailable means the endpoint could not be observed.',
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 560 ? 2 : 1;
+                return GridView.count(
+                  crossAxisCount: columns,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  mainAxisExtent: 104,
+                  children: <Widget>[
+                    _LiveMetric(title: 'Agents', value: _countLabel(_agents, const ['agents']), icon: Icons.smart_toy_outlined),
+                    _LiveMetric(title: 'Workflow runs', value: _countLabel(_workflows, const ['runs']), icon: Icons.account_tree_outlined),
+                    _LiveMetric(title: 'Projects', value: _countLabel(_projects, const ['projects']), icon: Icons.folder_outlined),
+                    _LiveMetric(title: 'Knowledge items', value: _countLabel(_knowledge, const ['artifacts']), icon: Icons.local_library_outlined),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 26),
+            _SectionHeader(
+              title: 'Open a tool',
+              subtitle: 'Go directly to a working area instead of navigating through documentation.',
             ),
             const SizedBox(height: 12),
             LayoutBuilder(
@@ -226,16 +296,58 @@ class _HomePageState extends State<HomePage> {
                   spacing: 12,
                   runSpacing: 12,
                   children: <Widget>[
-                    _WorkspaceCard(Icons.auto_awesome_outlined, 'AI & Agents', 'Chat, specialist agents and task runtime', onTap: () => widget.onNavigate?.call(2)),
-                    _WorkspaceCard(Icons.local_library_outlined, 'Knowledge', 'Library, memory and knowledge graph', onTap: () => widget.onNavigate?.call(3)),
-                    _WorkspaceCard(Icons.link_outlined, 'Connections', 'GitHub and Google Workspace integrations', onTap: () => widget.onNavigate?.call(5)),
-                    _WorkspaceCard(Icons.security_outlined, 'Local System', 'Windows Service, API, storage and backup', onTap: () => widget.onNavigate?.call(7)),
-                    _WorkspaceCard(Icons.monitor_heart_outlined, 'Monitoring', 'Health, runtime and system visibility', onTap: () => widget.onNavigate?.call(8)),
-                    _WorkspaceCard(Icons.tune_outlined, 'Configuration', 'Providers, endpoints and application settings', onTap: () => widget.onNavigate?.call(9)),
+                    _WorkspaceCard(Icons.chat_bubble_outline, 'AI Chat', 'Start a conversation with the configured AI provider', onTap: () => widget.onNavigate?.call(1)),
+                    _WorkspaceCard(Icons.smart_toy_outlined, 'Agent Center', 'Create, review and control agent workflows', onTap: () => widget.onNavigate?.call(2)),
+                    _WorkspaceCard(Icons.account_tree_outlined, 'Workflows', 'Inspect runs, steps, approvals and timelines', onTap: () => widget.onNavigate?.call(15)),
+                    _WorkspaceCard(Icons.local_library_outlined, 'Knowledge Library', 'Search and inspect saved research artifacts', onTap: () => widget.onNavigate?.call(3)),
+                    _WorkspaceCard(Icons.folder_open_outlined, 'Projects', 'Open project workspaces and their current state', onTap: () => widget.onNavigate?.call(14)),
+                    _WorkspaceCard(Icons.link_outlined, 'Connections', 'Manage GitHub and Google Workspace', onTap: () => widget.onNavigate?.call(6)),
+                    _WorkspaceCard(Icons.monitor_heart_outlined, 'System Monitor', 'Inspect runtime health and service status', onTap: () => widget.onNavigate?.call(8)),
+                    _WorkspaceCard(Icons.tune_outlined, 'Control Center', 'Inspect runtime state, evidence and audit history', onTap: () => widget.onNavigate?.call(16)),
                   ].map((card) => SizedBox(width: width, child: card)).toList(),
                 );
               },
             ),
+            const SizedBox(height: 26),
+            _SectionHeader(
+              title: 'Recent workflow runs',
+              subtitle: 'Latest records returned by the orchestration service.',
+            ),
+            const SizedBox(height: 10),
+            if (_workflows == null)
+              const Card(
+                child: ListTile(
+                  key: Key('home-workflows-unavailable'),
+                  leading: Icon(Icons.cloud_off_outlined),
+                  title: Text('Workflow service unavailable'),
+                  subtitle: Text('Other Research OS tools remain available.'),
+                ),
+              )
+            else if (_items(_workflows, const ['runs']).isEmpty)
+              const Card(
+                child: ListTile(
+                  key: Key('home-no-workflows'),
+                  leading: Icon(Icons.inbox_outlined),
+                  title: Text('No workflow runs yet'),
+                  subtitle: Text('Open Agent Center to create your first workflow.'),
+                ),
+              )
+            else
+              ..._items(_workflows, const ['runs']).take(5).map((run) {
+                final id = run['run_id']?.toString() ?? 'unknown';
+                final objective = run['objective']?.toString() ?? 'Untitled workflow';
+                final status = run['status']?.toString() ?? 'UNKNOWN';
+                return Card(
+                  child: ListTile(
+                    key: Key('home-workflow-$id'),
+                    leading: const Icon(Icons.route_outlined),
+                    title: Text(objective, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text('Run $id'),
+                    trailing: Chip(label: Text(status)),
+                    onTap: () => widget.onNavigate?.call(15),
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -327,6 +439,41 @@ class _StatusCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveMetric extends StatelessWidget {
+  const _LiveMetric({required this.title, required this.value, required this.icon});
+
+  final String title;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, color: theme.colorScheme.primary, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: theme.textTheme.labelMedium),
+                  const SizedBox(height: 4),
+                  Text(value, key: Key('home-metric-${title.toLowerCase().replaceAll(' ', '-')}'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
