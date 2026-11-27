@@ -125,24 +125,114 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
   }
 
   Future<void> _action(String id, String action) async {
-    setState(() => _busy.add(id));
+    if (!mounted || id.isEmpty || _busy.contains(id)) return;
+    if (!const {'execute', 'confirm', 'retry', 'cancel'}.contains(action)) {
+      throw ArgumentError.value(action, 'action', 'Unsupported orchestration action');
+    }
+    setState(() {
+      _busy.add(id);
+      _error = null;
+    });
     try {
-      if (action == 'confirm') {
-        await widget.apiClient.confirmOrchestration(id);
-      } else if (action == 'retry') {
-        await widget.apiClient.retryOrchestration(id);
-      } else if (action == 'cancel') {
-        await widget.apiClient.cancelOrchestration(id);
-      } else {
-        await widget.apiClient.executeOrchestration(id);
+      switch (action) {
+        case 'confirm':
+          await widget.apiClient.confirmOrchestration(id);
+        case 'retry':
+          await widget.apiClient.retryOrchestration(id);
+        case 'cancel':
+          await widget.apiClient.cancelOrchestration(id);
+        case 'execute':
+          await widget.apiClient.executeOrchestration(id);
       }
       await _loadRuns();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = _describeActionError(error));
     } finally {
       if (mounted) setState(() => _busy.remove(id));
     }
   }
+
+  String _describeActionError(Object error) {
+    if (error is ResearchOSApiException) {
+      if (error.statusCode == 401) {
+        return 'ต้องเข้าสู่ระบบใหม่ก่อนควบคุม Workflow (HTTP 401)';
+      }
+      if (error.statusCode == 403) {
+        return 'บัญชีนี้ไม่มีสิทธิ์ Owner สำหรับควบคุม Workflow (HTTP 403)';
+      }
+    }
+    return error.toString();
+  }
+
+  Future<void> _confirmWithPreview(Map<String, dynamic> run) async {
+    final id = '\${run['run_id'] ?? ''}';
+    if (id.isEmpty || _busy.contains(id)) return;
+    final steps = run['steps'] is List
+        ? (run['steps'] as List).whereType<Map>().map(_map).toList()
+        : <Map<String, dynamic>>[];
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('orchestration-confirmation-preview'),
+        title: const Text('Review workflow before confirmation'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Objective', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('\${run['objective'] ?? 'Untitled orchestration'}'),
+                const SizedBox(height: 14),
+                const Text('Steps to be confirmed', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                if (steps.isEmpty) const Text('No step details were returned by the API.'),
+                for (final step in steps) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('\${step['step_id'] ?? 'step'}: \${step['objective'] ?? 'No objective'}'),
+                    subtitle: Text(
+                      'Agent: \${step['requested_agent'] ?? 'automatic'} • '
+                      'Status: \${step['status'] ?? 'unknown'} • '
+                      'Depends on: \${step['depends_on'] is List ? (step['depends_on'] as List).join(', ') : 'none'}',
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  'Confirmation authorizes the backend to continue the waiting workflow. '
+                  'Review the objective and every step before proceeding.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('confirm-preview-cancel'),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            key: const Key('confirm-preview-submit'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm workflow'),
+          ),
+        ],
+      ),
+    );
+    if (approved == true && mounted) await _action(id, 'confirm');
+  }
+
+  bool _hasRetryableStep(List steps) => steps.whereType<Map>().any((raw) {
+        final step = _map(raw);
+        if (step['status'] != 'failed') return false;
+        final attempts = int.tryParse('\${step['attempt_count'] ?? 0}') ?? 0;
+        final maxAttempts = int.tryParse('\${step['max_attempts'] ?? 3}') ?? 3;
+        return attempts < maxAttempts;
+      });
 
   Future<void> _timeline(String id) async {
     try {
@@ -187,7 +277,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
         const EnterprisePageHeader(
           icon: Icons.smart_toy_outlined,
           title: 'Agent Center V2',
-          subtitle: 'Orchestration graph, timeline, approvals, retry/cancel/resume, health และ workspace knowledge',
+          subtitle: 'Orchestration graph, timeline, approvals, retry/cancel/continue, health และ workspace knowledge',
         ),
         const SizedBox(height: 18),
         EnterpriseSection(
@@ -303,7 +393,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
                       label: 'Approve orchestration ${_short(id)}',
                       child: FilledButton(
                         key: Key('approval-confirm-$id'),
-                        onPressed: _busy.contains(id) ? null : () => _action(id, 'confirm'),
+                        onPressed: _busy.contains(id) ? null : () => _confirmWithPreview(run),
                         child: const Text('Approve'),
                       ),
                     ),
@@ -431,10 +521,42 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
               icon: const Icon(Icons.timeline),
               label: const Text('Timeline'),
             ),
-            if (status == 'failed') OutlinedButton(key: Key('retry-$id'), onPressed: busy ? null : () => _action(id, 'retry'), child: const Text('Retry')),
-            if (status == 'interrupted' || status == 'blocked') OutlinedButton(key: Key('resume-$id'), onPressed: busy ? null : () => _action(id, 'resume'), child: const Text('Resume')),
-            if (!{'completed', 'failed', 'cancelled'}.contains(status)) TextButton(key: Key('cancel-$id'), onPressed: busy ? null : () => _action(id, 'cancel'), child: const Text('Cancel')),
-            if (status == 'awaiting_confirmation') FilledButton(key: Key('confirm-$id'), onPressed: busy ? null : () => _action(id, 'confirm'), child: const Text('Confirm')),
+            if (status == 'planned')
+              Semantics(
+                button: true,
+                label: 'Execute orchestration \${_short(id)}',
+                child: OutlinedButton.icon(
+                  key: Key('execute-$id'),
+                  onPressed: busy ? null : () => _action(id, 'execute'),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Execute'),
+                ),
+              ),
+            if ((status == 'interrupted' || status == 'blocked') && steps.isNotEmpty)
+              OutlinedButton.icon(
+                key: Key('continue-$id'),
+                onPressed: busy ? null : () => _action(id, 'execute'),
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('Continue'),
+              ),
+            if (status == 'failed' && _hasRetryableStep(steps))
+              OutlinedButton(
+                key: Key('retry-$id'),
+                onPressed: busy ? null : () => _action(id, 'retry'),
+                child: const Text('Retry'),
+              ),
+            if (const {'planned', 'interrupted', 'blocked', 'awaiting_confirmation'}.contains(status))
+              TextButton(
+                key: Key('cancel-$id'),
+                onPressed: busy ? null : () => _action(id, 'cancel'),
+                child: const Text('Cancel'),
+              ),
+            if (status == 'awaiting_confirmation')
+              FilledButton(
+                key: Key('confirm-$id'),
+                onPressed: busy ? null : () => _confirmWithPreview(run),
+                child: const Text('Review & confirm'),
+              ),
           ]),
         ]),
       ),
