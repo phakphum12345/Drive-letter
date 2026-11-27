@@ -1,5 +1,7 @@
 name: Research OS Unified Windows Distribution
 
+# Configure required reviewers and WINDOWS_CODESIGN_* environment secrets
+# in the protected code-signing environment before an authorized signing build.
 on:
   workflow_dispatch:
     inputs:
@@ -76,7 +78,7 @@ jobs:
     needs: validate
     runs-on: windows-latest
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize_signing == true && 'code-signing' || 'build-only' }}
+      name: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.authorize_signing == true && 'code-signing' || 'build-only' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
