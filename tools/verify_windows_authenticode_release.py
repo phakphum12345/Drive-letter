@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 
-def verify_signature(path: Path, ca_file: Path) -> None:
+def verify_signature(path: Path, ca_file: Path) -> tuple[str, str]:
     result = subprocess.run(
         ["osslsigncode", "verify", "-verbose", "-in", str(path), "-CAfile", str(ca_file)],
         capture_output=True,
@@ -32,8 +32,10 @@ def verify_signature(path: Path, ca_file: Path) -> None:
     issuer = re.search(r"^\s*Issuer:\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
     if not subject or not issuer:
         raise ValueError(f"Authenticode signer identity is missing for {path.name}")
-    if subject.group(1).strip() == issuer.group(1).strip():
+    subject_value, issuer_value = subject.group(1).strip(), issuer.group(1).strip()
+    if subject_value == issuer_value:
         raise ValueError(f"Self-issued/self-signed certificate is forbidden for {path.name}")
+    return subject_value, issuer_value
 
 
 def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
@@ -66,8 +68,9 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
             setup_evidence.get("sha256") != hashlib.sha256(setups[0].read_bytes()).hexdigest()):
         raise ValueError("setup signature evidence does not bind the exact installer bytes")
 
-    verify_signature(setups[0], ca_file)
+    setup_identity = verify_signature(setups[0], ca_file)
     verified = [setups[0].name]
+    signer_identities = [setup_identity]
     with zipfile.ZipFile(archives[0]) as package:
         executable_names = sorted(
             info.filename for info in package.infolist()
@@ -77,6 +80,15 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
             raise ValueError("platform ZIP contains no executable payload")
         if evidence.get("package_executable_count") != len(executable_names):
             raise ValueError("package executable count differs from signed build evidence")
+        try:
+            package_evidence = json.loads(package.read("CODE_SIGNING_EVIDENCE.json").decode("utf-8-sig"))
+        except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("embedded package Authenticode evidence is missing or invalid") from exc
+        if (package_evidence.get("schema") != "research-os.package-authenticode.v1" or
+                package_evidence.get("source_sha") != target_sha or
+                package_evidence.get("status") != "PASS" or
+                package_evidence.get("executable_count") != len(executable_names)):
+            raise ValueError("embedded package Authenticode evidence is not PASS for the exact executable inventory")
         with tempfile.TemporaryDirectory(prefix="research-os-authenticode-") as temp:
             temp_root = Path(temp)
             for index, name in enumerate(executable_names):
@@ -85,8 +97,10 @@ def verify_release(root: Path, target_sha: str, ca_file: Path) -> dict:
                     raise ValueError(f"manifested .exe is not a Windows PE image: {name}")
                 candidate = temp_root / f"{index:04d}.exe"
                 candidate.write_bytes(payload)
-                verify_signature(candidate, ca_file)
+                signer_identities.append(verify_signature(candidate, ca_file))
                 verified.append(name)
+    if len(set(signer_identities)) != 1:
+        raise ValueError("release executables do not share one consistent CA signer identity")
     return {
         "status": "PASS",
         "target_sha": target_sha,
