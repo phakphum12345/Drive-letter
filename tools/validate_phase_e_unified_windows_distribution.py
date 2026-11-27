@@ -212,7 +212,7 @@ def main() -> int:
         return 1
     print("PHASE_E_DISTRIBUTION=PASS")
     print("COMPONENTS=8")
-    print("PACKAGE_PATHS=14")
+    print(f"PACKAGE_PATHS={len(REQUIRED_PACKAGE_PATHS)}")
     print("RELEASE_AUTHORITY=FINAL_GATE")
     return 0
 
