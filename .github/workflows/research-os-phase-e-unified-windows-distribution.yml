@@ -944,7 +944,6 @@ jobs:
             phase-e/WINDOWS_INSTALL_E2E_EVIDENCE.json
             phase-e/CODE_SIGNING_EVIDENCE.json
             phase-e/package/DISTRIBUTION_MANIFEST.json
-            phase-e/package/CODE_SIGNING_EVIDENCE.json
             phase-e/package/DISTRIBUTION_MANIFEST.sha256
             owner_special/installer/output/Research-OS-Owner-Special-Setup-*-x64.exe
           if-no-files-found: error
