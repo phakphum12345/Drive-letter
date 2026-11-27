@@ -306,6 +306,7 @@ jobs:
           $p = "$env:GITHUB_WORKSPACE\phase-e\package"
           $required = @(
             "$p\app\research_os_flutter.exe",
+            "$p\CODE_SIGNING_EVIDENCE.json",
             "$p\owner_special\app\research_os_owner_special.exe",
             "$p\owner_special\OWNER_MANIFEST.json",
             "$p\owner_special\research_os_friend",
