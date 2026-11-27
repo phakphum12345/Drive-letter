@@ -52,8 +52,14 @@ class AuthenticodeReleaseGateTests(unittest.TestCase):
         publish = workflow.index("Create GitHub Release")
         self.assertLess(gate, publish)
         self.assertIn("if: ${{ inputs.publish == true }}", workflow[gate:publish])
-        self.assertIn("osslsigncode", workflow[gate:publish])
         self.assertIn("tools/verify_windows_authenticode_release.py", workflow[gate:publish])
+        tooling = workflow.index("Install Authenticode verification tooling")
+        self.assertLess(tooling, gate)
+        self.assertIn("apt-get install --yes osslsigncode", workflow[tooling:gate])
+        verifier = (root / "tools/verify_windows_authenticode_release.py").read_text(encoding="utf-8")
+        self.assertIn('"osslsigncode", "verify"', verifier)
+        self.assertIn('"-CAfile"', verifier)
+        self.assertIn('"-TSA-CAfile"', verifier)
 
     @patch("tools.verify_windows_authenticode_release.verify_signature")
     def test_accepts_exact_sha_signed_setup_and_every_zip_exe(self, verify_signature):
