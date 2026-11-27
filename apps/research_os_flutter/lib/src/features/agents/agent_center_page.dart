@@ -134,15 +134,14 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
       _error = null;
     });
     try {
-      switch (action) {
-        case 'confirm':
-          await widget.apiClient.confirmOrchestration(id);
-        case 'retry':
-          await widget.apiClient.retryOrchestration(id);
-        case 'cancel':
-          await widget.apiClient.cancelOrchestration(id);
-        case 'execute':
-          await widget.apiClient.executeOrchestration(id);
+      if (action == 'confirm') {
+        await widget.apiClient.confirmOrchestration(id);
+      } else if (action == 'retry') {
+        await widget.apiClient.retryOrchestration(id);
+      } else if (action == 'cancel') {
+        await widget.apiClient.cancelOrchestration(id);
+      } else if (action == 'execute') {
+        await widget.apiClient.executeOrchestration(id);
       }
       await _loadRuns();
     } catch (error) {
@@ -165,7 +164,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
   }
 
   Future<void> _confirmWithPreview(Map<String, dynamic> run) async {
-    final id = '\${run['run_id'] ?? ''}';
+    final id = '${run['run_id'] ?? ''}';
     if (id.isEmpty || _busy.contains(id)) return;
     final steps = run['steps'] is List
         ? (run['steps'] as List).whereType<Map>().map(_map).toList()
@@ -184,7 +183,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
               children: [
                 const Text('Objective', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('\${run['objective'] ?? 'Untitled orchestration'}'),
+                Text('${run['objective'] ?? 'Untitled orchestration'}'),
                 const SizedBox(height: 14),
                 const Text('Steps to be confirmed', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
@@ -192,11 +191,11 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
                 for (final step in steps) ...[
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text('\${step['step_id'] ?? 'step'}: \${step['objective'] ?? 'No objective'}'),
+                    title: Text('${step['step_id'] ?? 'step'}: ${step['objective'] ?? 'No objective'}'),
                     subtitle: Text(
-                      'Agent: \${step['requested_agent'] ?? 'automatic'} • '
-                      'Status: \${step['status'] ?? 'unknown'} • '
-                      'Depends on: \${step['depends_on'] is List ? (step['depends_on'] as List).join(', ') : 'none'}',
+                      'Agent: ${step['requested_agent'] ?? 'automatic'} • '
+                      'Status: ${step['status'] ?? 'unknown'} • '
+                      'Depends on: ${step['depends_on'] is List ? (step['depends_on'] as List).join(', ') : 'none'}',
                     ),
                   ),
                 ],
@@ -229,8 +228,8 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
   bool _hasRetryableStep(List steps) => steps.whereType<Map>().any((raw) {
         final step = _map(raw);
         if (step['status'] != 'failed') return false;
-        final attempts = int.tryParse('\${step['attempt_count'] ?? 0}') ?? 0;
-        final maxAttempts = int.tryParse('\${step['max_attempts'] ?? 3}') ?? 3;
+        final attempts = int.tryParse('${step['attempt_count'] ?? 0}') ?? 0;
+        final maxAttempts = int.tryParse('${step['max_attempts'] ?? 3}') ?? 3;
         return attempts < maxAttempts;
       });
 
@@ -505,16 +504,6 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
           ),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            Semantics(
-              button: true,
-              label: 'Execute orchestration ${_short(id)}',
-              child: OutlinedButton.icon(
-                key: Key('execute-$id'),
-                onPressed: busy ? null : () => _action(id, 'execute'),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Execute'),
-              ),
-            ),
             OutlinedButton.icon(
               key: Key('timeline-$id'),
               onPressed: busy ? null : () => _timeline(id),
@@ -524,7 +513,7 @@ class _AgentCenterPageState extends State<AgentCenterPage> {
             if (status == 'planned')
               Semantics(
                 button: true,
-                label: 'Execute orchestration \${_short(id)}',
+                label: 'Execute orchestration ${_short(id)}',
                 child: OutlinedButton.icon(
                   key: Key('execute-$id'),
                   onPressed: busy ? null : () => _action(id, 'execute'),
