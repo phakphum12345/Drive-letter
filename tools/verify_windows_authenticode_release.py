@@ -28,8 +28,8 @@ def verify_signature(path: Path, ca_file: Path) -> None:
     detail = (result.stdout + "\n" + result.stderr).strip()
     if result.returncode != 0:
         raise ValueError(f"Authenticode verification failed for {path.name}: {detail[-3000:]}")
-    subject = re.search(r"^\\s*Subject:\\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
-    issuer = re.search(r"^\\s*Issuer:\\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
+    subject = re.search(r"^\s*Subject:\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
+    issuer = re.search(r"^\s*Issuer:\s*(.+)$", detail, re.IGNORECASE | re.MULTILINE)
     if not subject or not issuer:
         raise ValueError(f"Authenticode signer identity is missing for {path.name}")
     if subject.group(1).strip() == issuer.group(1).strip():
