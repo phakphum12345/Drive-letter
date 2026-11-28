@@ -299,6 +299,7 @@ class FriendRuntime:
             "scale_authority": "v3-unified-master-orchestrator",
             "helper_scheduler": {"max_logical_helpers": self.helpers.MAX_LOGICAL_HELPERS, "max_active_workers": self.helpers.MAX_ACTIVE_WORKERS, "activation": "bounded-adaptive"},
             "skills": self.orchestrator.skills.names(),
+            "skill_catalog": self.orchestrator.skills.describe(),
             "tools": self.orchestrator.tools.names(),
             "tool_catalog": self.tool_catalog(),
             "tool_health": self.tool_health(),
