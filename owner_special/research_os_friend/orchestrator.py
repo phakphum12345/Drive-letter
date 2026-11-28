@@ -78,7 +78,9 @@ class FriendOrchestrator:
             for skill in selected_skills
             if skill.instructions
         )
-        provider_context = skill_instructions + tuple(item.text for item in context.memories) + skill_outputs + tool_outputs
+        # Provider adapters retain the last 12 context entries; keep selected
+        # protocol guidance last so memory/tool volume cannot silently drop it.
+        provider_context = tuple(item.text for item in context.memories) + skill_outputs + tool_outputs + skill_instructions
 
         tool_results: dict[str, object] = {}
         for tool, output in zip(selected_tools, tool_outputs):
