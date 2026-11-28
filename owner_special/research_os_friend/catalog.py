@@ -57,6 +57,11 @@ def install_builtin_skills(registry: SkillRegistry) -> SkillRegistry:
         ("analysis", "reasoning", "Analyze goals, constraints, and evidence."),
         ("planning", "orchestration", "Turn a goal into reviewable execution steps."),
         ("coding", "engineering", "Design, implement, test, and review software changes."),
+        (
+            "application_development",
+            "engineering",
+            "Apply the governed Application Development Protocol from discovery and requirements through architecture, UX, implementation, security, testing, release, and maintenance.",
+        ),
         ("research", "knowledge", "Gather and compare source-backed information."),
         ("data", "analytics", "Inspect structured data and produce quantitative findings."),
         ("documents", "artifacts", "Create and transform durable written artifacts."),
