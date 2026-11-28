@@ -78,6 +78,7 @@ class ApplicationDevelopmentSkillTests(unittest.TestCase):
         )
         self.assertIn("DISCOVER", protocol_context)
         self.assertIn("Identity → Role → Permission → Tools → Skills → Data Scope", protocol_context)
+        self.assertEqual(provider.context[-1], protocol_context)
         self.assertEqual(
             response.metadata["skill_protocols"],
             [{
