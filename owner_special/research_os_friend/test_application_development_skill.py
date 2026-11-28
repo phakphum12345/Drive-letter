@@ -19,6 +19,10 @@ class ApplicationDevelopmentSkillTests(unittest.TestCase):
         self.assertIn("requirements", skill.description)
         self.assertIn("security", skill.description)
         self.assertIn("release", skill.description)
+        self.assertEqual(skill.protocol_id, "ROS-APP-DEV-001")
+        self.assertEqual(skill.protocol_version, "1.0.0")
+        self.assertIn("DISCOVER", skill.instructions)
+        self.assertIn("Definition of Done", skill.instructions)
 
     def test_skill_handler_is_deterministic_and_preserves_request(self) -> None:
         (skill,) = self.registry.resolve(("application_development",))
@@ -26,6 +30,14 @@ class ApplicationDevelopmentSkillTests(unittest.TestCase):
             self.registry.run(skill, "Build a cross-platform application"),
             "application_development: Build a cross-platform application",
         )
+
+    def test_catalog_exposes_metadata_without_handlers(self) -> None:
+        entries = self.registry.describe()
+        application = next(item for item in entries if item["name"] == "application_development")
+        self.assertEqual(application["domain"], "engineering")
+        self.assertTrue(application["instructions_available"])
+        self.assertEqual(application["protocol_id"], "ROS-APP-DEV-001")
+        self.assertNotIn("handler", application)
 
     def test_existing_core_skills_remain_registered(self) -> None:
         expected = {
