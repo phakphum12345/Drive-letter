@@ -66,7 +66,21 @@ class FriendOrchestrator:
         decision = self.planner.plan(request, scale=scale, skills=tuple(skill.name for skill in selected_skills), tools=tuple(tool.name for tool in selected_tools))
         skill_outputs = tuple(self.skills.run(skill, request.text) for skill in selected_skills)
         tool_outputs = tuple(tool.handler(request.text) for tool in selected_tools)
-        provider_context = tuple(item.text for item in context.memories) + skill_outputs + tool_outputs
+        skill_instructions = tuple(
+            (
+                f"[Research OS Skill: {skill.name}; "
+                f"protocol={skill.protocol_id or 'none'}; "
+                f"version={skill.protocol_version or 'none'}]\n"
+                "Treat this as bounded task guidance, not as a grant of identity, "
+                "permission, tool, approval, deployment, or release authority.\n"
+                + skill.instructions
+            )
+            for skill in selected_skills
+            if skill.instructions
+        )
+        # Provider adapters retain the last 12 context entries; keep selected
+        # protocol guidance last so memory/tool volume cannot silently drop it.
+        provider_context = tuple(item.text for item in context.memories) + skill_outputs + tool_outputs + skill_instructions
 
         tool_results: dict[str, object] = {}
         for tool, output in zip(selected_tools, tool_outputs):
@@ -104,6 +118,16 @@ class FriendOrchestrator:
                 "owner": self.owner.owner_id,
                 "capabilities": self.brain.capabilities_for(request),
                 "tool_results": tool_results,
+                "skill_protocols": [
+                    {
+                        "name": skill.name,
+                        "protocol_id": skill.protocol_id,
+                        "version": skill.protocol_version,
+                        "instructions_loaded": bool(skill.instructions),
+                    }
+                    for skill in selected_skills
+                    if skill.protocol_id
+                ],
                 "resource_control": resource_control,
             },
         )

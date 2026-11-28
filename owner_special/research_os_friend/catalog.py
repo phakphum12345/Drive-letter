@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 from .skills import Skill, SkillRegistry
 from .tools import Tool, ToolRegistry
@@ -12,12 +13,32 @@ from tools.research_os_api.github_status import GitHubStatusError, dashboard as 
 
 DEFAULT_GITHUB_REPOSITORY = "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC_TH"
 _REPOSITORY_RE = re.compile(r"(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?![A-Za-z0-9_.-])")
+APPLICATION_DEVELOPMENT_PROTOCOL_ID = "ROS-APP-DEV-001"
+APPLICATION_DEVELOPMENT_PROTOCOL_VERSION = "1.0.0"
+APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS = 32000
 
 
 def _tag(label: str):
     def handler(text: str) -> str:
         return f"{label}: {text.strip()}"
     return handler
+
+
+def _application_development_protocol() -> str:
+    """Load the canonical protocol in source checkouts and its bundled copy in releases."""
+    candidates = (
+        Path(__file__).resolve().parents[2] / "docs" / "RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md",
+        Path(__file__).with_name("application_development_protocol.md"),
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            content = candidate.read_text(encoding="utf-8").strip()
+            if not content:
+                raise RuntimeError("Application Development Protocol is empty")
+            if len(content) > APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS:
+                raise RuntimeError("Application Development Protocol exceeds the runtime context limit")
+            return content
+    raise FileNotFoundError("Application Development Protocol is missing from source and runtime bundle")
 
 
 def _github_repository_from_text(text: str) -> str:
@@ -53,10 +74,16 @@ def _github_repository_status(text: str) -> str:
 
 
 def install_builtin_skills(registry: SkillRegistry) -> SkillRegistry:
+    protocol = _application_development_protocol()
     definitions = (
         ("analysis", "reasoning", "Analyze goals, constraints, and evidence."),
         ("planning", "orchestration", "Turn a goal into reviewable execution steps."),
         ("coding", "engineering", "Design, implement, test, and review software changes."),
+        (
+            "application_development",
+            "engineering",
+            "Apply the governed Application Development Protocol from discovery and requirements through architecture, UX, implementation, security, testing, release, and maintenance.",
+        ),
         ("research", "knowledge", "Gather and compare source-backed information."),
         ("data", "analytics", "Inspect structured data and produce quantitative findings."),
         ("documents", "artifacts", "Create and transform durable written artifacts."),
@@ -81,7 +108,20 @@ def install_builtin_skills(registry: SkillRegistry) -> SkillRegistry:
         ),
     )
     for name, domain, description in definitions:
-        registry.register(Skill(name, domain, description, _tag(name)))
+        if name == "application_development":
+            registry.register(
+                Skill(
+                    name,
+                    domain,
+                    description,
+                    _tag(name),
+                    instructions=protocol,
+                    protocol_id=APPLICATION_DEVELOPMENT_PROTOCOL_ID,
+                    protocol_version=APPLICATION_DEVELOPMENT_PROTOCOL_VERSION,
+                )
+            )
+        else:
+            registry.register(Skill(name, domain, description, _tag(name)))
     return registry
 
 

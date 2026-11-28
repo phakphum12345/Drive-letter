@@ -17,6 +17,12 @@ function Copy-Tree([string]$Source, [string]$Destination) {
 Copy-Tree $FlutterReleaseDir (Join-Path $PackageDir 'app')
 Copy-Tree $ServiceHostDir (Join-Path $PackageDir 'service_host')
 Copy-Tree (Join-Path $ownerRoot 'research_os_friend') (Join-Path $PackageDir 'owner_special\research_os_friend')
+# The service runs from the installed tree, so ship the canonical protocol beside catalog.py.
+$protocolSource = Join-Path $repoRoot 'docs\RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md'
+$protocolTarget = Join-Path $PackageDir 'owner_special\research_os_friend\application_development_protocol.md'
+if (-not (Test-Path $protocolSource -PathType Leaf)) { throw "Canonical Application Development Protocol missing: $protocolSource" }
+Copy-Item $protocolSource $protocolTarget -Force
+if (-not (Test-Path $protocolTarget -PathType Leaf)) { throw 'Application Development Protocol was not staged into Owner installer package' }
 Copy-Tree (Join-Path $ownerRoot 'scripts') (Join-Path $PackageDir 'owner_special\scripts')
 Copy-Tree (Join-Path $repoRoot 'v3\research_os_v3') (Join-Path $PackageDir 'v3\research_os_v3')
 # catalog.py imports the read-only GitHub dashboard adapter from tools.research_os_api.
