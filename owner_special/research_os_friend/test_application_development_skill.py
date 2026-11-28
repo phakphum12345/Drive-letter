@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from owner_special.research_os_friend.catalog import install_builtin_skills
+from owner_special.research_os_friend.catalog import (
+    APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS,
+    install_builtin_skills,
+)
 from owner_special.research_os_friend.skills import SkillRegistry
 from owner_special.research_os_friend import FriendRequest, FriendRuntime
 from owner_special.research_os_friend.providers import ProviderResult
@@ -36,6 +39,10 @@ class ApplicationDevelopmentSkillTests(unittest.TestCase):
         self.assertEqual(skill.protocol_version, "1.0.0")
         self.assertIn("DISCOVER", skill.instructions)
         self.assertIn("Definition of Done", skill.instructions)
+        self.assertLessEqual(
+            len(skill.instructions),
+            APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS,
+        )
 
     def test_skill_handler_is_deterministic_and_preserves_request(self) -> None:
         (skill,) = self.registry.resolve(("application_development",))
