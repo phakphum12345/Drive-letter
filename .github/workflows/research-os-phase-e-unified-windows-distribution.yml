@@ -181,7 +181,7 @@ jobs:
         run: |
           $p = "$env:GITHUB_WORKSPACE\phase-e\package"
           New-Item -ItemType Directory -Force "$p\owner_special\app","$p\owner_special\research_os_friend",
-            "$p\owner_special\research_os_friend\application_development_protocol.md","$p\owner_special\scripts","$p\docs","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
+            "$p\owner_special\scripts","$p\docs","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
           Copy-Item "owner_special\flutter_app\build\windows\x64\runner\Release\*" "$p\owner_special\app" -Recurse -Force
           Copy-Item "owner_special\research_os_friend\*" "$p\owner_special\research_os_friend" -Recurse -Force
           Copy-Item "docs\RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md" "$p\owner_special\research_os_friend\application_development_protocol.md" -Force
