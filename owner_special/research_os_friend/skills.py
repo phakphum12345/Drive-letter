@@ -12,6 +12,9 @@ class Skill:
     domain: str
     description: str
     handler: SkillHandler
+    instructions: str = ""
+    protocol_id: str = ""
+    protocol_version: str = ""
 
 
 class SkillRegistry:
@@ -31,6 +34,20 @@ class SkillRegistry:
         if missing:
             raise KeyError(f"unknown skills: {', '.join(missing)}")
         return tuple(self._skills[name] for name in requested)
+
+    def describe(self) -> tuple[dict[str, str | bool], ...]:
+        """Return read-only catalog metadata; never expose executable handlers."""
+        return tuple(
+            {
+                "name": skill.name,
+                "domain": skill.domain,
+                "description": skill.description,
+                "instructions_available": bool(skill.instructions),
+                "protocol_id": skill.protocol_id,
+                "protocol_version": skill.protocol_version,
+            }
+            for skill in (self._skills[name] for name in self.names())
+        )
 
     def run(self, skill: Skill, text: str) -> str:
         return skill.handler(text)
