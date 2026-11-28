@@ -4,6 +4,19 @@ import unittest
 
 from owner_special.research_os_friend.catalog import install_builtin_skills
 from owner_special.research_os_friend.skills import SkillRegistry
+from owner_special.research_os_friend import FriendRequest, FriendRuntime
+from owner_special.research_os_friend.providers import ProviderResult
+
+
+class _CapturingProvider:
+    name = "application-development-test-provider"
+
+    def __init__(self) -> None:
+        self.context: tuple[str, ...] = ()
+
+    def complete(self, *, prompt: str, context: tuple[str, ...]) -> ProviderResult:
+        self.context = context
+        return ProviderResult(text="captured")
 
 
 class ApplicationDevelopmentSkillTests(unittest.TestCase):
@@ -38,6 +51,44 @@ class ApplicationDevelopmentSkillTests(unittest.TestCase):
         self.assertTrue(application["instructions_available"])
         self.assertEqual(application["protocol_id"], "ROS-APP-DEV-001")
         self.assertNotIn("handler", application)
+
+    def test_selected_skill_protocol_is_injected_into_provider_context(self) -> None:
+        runtime = FriendRuntime.create_owner_special("phakphum")
+        provider = _CapturingProvider()
+        runtime.orchestrator.providers.set_primary(provider)
+
+        response = runtime.ask(
+            FriendRequest(
+                owner_id="phakphum",
+                text="Plan a secure desktop application",
+                requested_skills=("application_development",),
+            )
+        )
+
+        protocol_context = next(
+            item for item in provider.context
+            if "[Research OS Skill: application_development;" in item
+        )
+        self.assertIn("DISCOVER", protocol_context)
+        self.assertIn("Identity → Role → Permission → Tools → Skills → Data Scope", protocol_context)
+        self.assertEqual(
+            response.metadata["skill_protocols"],
+            [{
+                "name": "application_development",
+                "protocol_id": "ROS-APP-DEV-001",
+                "version": "1.0.0",
+                "instructions_loaded": True,
+            }],
+        )
+
+    def test_unselected_skill_protocol_is_not_injected(self) -> None:
+        runtime = FriendRuntime.create_owner_special("phakphum")
+        provider = _CapturingProvider()
+        runtime.orchestrator.providers.set_primary(provider)
+
+        runtime.ask(FriendRequest(owner_id="phakphum", text="Hello"))
+
+        self.assertFalse(any("ROS-APP-DEV-001" in item for item in provider.context))
 
     def test_existing_core_skills_remain_registered(self) -> None:
         expected = {
