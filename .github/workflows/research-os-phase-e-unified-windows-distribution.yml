@@ -180,9 +180,12 @@ jobs:
         shell: pwsh
         run: |
           $p = "$env:GITHUB_WORKSPACE\phase-e\package"
-          New-Item -ItemType Directory -Force "$p\owner_special\app","$p\owner_special\research_os_friend","$p\owner_special\scripts","$p\docs","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
+          New-Item -ItemType Directory -Force "$p\owner_special\app","$p\owner_special\research_os_friend",
+            "$p\owner_special\research_os_friend\application_development_protocol.md","$p\owner_special\scripts","$p\docs","$p\tools","$p\v3","$p\current","$p\workflow","$p\platform\research_os_web","$p\assurance\aeos","$p\runtime\python","$p\service_host","$p\scripts" | Out-Null
           Copy-Item "owner_special\flutter_app\build\windows\x64\runner\Release\*" "$p\owner_special\app" -Recurse -Force
           Copy-Item "owner_special\research_os_friend\*" "$p\owner_special\research_os_friend" -Recurse -Force
+          Copy-Item "docs\RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md" "$p\owner_special\research_os_friend\application_development_protocol.md" -Force
+          if (-not (Test-Path "$p\owner_special\research_os_friend\application_development_protocol.md" -PathType Leaf)) { throw 'Application Development Protocol missing from unified Owner runtime package.' }
           Copy-Item "owner_special\scripts\*" "$p\owner_special\scripts" -Recurse -Force
           Copy-Item "owner_special\OWNER_MANIFEST.json" "$p\owner_special\OWNER_MANIFEST.json" -Force
           $env:GITHUB_SHA = (git rev-parse HEAD).Trim()
@@ -364,6 +367,7 @@ jobs:
             foreach ($requiredZipEntry in @(
               'app/research_os_flutter.exe',
               'owner_special/app/research_os_owner_special.exe',
+              'owner_special/research_os_friend/application_development_protocol.md',
               'docs/RESEARCH_OS_SYSTEM_PLATFORM_MATRIX.md',
               'DISTRIBUTION_MANIFEST.json',
               'DISTRIBUTION_MANIFEST.sha256'
