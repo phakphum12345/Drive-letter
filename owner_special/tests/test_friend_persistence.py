@@ -98,6 +98,11 @@ class FriendPersistenceTests(unittest.TestCase):
                 self.assertIn("research_os_friend/runtime.py", names)
                 self.assertIn("research_os_friend/brain.py", names)
                 self.assertIn("research_os_friend/skills.py", names)
+                protocol_path = "research_os_friend/application_development_protocol.md"
+                self.assertIn(protocol_path, names)
+                bundled_protocol = archive.read(protocol_path).decode("utf-8")
+                source_protocol = (REPOSITORY_ROOT / "docs" / "RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md").read_text(encoding="utf-8").strip()
+                self.assertEqual(bundled_protocol.strip(), source_protocol)
                 self.assertIn("research_os_friend/persistent_memory.py", names)
                 self.assertIn("research_os_friend/v3_bridge.py", names)
                 self.assertIn("BUNDLE_MANIFEST.json", names)
