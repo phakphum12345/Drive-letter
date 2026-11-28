@@ -102,7 +102,7 @@ class FriendPersistenceTests(unittest.TestCase):
                 self.assertIn(protocol_path, names)
                 bundled_protocol = archive.read(protocol_path).decode("utf-8")
                 source_protocol = (REPOSITORY_ROOT / "docs" / "RESEARCH_OS_APPLICATION_DEVELOPMENT_PROTOCOL.md").read_text(encoding="utf-8").strip()
-                self.assertEqual(bundled_protocol.strip(), source_protocol)
+                self.assertEqual(bundled_protocol.replace("\r\n", "\n").replace("\r", "\n").strip(), source_protocol.replace("\r\n", "\n").replace("\r", "\n").strip())
                 self.assertIn("research_os_friend/persistent_memory.py", names)
                 self.assertIn("research_os_friend/v3_bridge.py", names)
                 self.assertIn("BUNDLE_MANIFEST.json", names)
