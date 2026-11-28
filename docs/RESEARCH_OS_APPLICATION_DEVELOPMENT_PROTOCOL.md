@@ -350,6 +350,13 @@ The `application_development` skill:
 - Must defer approval, tool execution, Git mutation, deployment and release to their existing governed capabilities.
 - Must not mutate Core Skills or promote learned skills automatically.
 
+Runtime contract:
+- Friend loads this canonical document as the `application_development` Skill instruction source.
+- Instructions enter Provider context only when that Skill is explicitly selected for the request; unselected requests do not receive this protocol.
+- The runtime enforces a 32,000-character maximum and fails closed if the protocol is missing or empty.
+- Owner source bundles carry the same document at `research_os_friend/application_development_protocol.md`; bundle tests verify its content against this canonical source.
+- The injected text is bounded task guidance. It cannot override identity, role, permission, tool authorization, approval, execution, deployment or release controls.
+
 ## 11. Evidence and versioning
 
 Every protocol execution should record:
