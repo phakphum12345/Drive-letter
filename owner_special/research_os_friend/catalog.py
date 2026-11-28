@@ -15,6 +15,7 @@ DEFAULT_GITHUB_REPOSITORY = "phakphoum38-stack/ENTERPRISE_API_ARCHITECTURE_LOGIC
 _REPOSITORY_RE = re.compile(r"(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?![A-Za-z0-9_.-])")
 APPLICATION_DEVELOPMENT_PROTOCOL_ID = "ROS-APP-DEV-001"
 APPLICATION_DEVELOPMENT_PROTOCOL_VERSION = "1.0.0"
+APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS = 32000
 
 
 def _tag(label: str):
@@ -34,7 +35,7 @@ def _application_development_protocol() -> str:
             content = candidate.read_text(encoding="utf-8").strip()
             if not content:
                 raise RuntimeError("Application Development Protocol is empty")
-            if len(content) > 32000:
+            if len(content) > APPLICATION_DEVELOPMENT_PROTOCOL_MAX_CHARS:
                 raise RuntimeError("Application Development Protocol exceeds the runtime context limit")
             return content
     raise FileNotFoundError("Application Development Protocol is missing from source and runtime bundle")
